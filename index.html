@@ -422,7 +422,6 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.3; }
         }
-
         /* ESTILOS DEL SISTEMA DE ACTUALIZACIONES */
         #updateModal {
             position: fixed;
@@ -669,6 +668,132 @@
             border-radius: 50%;
             animation: blink 1.5s infinite;
         }
+
+        /* 🆕 MODAL DE PERMISOS MULTIMEDIA */
+        #permisosModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 15000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #permisosModal.show {
+            display: flex;
+        }
+
+        .permisos-content {
+            background: #222;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 450px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(255, 195, 0, 0.3);
+        }
+
+        .permisos-content h2 {
+            color: var(--color-primary);
+            margin-bottom: 20px;
+        }
+
+        .permisos-content p {
+            color: var(--color-secondary);
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .permisos-list {
+            text-align: left;
+            margin: 20px 0;
+            padding: 15px;
+            background: #333;
+            border-radius: 10px;
+        }
+
+        .permiso-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 15px 0;
+            padding: 10px;
+            background: #444;
+            border-radius: 8px;
+        }
+
+        .permiso-icon {
+            font-size: 32px;
+            width: 50px;
+            text-align: center;
+        }
+
+        .permiso-info {
+            flex: 1;
+        }
+
+        .permiso-info strong {
+            color: var(--color-primary);
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .permiso-info small {
+            color: #999;
+            font-size: 0.85em;
+        }
+
+        .permisos-warning {
+            background: rgba(230, 126, 34, 0.2);
+            border: 1px solid #E67E22;
+            color: #E67E22;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-size: 0.9em;
+        }
+
+        .permisos-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+
+        .permisos-buttons button {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-permitir {
+            background: var(--color-primary);
+            color: var(--color-background);
+        }
+
+        .btn-permitir:hover {
+            background: #e6b200;
+            transform: translateY(-2px);
+        }
+
+        .btn-omitir {
+            background: #555;
+            color: white;
+        }
+
+        .btn-omitir:hover {
+            background: #666;
+        }
     </style>
 </head>
 <body>
@@ -683,6 +808,53 @@
 <div id="gpsIndicator" class="gps-indicator">
     <div class="gps-dot"></div>
     <span>📍 GPS Activo</span>
+</div>
+
+<!-- 🆕 MODAL DE PERMISOS MULTIMEDIA -->
+<div id="permisosModal">
+    <div class="permisos-content">
+        <h2>🔐 Permisos Necesarios</h2>
+        <p>Para usar todas las funciones necesitamos acceso a:</p>
+        
+        <div class="permisos-list">
+            <div class="permiso-item">
+                <div class="permiso-icon">📍</div>
+                <div class="permiso-info">
+                    <strong>Ubicación GPS</strong>
+                    <small>Tracking continuo cada 2-3 segundos</small>
+                </div>
+            </div>
+            
+            <div class="permiso-item">
+                <div class="permiso-icon">📷</div>
+                <div class="permiso-info">
+                    <strong>Cámara/Galería</strong>
+                    <small>Para enviar fotos en el chat</small>
+                </div>
+            </div>
+            
+            <div class="permiso-item">
+                <div class="permiso-icon">🎤</div>
+                <div class="permiso-info">
+                    <strong>Micrófono</strong>
+                    <small>Para grabar y enviar audios</small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="permisos-warning">
+            ⚠️ <strong>Importante:</strong> El GPS se activará automáticamente y continuará activo incluso si minimizas la app.
+        </div>
+        
+        <div class="permisos-buttons">
+            <button class="btn-permitir" onclick="solicitarTodosLosPermisos()">
+                ✅ Permitir Todo
+            </button>
+            <button class="btn-omitir" onclick="omitirPermisos()">
+                ⏭️ Continuar sin permisos
+            </button>
+        </div>
+    </div>
 </div>
 
 <!-- MODAL DE ACTUALIZACIÓN -->
@@ -758,7 +930,6 @@
             <button id="quickLoginBtn" style="background: var(--color-primary); color: var(--color-background); border: none;">Entrar Rápido (Un Clic)</button>
         </div>
     </div>
-    
     <div id="registrationForm" style="display:none;">
         <h3 style="color: var(--color-primary);">Completa tu Registro</h3>
         <p style="font-size: 0.9em; margin-bottom: 15px;">
@@ -791,7 +962,7 @@
         <h2 style="color: var(--color-secondary); margin: 0;">Bienvenido, <span id="repartidorName"></span>!</h2>
         <div style="display: flex; gap: 10px; align-items: center;">
             <span id="appVersionDisplay" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 15px; font-size: 0.85em; font-weight: bold;">
-                v1.5.0
+                v1.5.2
             </span>
             <button id="logoutBtn" style="padding: 8px 15px; background: var(--color-accent-danger); color: white; border: none; border-radius: 5px; font-weight: bold;">Cerrar Sesión</button>
         </div>
@@ -919,7 +1090,7 @@
     const storage = getStorage(app);
 
     // VERSIÓN ACTUALIZADA
-    const APP_VERSION = "1.5.1";
+    const APP_VERSION = "1.5.2";
     
     // Mostrar versión en el DOM cuando se cargue
     window.addEventListener('DOMContentLoaded', () => {
@@ -969,6 +1140,121 @@
     let backgroundGeoInterval = null;
     let isBackgroundMode = false;
 
+    // 🆕 Variables para permisos multimedia
+    let permisosMultimediaOtorgados = false;
+    let permisosCamaraOtorgado = false;
+    let permisosMicrofonoOtorgado = false;
+    let permisosUbicacionOtorgado = false;
+
+    // ========================================
+    // 🆕 SISTEMA DE PERMISOS MULTIMEDIA
+    // ========================================
+    
+    window.solicitarTodosLosPermisos = async function() {
+        console.log('🔐 Solicitando todos los permisos...');
+        
+        const modal = document.getElementById('permisosModal');
+        modal.classList.remove('show');
+        
+        let todosOtorgados = true;
+        
+        // 1️⃣ Solicitar permiso de UBICACIÓN (GPS)
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    resolve,
+                    reject,
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 15000,
+                        maximumAge: 0
+                    }
+                );
+            });
+            
+            permisosUbicacionOtorgado = true;
+            console.log('✅ Permiso de UBICACIÓN concedido');
+            console.log(`📍 Ubicación: ${position.coords.latitude}, ${position.coords.longitude}`);
+            
+        } catch (error) {
+            todosOtorgados = false;
+            permisosUbicacionOtorgado = false;
+            console.error('❌ Permiso de UBICACIÓN denegado:', error);
+            
+            alert('⚠️ IMPORTANTE: Permiso de ubicación denegado.\n\n' +
+                  'Sin este permiso NO podrás recibir pedidos.\n\n' +
+                  'Para activarlo:\n' +
+                  '1. Ve a Configuración de Android\n' +
+                  '2. Aplicaciones → Servi Aliados\n' +
+                  '3. Permisos → Ubicación\n' +
+                  '4. Selecciona "Permitir TODO EL TIEMPO"');
+        }
+        
+        // 2️⃣ Solicitar permiso de CÁMARA
+        try {
+            const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+            videoStream.getTracks().forEach(track => track.stop());
+            permisosCamaraOtorgado = true;
+            console.log('✅ Permiso de CÁMARA concedido');
+            
+        } catch (error) {
+            permisosCamaraOtorgado = false;
+            console.warn('⚠️ Permiso de CÁMARA denegado:', error);
+        }
+        
+        // 3️⃣ Solicitar permiso de MICRÓFONO
+        try {
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioStream.getTracks().forEach(track => track.stop());
+            permisosMicrofonoOtorgado = true;
+            console.log('✅ Permiso de MICRÓFONO concedido');
+            
+        } catch (error) {
+            permisosMicrofonoOtorgado = false;
+            console.warn('⚠️ Permiso de MICRÓFONO denegado:', error);
+        }
+        
+        permisosMultimediaOtorgados = todosOtorgados;
+        
+        // Mostrar resumen
+        const resumen = `
+📊 RESUMEN DE PERMISOS:
+
+${permisosUbicacionOtorgado ? '✅' : '❌'} Ubicación GPS
+${permisosCamaraOtorgado ? '✅' : '❌'} Cámara/Fotos
+${permisosMicrofonoOtorgado ? '✅' : '❌'} Micrófono/Audio
+
+${!permisosUbicacionOtorgado ? '\n⚠️ Sin GPS no podrás recibir pedidos' : ''}
+${!permisosCamaraOtorgado ? '\n⚠️ Sin cámara no podrás enviar fotos' : ''}
+${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios' : ''}
+        `.trim();
+        
+        alert(resumen);
+        
+        // Iniciar GPS si fue otorgado
+        if (permisosUbicacionOtorgado) {
+            await iniciarTrackingGPSAutomatico();
+        }
+    }
+    
+    window.omitirPermisos = function() {
+        console.log('⏭️ Permisos omitidos por el usuario');
+        
+        const modal = document.getElementById('permisosModal');
+        modal.classList.remove('show');
+        
+        alert('⚠️ Has omitido los permisos.\n\n' +
+              'Funcionalidad limitada:\n' +
+              '- NO recibirás pedidos (sin GPS)\n' +
+              '- NO podrás enviar fotos (sin cámara)\n' +
+              '- NO podrás enviar audios (sin micrófono)\n\n' +
+              'Puedes activarlos después desde Configuración.');
+    }
+    
+    function mostrarModalPermisos() {
+        const modal = document.getElementById('permisosModal');
+        modal.classList.add('show');
+    }
     // ========================================
     // SISTEMA DE HEARTBEAT MÚLTIPLE
     // ========================================
@@ -1067,7 +1353,12 @@
                 appVersion: APP_VERSION,
                 navegadorActivo: !document.hidden,
                 gpsActivo: isTrackingEnabled,
-                backgroundMode: isBackgroundMode
+                backgroundMode: isBackgroundMode,
+                permisosMultimedia: {
+                    camara: permisosCamaraOtorgado,
+                    microfono: permisosMicrofonoOtorgado,
+                    ubicacion: permisosUbicacionOtorgado
+                }
             });
             
             console.log('💚 Online:', new Date(timestamp).toLocaleTimeString());
@@ -1187,13 +1478,17 @@
                 const timestamp = Date.now();
                 const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
 
-                // Envío DIRECTO sin usar SDK de Firebase
+                // 🆕 ENVÍO DIRECTO A FIREBASE - FORMATO CORRECTO PARA CLIENTE
                 const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
 
                 await fetch(url, {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
+                        ubicacion: {
+                            lat: parseFloat(lat.toFixed(6)),
+                            lon: parseFloat(lng.toFixed(6))  // 🆕 'lon' en lugar de 'lng'
+                        },
                         ubicacionActual: {
                             lat: parseFloat(lat.toFixed(6)),
                             lng: parseFloat(lng.toFixed(6)),
@@ -1259,25 +1554,17 @@
     async function iniciarTrackingGPSAutomatico() {
         console.log('🚀 Iniciando GPS automático al login...');
         
+        if (!permisosUbicacionOtorgado) {
+            console.warn('⚠️ No se puede iniciar GPS sin permisos de ubicación');
+            return;
+        }
+        
         const esAPK = window.matchMedia('(display-mode: standalone)').matches || 
                       window.navigator.standalone ||
                       document.referrer.includes('android-app://');
         
         if (esAPK) {
-            console.log('📱 Detectado APK Android - Solicitando permisos nativos...');
-            
-            const permisoGPS = await solicitarPermisoUbicacionAPK();
-            
-            if (!permisoGPS) {
-                console.error('❌ Permisos GPS denegados en APK');
-                alert('⚠️ IMPORTANTE: Esta app necesita acceso a tu ubicación TODO EL TIEMPO.\n\n' +
-                      '1. Ve a Configuración de Android\n' +
-                      '2. Aplicaciones → Servi Aliados\n' +
-                      '3. Permisos → Ubicación\n' +
-                      '4. Selecciona "Permitir TODO EL TIEMPO"\n\n' +
-                      'Sin este permiso no podrás recibir pedidos.');
-                return;
-            }
+            console.log('📱 Detectado APK Android - Verificando permisos nativos...');
         }
         
         await solicitarWakeLock();
@@ -1285,70 +1572,6 @@
         iniciarBackgroundGeolocation();
         
         document.getElementById('gpsIndicator').classList.add('active');
-    }
-
-    async function solicitarPermisoUbicacionAPK() {
-        if (!navigator.geolocation) {
-            console.error('❌ Geolocalización no soportada');
-            return false;
-        }
-        
-        try {
-            console.log('📍 Solicitando permiso de ubicación en APK...');
-            
-            const position = await new Promise((resolve, reject) => {
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => {
-                        console.log('✅ Permiso GPS concedido en APK');
-                        console.log(`📍 Ubicación: ${pos.coords.latitude}, ${pos.coords.longitude}`);
-                        console.log(`📏 Precisión: ±${Math.round(pos.coords.accuracy)}m`);
-                        resolve(pos);
-                    },
-                    (error) => {
-                        console.error('❌ Error al obtener ubicación:', error);
-                        reject(error);
-                    },
-                    { 
-                        enableHighAccuracy: true,
-                        timeout: 20000,
-                        maximumAge: 0
-                    }
-                );
-            });
-            
-            if (position.coords.latitude && position.coords.longitude) {
-                console.log('✅ GPS funcionando correctamente en APK');
-                
-                if (repartidorUID) {
-                    await update(ref(db, `repartidores_info/${repartidorUID}`), {
-                        gpsActivoAPK: true,
-                        ultimaUbicacionAPK: {
-                            lat: position.coords.latitude,
-                            lng: position.coords.longitude,
-                            timestamp: Date.now()
-                        }
-                    });
-                }
-                
-                return true;
-            } else {
-                console.error('❌ Coordenadas GPS inválidas');
-                return false;
-            }
-            
-        } catch (error) {
-            console.error('❌ Error al solicitar permiso GPS en APK:', error);
-            
-            if (error.code === 1) {
-                console.error('⚠️ Usuario denegó permiso de ubicación');
-            } else if (error.code === 2) {
-                console.error('⚠️ Ubicación no disponible (GPS apagado?)');
-            } else if (error.code === 3) {
-                console.error('⚠️ Timeout al obtener ubicación');
-            }
-            
-            return false;
-        }
     }
 
     function iniciarTrackingGPS() {
@@ -1466,7 +1689,12 @@
             const timestamp = Date.now();
             const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
             
+            // 🆕 FORMATO CORRECTO: 'ubicacion' con 'lat' y 'lon' para el cliente
             await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                ubicacion: {
+                    lat: parseFloat(lat.toFixed(6)),
+                    lon: parseFloat(lng.toFixed(6))  // 🆕 'lon' en lugar de 'lng'
+                },
                 ubicacionActual: {
                     lat: parseFloat(lat.toFixed(6)),
                     lng: parseFloat(lng.toFixed(6)),
@@ -1497,10 +1725,15 @@
             
             const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
 
+            // 🆕 FORMATO CORRECTO: 'ubicacion' con 'lat' y 'lon'
             await fetch(url, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    ubicacion: {
+                        lat: parseFloat(lat.toFixed(6)),
+                        lon: parseFloat(lng.toFixed(6))  // 🆕 'lon' en lugar de 'lng'
+                    },
                     ubicacionActual: {
                         lat: parseFloat(lat.toFixed(6)),
                         lng: parseFloat(lng.toFixed(6)),
@@ -1639,12 +1872,17 @@
         }
         console.log('🧹 Recursos limpiados');
     }
-
     // ========================================
     // 🎤 SISTEMA DE GRABACIÓN EN TIEMPO REAL
     // ========================================
 
     async function iniciarGrabacionAudio() {
+        // 🆕 Verificar permisos antes de grabar
+        if (!permisosMicrofonoOtorgado) {
+            alert('⚠️ No tienes permiso de micrófono.\n\nActiva los permisos desde el menú al iniciar sesión.');
+            return;
+        }
+        
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
                 audio: {
@@ -2055,6 +2293,12 @@
     }
     
     document.getElementById('sendGalleryBtn').addEventListener('click', () => {
+        // 🆕 Verificar permisos antes de abrir galería
+        if (!permisosCamaraOtorgado) {
+            alert('⚠️ No tienes permiso de cámara/fotos.\n\nActiva los permisos desde el menú al iniciar sesión.');
+            return;
+        }
+        
         document.getElementById('galleryInput').click();
     });
     
@@ -2103,7 +2347,7 @@
     };
 
     // ========================================
-    // FUNCIONES DE LOGIN Y SESIÓN CORREGIDAS
+    // FUNCIONES DE LOGIN Y SESIÓN
     // ========================================
     
     function saveQuickLoginData(email, password, name) {
@@ -2119,131 +2363,6 @@
         document.getElementById('loginContainer').style.display = 'flex';
         document.getElementById('appContainer').style.display = 'none';
     }
-    
-    async function solicitarPermisosMultimedia() {
-        return new Promise((resolve) => {
-            const permisosContainer = document.createElement('div');
-            permisosContainer.style.cssText = `
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(0,0,0,0.9); z-index: 5000;
-                display: flex; justify-content: center; align-items: center;
-                flex-direction: column; padding: 20px; box-sizing: border-box;
-            `;
-            
-            permisosContainer.innerHTML = `
-                <div style="background: #222; padding: 30px; border-radius: 15px; max-width: 400px; text-align: center;">
-                    <h2 style="color: #FFC300; margin-bottom: 20px;">🔐 Permisos Necesarios</h2>
-                    <p style="color: #D7D7D7; margin-bottom: 30px; line-height: 1.6;">
-                        Para usar todas las funciones necesitamos tu permiso para acceder a:
-                    </p>
-                    <div style="text-align: left; margin-bottom: 20px;">
-                        <p style="color: #FFC300; margin: 10px 0;">📍 <strong>Ubicación GPS</strong></p>
-                        <p style="color: #999; font-size: 0.9em; margin-left: 30px;">Tracking automático permanente (cada 2-3 segundos incluso en segundo plano)</p>
-                        
-                        <p style="color: #FFC300; margin: 10px 0; margin-top: 20px;">📷 <strong>Cámara/Galería</strong></p>
-                        <p style="color: #999; font-size: 0.9em; margin-left: 30px;">Para enviar fotos</p>
-                        
-                        <p style="color: #FFC300; margin: 10px 0; margin-top: 20px;">🎤 <strong>Micrófono</strong></p>
-                        <p style="color: #999; font-size: 0.9em; margin-left: 30px;">Para grabar y enviar audios</p>
-                    </div>
-                    <p style="color: #E67E22; font-size: 0.85em; margin-bottom: 20px;">
-                        ⚠️ El GPS se activará automáticamente y continuará activo incluso si minimizas la app o bloqueas la pantalla.
-                    </p>
-                    <button id="solicitarPermisosBtn" style="
-                        background: #FFC300; color: #111; 
-                        padding: 15px 30px; border: none; 
-                        border-radius: 8px; font-weight: bold; 
-                        font-size: 1.1em; cursor: pointer;
-                        width: 100%; margin-bottom: 10px;
-                    ">Solicitar Permisos</button>
-                    <button id="omitirPermisosBtn" style="
-                        background: #555; color: white; 
-                        padding: 10px 20px; border: none; 
-                        border-radius: 8px; cursor: pointer;
-                        width: 100%; font-size: 0.9em;
-                    ">Continuar sin permisos</button>
-                </div>
-            `;
-            
-            document.body.appendChild(permisosContainer);
-            
-            const solicitarBtn = document.getElementById('solicitarPermisosBtn');
-            const omitirBtn = document.getElementById('omitirPermisosBtn');
-            
-            solicitarBtn.addEventListener('click', async () => {
-                console.log('🔐 Solicitando permisos...');
-                
-                let gpsPermiso = false;
-                let micPermiso = false;
-                let cameraPermiso = false;
-                let permisosCompletos = true;
-                
-                try {
-                    const position = await new Promise((res, rej) => {
-                        navigator.geolocation.getCurrentPosition(res, rej, {
-                            enableHighAccuracy: true,
-                            timeout: 15000,
-                            maximumAge: 0
-                        });
-                    });
-                    gpsPermiso = true;
-                    console.log('✅ GPS permitido');
-                } catch (error) {
-                    console.warn('⚠️ GPS denegado:', error);
-                    permisosCompletos = false;
-                }
-                
-                try {
-                    const streamMic = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    streamMic.getTracks().forEach(track => track.stop());
-                    micPermiso = true;
-                    console.log('✅ Micrófono permitido');
-                } catch (error) {
-                    console.warn('⚠️ Micrófono denegado:', error);
-                    permisosCompletos = false;
-                }
-                
-                try {
-                    const streamCam = await navigator.mediaDevices.getUserMedia({ video: true });
-                    streamCam.getTracks().forEach(track => track.stop());
-                    cameraPermiso = true;
-                    console.log('✅ Cámara permitida');
-                } catch (error) {
-                    console.warn('⚠️ Cámara denegada:', error);
-                    permisosCompletos = false;
-                }
-                
-                try {
-                    document.body.removeChild(permisosContainer);
-                } catch (e) {
-                    console.warn('Modal ya removido');
-                }
-                
-                if (permisosCompletos) {
-                    console.log('✅ Todos los permisos concedidos');
-                } else if (gpsPermiso) {
-                    console.log('⚠️ GPS activado, otros permisos pendientes');
-                } else {
-                    console.log('⚠️ GPS no activado');
-                }
-                
-                resolve({ gpsPermiso, micPermiso, cameraPermiso });
-            });
-            
-            omitirBtn.addEventListener('click', () => {
-                console.log('⏭️ Permisos omitidos');
-                
-                try {
-                    document.body.removeChild(permisosContainer);
-                } catch (e) {
-                    console.warn('Modal ya removido');
-                }
-                
-                resolve({ gpsPermiso: false, micPermiso: false, cameraPermiso: false });
-            });
-        });
-    }
-
     async function setLoginState(isLoggedIn, user = null) {
         document.getElementById('loginContainer').style.display = isLoggedIn ? 'none' : 'flex';
         document.getElementById('appContainer').style.display = isLoggedIn ? 'block' : 'none';
@@ -2272,32 +2391,8 @@
             document.getElementById('loginContainer').style.display = 'none';
             document.getElementById('appContainer').style.display = 'block';
 
-            const esAppNativa = window.matchMedia('(display-mode: standalone)').matches || 
-                               window.navigator.standalone || 
-                               document.referrer.includes('android-app://');
-            
-            console.log('📱 Modo:', esAppNativa ? 'App Nativa' : 'Web');
-            
-            const permisosYaSolicitados = localStorage.getItem(`permisos_solicitados_${uid}`);
-            
-            if (esAppNativa || !permisosYaSolicitados) {
-                console.log('🔐 Solicitando permisos...');
-                const permisos = await solicitarPermisosMultimedia();
-                
-                if (!esAppNativa) {
-                    localStorage.setItem(`permisos_solicitados_${uid}`, 'true');
-                }
-                
-                if (permisos.gpsPermiso) {
-                    console.log('🚀 Iniciando GPS con permisos...');
-                    await iniciarTrackingGPSAutomatico();
-                } else {
-                    console.log('⚠️ GPS no activado - Continuar sin tracking');
-                }
-            } else {
-                console.log('🚀 Iniciando GPS (permisos previos)...');
-                await iniciarTrackingGPSAutomatico();
-            }
+            // 🆕 MOSTRAR MODAL DE PERMISOS AL LOGIN
+            mostrarModalPermisos();
 
             showSection('chatSection'); 
             listenForPedidos();
@@ -2340,7 +2435,7 @@
     });
     
     // ========================================
-    // EVENTOS DE LOGIN CORREGIDOS
+    // EVENTOS DE LOGIN
     // ========================================
 
     document.getElementById('quickLoginBtn').addEventListener('click', async () => {
@@ -2517,7 +2612,7 @@
     });
 
     // ========================================
-    // LÓGICA DE PEDIDOS CORREGIDA
+    // LÓGICA DE PEDIDOS
     // ========================================
     
     window.avanzarEstadoPedido = async function(pedidoId, estadoActual) {
@@ -2548,6 +2643,7 @@
                             estado: proximoEstado,
                             repartidorAsignado: repartidorNombre,
                             repartidorUID: repartidorUID,
+                            repartidorIdAsignado: repartidorUID,
                             timestampAceptado: Date.now(),
                             ubicacionRepartidor: {
                                 lat: parseFloat(lat.toFixed(6)),
@@ -2564,6 +2660,7 @@
                             estado: proximoEstado,
                             repartidorAsignado: repartidorNombre,
                             repartidorUID: repartidorUID,
+                            repartidorIdAsignado: repartidorUID,
                             timestampAceptado: Date.now()
                         });
                     }
@@ -2930,8 +3027,7 @@
             
             chatBox.scrollTop = chatBox.scrollHeight;
             
-            console.log('💬 Chat actualizado:', Object.
-keys(mensajes).length, 'mensajes');
+            console.log('💬 Chat actualizado:', Object.keys(mensajes).length, 'mensajes');
         });
     }
 
@@ -2958,7 +3054,8 @@ keys(mensajes).length, 'mensajes');
                     remitente: repartidorNombre,
                     tipo: 'imagen',
                     imagenURL: imageURL,
-                    texto: texto || '',
+                    texto
+                    : texto || '',
                     timestamp: timestamp,
                     rol_remitente: "Repartidor"
                 });
@@ -2991,22 +3088,19 @@ keys(mensajes).length, 'mensajes');
     }
 
     // ========================================
-    // MANEJO DE VISIBILIDAD Y RECONEXIÓN CON BACKGROUND MODE
+    // MANEJO DE VISIBILIDAD Y RECONEXIÓN
     // ========================================
     
     document.addEventListener('visibilitychange', async () => {
         if (document.hidden) {
-            // App en segundo plano
             isBackgroundMode = true;
             console.log('📱 App en SEGUNDO PLANO - Activando modo background...');
             
             if (sessionActive && repartidorUID) {
-                // Mantener heartbeat y GPS activos
                 if (!backgroundGeoInterval) {
                     iniciarBackgroundGeolocation();
                 }
                 
-                // Marcar en Firebase que está en background
                 try {
                     await update(ref(db, `repartidores_info/${repartidorUID}`), {
                         backgroundMode: true,
@@ -3017,14 +3111,13 @@ keys(mensajes).length, 'mensajes');
                 }
             }
         } else {
-            // App visible de nuevo
             isBackgroundMode = false;
             console.log('📱 App VISIBLE - Reactivando sistemas...');
             
             if (sessionActive && repartidorUID) {
                 await marcarComoOnline();
                 
-                if (!isTrackingEnabled) {
+                if (!isTrackingEnabled && permisosUbicacionOtorgado) {
                     console.log('📍 Reactivando GPS...');
                     await iniciarTrackingGPSAutomatico();
                 }
@@ -3059,7 +3152,7 @@ keys(mensajes).length, 'mensajes');
         if (sessionActive && repartidorUID) {
             await marcarComoOnline();
             
-            if (!isTrackingEnabled) {
+            if (!isTrackingEnabled && permisosUbicacionOtorgado) {
                 console.log('📍 Reactivando GPS tras reconexión...');
                 await iniciarTrackingGPSAutomatico();
             }
@@ -3084,10 +3177,6 @@ keys(mensajes).length, 'mensajes');
         actualizarIndicadorConexion(false);
     });
 
-    // ========================================
-    // EVENTO BEFOREUNLOAD - SESIÓN PERSISTENTE
-    // ========================================
-    
     window.addEventListener('beforeunload', (event) => {
         if (Object.keys(pedidosActivos).length > 0) {
             const mensaje = '⚠️ Tienes pedidos activos. ¿Seguro que quieres salir?';
@@ -3099,10 +3188,6 @@ keys(mensajes).length, 'mensajes');
         console.log('📱 App cerrándose - Sesión permanece activa');
     });
 
-    // ========================================
-    // MONITOREO DE BATERÍA
-    // ========================================
-    
     if ('getBattery' in navigator) {
         navigator.getBattery().then(battery => {
             const checkBattery = () => {
@@ -3117,10 +3202,6 @@ keys(mensajes).length, 'mensajes');
         });
     }
 
-    // ========================================
-    // VERIFICACIÓN PERIÓDICA
-    // ========================================
-    
     setInterval(() => {
         if (isTrackingEnabled && sessionActive) {
             const tiempoDesdeUltimaActualizacion = Date.now() - lastLocationUpdate;
@@ -3141,7 +3222,7 @@ keys(mensajes).length, 'mensajes');
                 iniciarHeartbeatBackup();
             }
             
-            if (!isTrackingEnabled && sessionActive) {
+            if (!isTrackingEnabled && sessionActive && permisosUbicacionOtorgado) {
                 console.warn('⚠️ GPS detenido inesperadamente, reiniciando...');
                 iniciarTrackingGPSAutomatico();
             }
@@ -3153,10 +3234,6 @@ keys(mensajes).length, 'mensajes');
         }
     }, 30000);
 
-    // ========================================
-    // INICIALIZACIÓN
-    // ========================================
-    
     window.addEventListener('load', () => {
         console.log('🚀 Servi Aliados - Panel Repartidor');
         console.log('📱 Versión:', APP_VERSION);
@@ -3170,7 +3247,8 @@ keys(mensajes).length, 'mensajes');
         console.log('   ✅ Sesión persistente');
         console.log('   ✅ GPS optimizado para APK Android');
         console.log('   ✅ Tracking en segundo plano');
-        console.log('   ✅ Login corregido - sin cierres de sesión');
+        console.log('   ✅ Permisos multimedia solicitados');
+        console.log('   ✅ Ubicación formato lat/lon para cliente');
         console.log('🔋 Wake Lock:', isWakeLockSupported ? 'Soportado' : 'No soportado');
         console.log('🎤 MediaRecorder:', typeof MediaRecorder !== 'undefined' ? 'Soportado' : 'No soportado');
         
@@ -3181,17 +3259,10 @@ keys(mensajes).length, 'mensajes');
     setInterval(verificarActualizacion, 30 * 60 * 1000);
 
     console.log('✅ Sistema inicializado correctamente v' + APP_VERSION);
-    console.log('📍 GPS se activará automáticamente al hacer login');
-    console.log('🔄 Actualización de ubicación: Cada 2 segundos (foreground) + Cada 3 segundos (background)');
-    console.log('💚 Presencia online: Persistente y redundante');
-    console.log('🚫 Sesión NO se cierra al salir de la app');
-    console.log('🔐 Sesión solo se cierra con el botón "Cerrar Sesión"');
-    console.log('📱 APK: Permisos GPS con timeout extendido y mensajes específicos');
-    console.log('🎤 Audio: Grabación completamente funcional');
-    console.log('📷 Fotos: Solo desde galería');
-    console.log('⭐ GPS continúa activo en segundo plano');
-    console.log('⭐ Heartbeat continúa incluso con app minimizada');
-    console.log('🔧 LOGIN CORREGIDO: Ya no cierra sesión al aceptar pedidos');
+    console.log('📍 GPS se activará con permisos otorgados');
+    console.log('🔄 Ubicación: lat/lon (compatible con cliente)');
+    console.log('🎤 Audio: Con verificación de permisos');
+    console.log('📷 Fotos: Con verificación de permisos');
     
 </script>
 </body>
