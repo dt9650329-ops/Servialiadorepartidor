@@ -1,0 +1,3198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta http-equiv="Permissions-Policy" content="camera=*, microphone=*, geolocation=*">
+    <meta http-equiv="Feature-Policy" content="camera *; microphone *; geolocation *">
+    
+    <!-- Configuración para APK Android -->
+    <meta name="theme-color" content="#FFC300">
+    <meta name="mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Service Worker para operaciones en segundo plano -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(reg => console.log('✅ Service Worker registrado'))
+                .catch(err => console.error('❌ Error SW:', err));
+        }
+    </script>
+    
+    <title>Panel Repartidor - Servi Aliados</title>
+    <style>
+        /* Paleta de Colores de Servi Aliados */
+        :root {
+            --color-primary: #FFC300;
+            --color-secondary: #D7D7D7;
+            --color-background: #111111;
+            --color-accent-danger: #C0392B;
+            --color-waiting: #E67E22;
+            --color-delivery: #2980B9;
+        }
+
+        body { 
+            margin: 0; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: var(--color-background);
+            color: var(--color-secondary);
+        }
+        
+        #loginContainer {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: var(--color-background);
+            z-index: 2000; display: flex; 
+            justify-content: center; align-items: center; flex-direction: column;
+        }
+        #loginContainer > div {
+            background: #222222;
+            padding: 30px; border-radius: 10px; 
+            box-shadow: 0 0 20px rgba(255,195,0,0.3);
+            width: 90%; max-width: 350px;
+        }
+        #loginContainer input {
+            background: #333;
+            color: white;
+            border: 1px solid #444;
+            width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; box-sizing: border-box;
+        }
+        
+        #loginContainer button {
+            width: 100%; padding: 12px; margin-top: 5px; margin-bottom: 10px; border-radius: 4px; box-sizing: border-box;
+            background: var(--color-primary);
+            color: var(--color-background);
+            border: none; font-weight: bold; cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #loginContainer button:hover {
+            background: #e6b200;
+        }
+        #loginContainer button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        #registrationForm h3, #registrationForm p {
+            color: var(--color-primary);
+            text-align: center;
+        }
+        #registrationForm label {
+            font-size: 0.9em; display: block; margin-top: 10px; margin-bottom: 5px;
+            color: var(--color-secondary);
+        }
+        
+        #quickLoginArea {
+            margin-top: 15px; 
+            border-top: 1px solid #444; 
+            padding-top: 10px; 
+            text-align: center;
+        }
+
+        #appContainer { display: none; max-width: 900px; margin: 20px auto; padding: 20px; }
+        
+        h2, h3 { color: var(--color-secondary); }
+
+        .nav-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); 
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .nav-buttons button {
+            padding: 10px 5px; 
+            border: none; 
+            color: var(--color-background);
+            border-radius: 5px; 
+            font-weight: bold;
+            position: relative;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .nav-buttons button:hover {
+            opacity: 0.9;
+        }
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: var(--color-accent-danger);
+            color: white;
+            border-radius: 50%;
+            padding: 4px 8px;
+            font-size: 0.7em;
+            line-height: 1;
+            display: none; 
+        }
+
+        .pedidos-list {
+            background: #222222;
+            padding: 15px; border-radius: 10px; 
+            box-shadow: 0 0 10px rgba(0,0,0,0.5); 
+            margin-top: 20px;
+        }
+        .pedido-item {
+            padding: 10px; border-bottom: 1px solid #333; margin-bottom: 10px;
+            background: #333333; 
+            border-left: 5px solid var(--color-accent-danger);
+            color: var(--color-secondary);
+            position: relative; 
+            border-radius: 4px;
+        }
+        .pedido-item.asignado { border-left: 5px solid var(--color-primary); background: #444444; }
+        .pedido-item.esperando { border-left: 5px solid var(--color-waiting); }
+        .pedido-item.en-camino { border-left: 5px solid var(--color-delivery); }
+
+        .pedido-item strong { color: var(--color-primary); }
+        .pedido-item button { 
+            border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; margin-top: 5px; 
+            font-weight: bold;
+            transition: opacity 0.2s;
+        }
+        .pedido-item button:hover {
+            opacity: 0.8;
+        }
+        .pedido-item .timer {
+            font-size: 1.2em; font-weight: bold; color: var(--color-primary);
+            margin-top: 5px; display: block;
+        }
+
+        #cancelModal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 3000;
+            display: none; justify-content: center; align-items: center;
+        }
+        #cancelModalContent {
+            background: #222222; 
+            color: var(--color-secondary);
+            padding: 20px; border-radius: 8px; width: 90%; max-width: 300px; text-align: center;
+        }
+        #cancelModalContent button {
+            background: var(--color-accent-danger); 
+            margin-top: 10px; margin-bottom: 5px;
+            color: white;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        #cancelModalContent button:hover {
+            opacity: 0.8;
+        }
+
+        /* Estilos del Chat Mejorados */
+        .chat-box {
+             background: #222222; padding: 15px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.5); margin-top: 20px;
+        }
+        .mensajes-area { 
+            max-height: 400px; 
+            overflow-y: auto; 
+            padding: 10px; 
+            border: 1px solid #444; 
+            border-radius: 5px; 
+            background: #1a1a1a;
+        }
+        .mensaje { 
+            padding: 8px 12px; 
+            border-radius: 12px; 
+            margin: 5px 0; 
+            max-width: 80%; 
+            word-wrap: break-word;
+            clear: both;
+        }
+        .admin-msg { 
+            background-color: var(--color-primary);
+            color: var(--color-background); 
+            float: left;
+            margin-right: auto; 
+        }
+        .rep-msg { 
+            background-color: #555555;
+            color: white; 
+            float: right;
+            margin-left: auto; 
+        }
+        .chat-time { 
+            font-size: 10px; 
+            margin-top: 3px; 
+            display: block; 
+            text-align: right; 
+            color: rgba(0, 0, 0, 0.7); 
+        }
+        .rep-msg .chat-time { 
+            color: rgba(255, 255, 255, 0.7); 
+        }
+
+        /* Estilos para multimedia en chat */
+        .mensaje img {
+            max-width: 200px;
+            max-height: 200px;
+            border-radius: 8px;
+            margin-top: 5px;
+            display: block;
+            cursor: pointer;
+        }
+        .mensaje audio {
+            width: 100%;
+            max-width: 250px;
+            margin-top: 5px;
+            display: block;
+        }
+
+        /* Controles de multimedia */
+        .media-controls {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .media-controls button {
+            background: #444;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background 0.2s;
+        }
+        .media-controls button:hover {
+            background: #555;
+        }
+        .media-controls button.active {
+            background: var(--color-accent-danger);
+        }
+        .media-controls input[type="file"] {
+            display: none;
+        }
+
+        /* Indicador de grabación */
+        .recording-indicator {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: var(--color-accent-danger);
+            color: white;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        .recording-indicator.active {
+            display: flex;
+        }
+        .recording-dot {
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Vista previa de imagen */
+        .image-preview {
+            display: none;
+            margin-top: 10px;
+            position: relative;
+        }
+        .image-preview.active {
+            display: block;
+        }
+        .image-preview img {
+            max-width: 100%;
+            max-height: 150px;
+            border-radius: 5px;
+        }
+        .image-preview button {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: var(--color-accent-danger);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            cursor: pointer;
+        }
+
+        /* Modal para ver imagen completa */
+        #imageModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 4000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        #imageModal.active {
+            display: flex;
+        }
+        #imageModal img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 10px;
+        }
+        #imageModal button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: var(--color-accent-danger);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
+
+        /* Indicador de carga */
+        .upload-progress {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #333;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .upload-progress.active {
+            display: block;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #444;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--color-primary);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* Indicador GPS Activo */
+        .gps-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #27ae60;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 25px;
+            font-size: 0.9em;
+            font-weight: bold;
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.5);
+            animation: pulse-gps 2s infinite;
+        }
+
+        .gps-indicator.active {
+            display: flex;
+        }
+
+        @keyframes pulse-gps {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .gps-dot {
+            width: 10px;
+            height: 10px;
+            background: white;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* ESTILOS DEL SISTEMA DE ACTUALIZACIONES */
+        #updateModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 10000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #updateModal.show {
+            display: flex;
+        }
+
+        .update-content {
+            background: linear-gradient(135deg, #FFC300 0%, #e6b200 100%);
+            padding: 40px 30px;
+            border-radius: 20px;
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(255, 195, 0, 0.5);
+            animation: slideDown 0.4s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .update-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            animation: pulseUpdate 2s infinite;
+        }
+
+        @keyframes pulseUpdate {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .update-content h2 {
+            color: #111;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+        }
+
+        .update-content p {
+            color: #333;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .version-info {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .version-info p {
+            margin: 5px 0;
+            font-weight: bold;
+        }
+
+        .version-old {
+            color: #C0392B;
+        }
+
+        .version-new {
+            color: #27ae60;
+        }
+
+        .changelog {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: left;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .changelog h3 {
+            color: #111;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .changelog ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .changelog li {
+            color: #333;
+            margin: 5px 0;
+        }
+
+        .update-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .update-buttons button {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-update {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-update:hover {
+            background: #229954;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+        }
+
+        .btn-later {
+            background: #555;
+            color: white;
+        }
+
+        .btn-later:hover {
+            background: #666;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 9999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .loading-overlay.show {
+            display: flex;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 5px solid rgba(255, 195, 0, 0.3);
+            border-top: 5px solid #FFC300;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #FFC300;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .version-badge {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #C0392B;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+            z-index: 1000;
+            cursor: pointer;
+            animation: shake 2s infinite;
+            display: none;
+        }
+
+        .version-badge.show {
+            display: block;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+
+        /* Indicador de conexión persistente */
+        .connection-status {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: #27ae60;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .connection-status.active {
+            display: flex;
+        }
+
+        .connection-status.offline {
+            background: #C0392B;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            animation: blink 1.5s infinite;
+        }
+    </style>
+</head>
+<body>
+
+<!-- INDICADOR DE CONEXIÓN -->
+<div id="connectionStatus" class="connection-status">
+    <div class="status-dot"></div>
+    <span id="connectionText">🟢 Online</span>
+</div>
+
+<!-- INDICADOR GPS ACTIVO -->
+<div id="gpsIndicator" class="gps-indicator">
+    <div class="gps-dot"></div>
+    <span>📍 GPS Activo</span>
+</div>
+
+<!-- MODAL DE ACTUALIZACIÓN -->
+<div id="updateModal">
+    <div class="update-content">
+        <div class="update-icon">🚀</div>
+        <h2>¡Nueva Actualización Disponible!</h2>
+        <p>Hay una nueva versión de la aplicación con mejoras y correcciones.</p>
+        
+        <div class="version-info">
+            <p>Versión actual: <span class="version-old" id="currentVersion">1.0.0</span></p>
+            <p>Nueva versión: <span class="version-new" id="newVersion">1.0.0</span></p>
+        </div>
+        
+        <div class="changelog">
+            <h3>📋 Novedades:</h3>
+            <ul id="changelogList">
+                <li>Cargando...</li>
+            </ul>
+        </div>
+        
+        <div class="update-buttons">
+            <button class="btn-update" onclick="actualizarApp()">
+                🔄 Actualizar Ahora
+            </button>
+            <button class="btn-later" onclick="recordarMasTarde()">
+                ⏰ Más Tarde
+            </button>
+        </div>
+        
+        <p style="font-size: 0.85em; margin-top: 15px; color: #666;">
+            💡 Se recomienda actualizar para obtener las últimas mejoras
+        </p>
+    </div>
+</div>
+
+<!-- INDICADOR DE CARGA DE ACTUALIZACIÓN -->
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="spinner"></div>
+    <p class="loading-text">Actualizando aplicación...</p>
+</div>
+
+<!-- BADGE DE NOTIFICACIÓN DE VERSIÓN -->
+<div id="versionBadge" class="version-badge" onclick="mostrarModalActualizacion()">
+    🔔 Nueva versión disponible
+</div>
+
+<!-- CONTENEDOR DE LOGIN -->
+<div id="loginContainer">
+    <div id="manualLoginForm">
+        <h3 style="text-align: center; color: var(--color-primary);">Bienvenido</h3>
+        <p style="text-align: center; font-size: 0.9em; margin-bottom: 20px;">
+            Inicia sesión o regístrate con tu correo y contraseña:
+        </p>
+        
+        <label style="font-size: 0.8em; display: block; margin-bottom: 5px; color: var(--color-secondary);">Correo Electrónico:</label>
+        <input type="email" id="loginEmail" placeholder="tu.correo@ejemplo.com">
+        
+        <label style="font-size: 0.8em; display: block; margin-bottom: 5px; color: var(--color-secondary);">Contraseña:</label>
+        <input type="password" id="loginPassword" placeholder="Contraseña (Mín. 6 caracteres)">
+        
+        <button id="registerBtn">
+            Registrarse (Crear Cuenta)
+        </button>
+        <button id="loginBtn" style="background: var(--color-primary); color: var(--color-background);">
+            Iniciar Sesión
+        </button>
+        
+        <p id="loginError" style="color: var(--color-accent-danger); margin-top: 10px; text-align: center;"></p>
+        
+        <div id="quickLoginArea" style="display: none;">
+            <p id="quickLoginMessage" style="margin-bottom: 5px; font-size: 0.9em; color: var(--color-primary);"></p>
+            <button id="quickLoginBtn" style="background: var(--color-primary); color: var(--color-background); border: none;">Entrar Rápido (Un Clic)</button>
+        </div>
+    </div>
+    
+    <div id="registrationForm" style="display:none;">
+        <h3 style="color: var(--color-primary);">Completa tu Registro</h3>
+        <p style="font-size: 0.9em; margin-bottom: 15px;">
+            Falta información esencial para solicitar domicilios.
+        </p>
+        
+        <label>Nombre completo: *</label>
+        <input type="text" id="regName" placeholder="Tu Nombre Completo">
+        
+        <label>Correo Electrónico:</label>
+        <input type="email" id="regEmailDisplay" placeholder="Email (no editable)" disabled style="color: #999;">
+        
+        <label>Teléfono principal: *</label>
+        <input type="text" id="regPhone" placeholder="Tu Número de Teléfono (Único)">
+
+        <label>Teléfono secundario (opcional):</label>
+        <input type="text" id="regSecondaryPhone" placeholder="Otro Número de Contacto">
+        
+        <label>Dirección de residencia: *</label>
+        <input type="text" id="regAddress" placeholder="Dirección de tu Residencia">
+        
+        <button id="completeRegBtn" style="background: var(--color-primary); color: var(--color-background); margin-top: 20px;">Guardar y Continuar</button>
+        <button id="regLogoutBtn" style="background: #555555; color: white;">Cerrar Sesión</button>
+    </div>
+</div>
+
+<!-- CONTENEDOR DE LA APLICACIÓN -->
+<div id="appContainer">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap;">
+        <h2 style="color: var(--color-secondary); margin: 0;">Bienvenido, <span id="repartidorName"></span>!</h2>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <span id="appVersionDisplay" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 15px; font-size: 0.85em; font-weight: bold;">
+                v1.5.0
+            </span>
+            <button id="logoutBtn" style="padding: 8px 15px; background: var(--color-accent-danger); color: white; border: none; border-radius: 5px; font-weight: bold;">Cerrar Sesión</button>
+        </div>
+    </div>
+
+    <div class="nav-buttons">
+        <button id="showChatBtn" style="background: var(--color-primary);">💬 Chat</button>
+        <button id="showPendientesBtn" style="background: var(--color-accent-danger);">
+            📦 Pendientes <span id="pendientesBadge" class="notification-badge">!</span>
+        </button>
+        <button id="showAsignadosBtn" style="background: var(--color-primary);">🚚 Asignados (<span id="asignadosCount">0</span>)</button>
+        <button id="showHistorialBtn" style="background: var(--color-secondary); color: var(--color-background);">📜 Historial</button>
+    </div>
+    
+    <div id="chatSection">
+        <h3 style="color: var(--color-secondary);">💬 Chat con Administrador</h3>
+        <div class="chat-box">
+            <div class="mensajes-area" id="chatBox">Esperando mensaje del Admin...</div>
+            
+            <!-- Controles multimedia -->
+            <div class="media-controls">
+                <button id="sendGalleryBtn" title="Seleccionar foto de galería">🖼️ Galería</button>
+                <button id="recordAudioBtn" title="Grabar audio">🎤 Grabar Audio</button>
+                <input type="file" id="galleryInput" accept="image/*" style="display: none;">
+            </div>
+
+            <!-- Vista previa de audio -->
+            <div class="audio-preview" id="audioPreview" style="display: none; margin-top: 10px; padding: 10px; background: #333; border-radius: 5px;">
+                <p style="color: #FFC300; margin: 0 0 5px 0;">🎤 Audio grabado:</p>
+                <audio id="previewAudio" controls style="width: 100%; max-width: 300px;"></audio>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                    <button id="sendAudioFileBtn" style="background: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; flex: 1;">✅ Enviar Audio</button>
+                    <button id="cancelAudioBtn" style="background: var(--color-accent-danger); color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer;">✕ Cancelar</button>
+                </div>
+            </div>
+            
+            <!-- Indicador de grabación -->
+            <div class="recording-indicator" id="recordingIndicator">
+                <div class="recording-dot"></div>
+                <span id="recordingTimer">00:00</span>
+                <button id="stopRecordingBtn" style="background: var(--color-accent-danger); color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Detener</button>
+            </div>
+            
+            <!-- Vista previa de imagen -->
+            <div class="image-preview" id="imagePreview">
+                <img id="previewImg" src="" alt="Preview">
+                <button id="cancelImageBtn">✕</button>
+            </div>
+            
+            <!-- Indicador de progreso de carga -->
+            <div class="upload-progress" id="uploadProgress">
+                <p>Subiendo archivo...</p>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p id="progressText">0%</p>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <input type="text" id="mensajeInput" placeholder="Escribe un mensaje..." style="flex-grow: 1; background: #333; color: white; border: 1px solid #555; padding: 10px; border-radius: 5px;">
+                <button id="enviarBtn" style="background: var(--color-primary); color: var(--color-background); border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">Enviar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="pendientesSection" style="display:none;">
+        <h3 style="color: var(--color-secondary);">📦 Nuevos Pedidos (Pendientes)</h3>
+        <div class="pedidos-list" id="pedidosList">Cargando pedidos pendientes...</div>
+    </div>
+    
+    <div id="asignadosSection" style="display:none;">
+        <h3 style="color: var(--color-secondary);">🚚 Mis Pedidos Asignados</h3>
+        <div class="pedidos-list" id="pedidosAsignadosList">No tienes pedidos asignados actualmente.</div>
+    </div>
+
+    <div id="historialSection" style="display:none;">
+        <h3 style="color: var(--color-secondary);">📜 Historial de Domicilios Completados/Cancelados</h3>
+        <div class="pedidos-list" id="pedidosHistorialList">Cargando historial...</div>
+    </div>
+</div>
+
+<!-- MODAL DE CANCELACIÓN -->
+<div id="cancelModal">
+    <div id="cancelModalContent">
+        <h4>¿Por qué deseas cancelar este domicilio?</h4>
+        <div id="motivosContainer">
+            <button onclick="window.ejecutarCancelacionConMotivo('Envío/Domicilio mal tomado')" style="background: var(--color-accent-danger); width: 100%;">Envío/Domicilio mal tomado</button>
+            <button onclick="window.ejecutarCancelacionConMotivo('Me varé (Problemas con el vehículo)')" style="background: var(--color-accent-danger); width: 100%;">Me varé (Problemas con el vehículo)</button>
+            <button onclick="window.ejecutarCancelacionConMotivo('Fin de turno/No puedo cubrirlo')" style="background: var(--color-accent-danger); width: 100%;">Fin de turno/No puedo cubrirlo</button>
+            <button onclick="window.ejecutarCancelacionConMotivo('Corrección de datos / Contacto fallido')" style="background: var(--color-accent-danger); width: 100%;">Corrección de datos / Contacto fallido</button>
+        </div>
+        <button onclick="document.getElementById('cancelModal').style.display='none';" style="background: #555555; width: 100%; margin-top: 15px; color: white;">Cerrar</button>
+    </div>
+</div>
+
+<!-- Modal para ver imagen completa -->
+<div id="imageModal">
+    <button onclick="document.getElementById('imageModal').classList.remove('active');">✕ Cerrar</button>
+    <img id="modalImage" src="" alt="Imagen completa">
+</div>
+
+<audio id="notificationSound" src="https://github.com/dt9650329-ops/Chat-administrador-/raw/f67a159f93aed6be1d6f7f02709384111cd84b7e/%E2%9C%A8Monedas%20Cayendo%20__%20Efectos%20De%20Sonidos(MP3_160K).mp3" preload="auto"></audio>
+
+<script type="module">
+
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+    // ⚙️ Configuración Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyAZX7Q5B29Xti4YtV9wXuiREVdkgcclv9U",
+      authDomain: "domicilios-1cd74.firebaseapp.com",
+      databaseURL: "https://domicilios-1cd74-default-rtdb.firebaseio.com",
+      projectId: "domicilios-1cd74",
+      storageBucket: "domicilios-1cd74.firebasestorage.app",
+      messagingSenderId: "771819437001",
+      appId: "1:771819437001:web:xxxxxxxxxxxxxx"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+    const storage = getStorage(app);
+
+    // VERSIÓN ACTUALIZADA
+    const APP_VERSION = "1.5.1";
+    
+    // Mostrar versión en el DOM cuando se cargue
+    window.addEventListener('DOMContentLoaded', () => {
+        const versionDisplay = document.getElementById('appVersionDisplay');
+        if (versionDisplay) {
+            versionDisplay.textContent = `v${APP_VERSION}`;
+        }
+    });
+    
+    // VARIABLES GLOBALES
+    let repartidorUID = null;
+    let repartidorNombre = "Repartidor";
+    let timerInterval = null; 
+    let currentPedidoIdToCancel = null; 
+    let initialLoad = true;
+    
+    // Variables para grabación de audio
+    let selectedImageFile = null;
+    let selectedAudioFile = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recordingStartTime = 0;
+    let recordingTimerInterval = null;
+    
+    // Variables de tracking GPS
+    let watchId = null;
+    let lastLocationUpdate = 0;
+    const LOCATION_UPDATE_INTERVAL = 2000;
+    let isTrackingEnabled = false;
+    let pedidosActivos = {};
+    let gpsErrorCount = 0;
+    const MAX_GPS_ERRORS = 3;
+
+    // Variables para presencia persistente
+    let heartbeatInterval = null;
+    let sessionActive = false;
+    let heartbeatBackupInterval = null;
+
+    // Variables para Wake Lock
+    let wakeLock = null;
+    let isWakeLockSupported = 'wakeLock' in navigator;
+
+    // Variables para envío de ubicación via fetch directo
+    let locationSendInterval = null;
+    
+    // Variables para Background Geolocation (mejorado)
+    let backgroundGeoInterval = null;
+    let isBackgroundMode = false;
+
+    // ========================================
+    // SISTEMA DE HEARTBEAT MÚLTIPLE
+    // ========================================
+    
+    async function iniciarHeartbeatPrincipal() {
+        if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+        }
+
+        sessionActive = true;
+        await marcarComoOnline();
+
+        heartbeatInterval = setInterval(async () => {
+            if (sessionActive && repartidorUID) {
+                await marcarComoOnline();
+            }
+        }, 8000);
+
+        console.log('✅ Heartbeat principal iniciado (cada 8s)');
+    }
+
+    async function iniciarHeartbeatBackup() {
+        if (heartbeatBackupInterval) {
+            clearInterval(heartbeatBackupInterval);
+        }
+
+        heartbeatBackupInterval = setInterval(async () => {
+            if (sessionActive && repartidorUID) {
+                await enviarHeartbeatDirecto();
+            }
+        }, 10000);
+
+        console.log('✅ Heartbeat backup iniciado (cada 10s)');
+    }
+
+    async function enviarHeartbeatDirecto() {
+        if (!repartidorUID) return;
+
+        try {
+            const timestamp = Date.now();
+            const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
+
+            const response = await fetch(url, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    online: true,
+                    lastSeen: timestamp,
+                    ultimaConexion: timestamp,
+                    heartbeatBackup: true,
+                    timestampBackup: new Date(timestamp).toLocaleString('es-CO')
+                })
+            });
+
+            if (response.ok) {
+                console.log('💚 Heartbeat BACKUP OK:', new Date(timestamp).toLocaleTimeString());
+                actualizarIndicadorConexion(true);
+            } else {
+                console.warn('⚠️ Heartbeat backup falló:', response.status);
+            }
+
+        } catch (error) {
+            console.error('❌ Error en heartbeat backup:', error);
+            actualizarIndicadorConexion(false);
+        }
+    }
+
+    function actualizarIndicadorConexion(online) {
+        const indicator = document.getElementById('connectionStatus');
+        const text = document.getElementById('connectionText');
+        
+        if (online) {
+            indicator.classList.remove('offline');
+            indicator.classList.add('active');
+            text.textContent = '🟢 Online';
+        } else {
+            indicator.classList.add('offline');
+            indicator.classList.add('active');
+            text.textContent = '🔴 Reconectando...';
+        }
+    }
+
+    async function marcarComoOnline() {
+        if (!repartidorUID || !db) {
+            return;
+        }
+
+        try {
+            const timestamp = Date.now();
+            const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+            
+            await update(userStatusRef, {
+                online: true,
+                lastSeen: timestamp,
+                ultimaConexion: timestamp,
+                appVersion: APP_VERSION,
+                navegadorActivo: !document.hidden,
+                gpsActivo: isTrackingEnabled,
+                backgroundMode: isBackgroundMode
+            });
+            
+            console.log('💚 Online:', new Date(timestamp).toLocaleTimeString());
+            actualizarIndicadorConexion(true);
+            
+        } catch (error) {
+            console.error('❌ Error al marcar como online:', error);
+            actualizarIndicadorConexion(false);
+            
+            setTimeout(() => {
+                if (sessionActive && repartidorUID) {
+                    enviarHeartbeatDirecto();
+                }
+            }, 3000);
+        }
+    }
+
+    function detenerHeartbeat() {
+        if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+        }
+        if (heartbeatBackupInterval) {
+            clearInterval(heartbeatBackupInterval);
+            heartbeatBackupInterval = null;
+        }
+        sessionActive = false;
+        console.log('🛑 Heartbeats detenidos');
+    }
+
+    async function marcarComoOffline() {
+        if (!repartidorUID || !db) {
+            return;
+        }
+
+        try {
+            const timestamp = Date.now();
+            const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+            
+            await update(userStatusRef, {
+                online: false,
+                lastSeen: timestamp,
+                trackingActivo: false,
+                sesionCerradaManualmente: true
+            });
+            
+            const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
+            await fetch(url, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    online: false,
+                    lastSeen: timestamp,
+                    trackingActivo: false
+                })
+            });
+            
+            console.log('🔴 Offline marcado correctamente');
+            
+        } catch (error) {
+            console.error('❌ Error al marcar como offline:', error);
+        }
+    }
+
+    async function configurarPresenciaInicial() {
+        if (!repartidorUID || !db) {
+            console.warn('⚠️ No se puede configurar presencia sin UID');
+            return;
+        }
+
+        try {
+            await marcarComoOnline();
+            await iniciarHeartbeatPrincipal();
+            await iniciarHeartbeatBackup();
+            
+            iniciarEnvioUbicacionDirecto();
+            
+            console.log('✅ Sistema de presencia persistente configurado');
+            actualizarIndicadorConexion(true);
+            
+        } catch (error) {
+            console.error('❌ Error al configurar presencia:', error);
+        }
+    }
+    
+    // ========================================
+    // SISTEMA GPS CON BACKGROUND GEOLOCATION MEJORADO
+    // ========================================
+    
+    function iniciarBackgroundGeolocation() {
+        if (backgroundGeoInterval) {
+            clearInterval(backgroundGeoInterval);
+        }
+
+        // Envío agresivo de ubicación cada 3 segundos
+        backgroundGeoInterval = setInterval(async () => {
+            if (!repartidorUID) return;
+            
+            try {
+                const position = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(
+                        resolve,
+                        reject,
+                        {
+                            enableHighAccuracy: true,
+                            timeout: 8000,
+                            maximumAge: 0
+                        }
+                    );
+                });
+
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                const accuracy = position.coords.accuracy;
+                const speed = position.coords.speed || 0;
+                const heading = position.coords.heading || 0;
+                const timestamp = Date.now();
+                const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+
+                // Envío DIRECTO sin usar SDK de Firebase
+                const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
+
+                await fetch(url, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ubicacionActual: {
+                            lat: parseFloat(lat.toFixed(6)),
+                            lng: parseFloat(lng.toFixed(6)),
+                            accuracy: Math.round(accuracy),
+                            speed: Math.round(speed * 3.6),
+                            heading: Math.round(heading),
+                            timestamp: timestamp
+                        },
+                        ubicacionUrl: googleMapsUrl,
+                        trackingActivo: true,
+                        lastSeen: timestamp,
+                        online: true,
+                        backgroundMode: isBackgroundMode
+                    })
+                });
+
+                console.log(`📍 BG GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)} [${isBackgroundMode ? 'BACKGROUND' : 'FOREGROUND'}]`);
+
+            } catch (error) {
+                console.warn('⚠️ Error en background GPS:', error.message);
+            }
+        }, 3000); // Cada 3 segundos
+
+        console.log('✅ Background Geolocation iniciado (cada 3s)');
+    }
+
+    function detenerBackgroundGeolocation() {
+        if (backgroundGeoInterval) {
+            clearInterval(backgroundGeoInterval);
+            backgroundGeoInterval = null;
+            console.log('🛑 Background Geolocation detenido');
+        }
+    }
+
+    function iniciarEnvioUbicacionDirecto() {
+        if (locationSendInterval) {
+            clearInterval(locationSendInterval);
+        }
+
+        locationSendInterval = setInterval(async () => {
+            if (isTrackingEnabled && repartidorUID && lastLocationUpdate > 0) {
+                const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
+                
+                try {
+                    await fetch(url, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            trackingActivo: true,
+                            lastSeen: Date.now(),
+                            online: true
+                        })
+                    });
+                } catch (error) {
+                    console.warn('⚠️ Error en envío directo de ubicación:', error);
+                }
+            }
+        }, 5000);
+
+        console.log('✅ Envío directo de ubicación iniciado');
+    }
+
+    async function iniciarTrackingGPSAutomatico() {
+        console.log('🚀 Iniciando GPS automático al login...');
+        
+        const esAPK = window.matchMedia('(display-mode: standalone)').matches || 
+                      window.navigator.standalone ||
+                      document.referrer.includes('android-app://');
+        
+        if (esAPK) {
+            console.log('📱 Detectado APK Android - Solicitando permisos nativos...');
+            
+            const permisoGPS = await solicitarPermisoUbicacionAPK();
+            
+            if (!permisoGPS) {
+                console.error('❌ Permisos GPS denegados en APK');
+                alert('⚠️ IMPORTANTE: Esta app necesita acceso a tu ubicación TODO EL TIEMPO.\n\n' +
+                      '1. Ve a Configuración de Android\n' +
+                      '2. Aplicaciones → Servi Aliados\n' +
+                      '3. Permisos → Ubicación\n' +
+                      '4. Selecciona "Permitir TODO EL TIEMPO"\n\n' +
+                      'Sin este permiso no podrás recibir pedidos.');
+                return;
+            }
+        }
+        
+        await solicitarWakeLock();
+        await iniciarTrackingGPS();
+        iniciarBackgroundGeolocation();
+        
+        document.getElementById('gpsIndicator').classList.add('active');
+    }
+
+    async function solicitarPermisoUbicacionAPK() {
+        if (!navigator.geolocation) {
+            console.error('❌ Geolocalización no soportada');
+            return false;
+        }
+        
+        try {
+            console.log('📍 Solicitando permiso de ubicación en APK...');
+            
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => {
+                        console.log('✅ Permiso GPS concedido en APK');
+                        console.log(`📍 Ubicación: ${pos.coords.latitude}, ${pos.coords.longitude}`);
+                        console.log(`📏 Precisión: ±${Math.round(pos.coords.accuracy)}m`);
+                        resolve(pos);
+                    },
+                    (error) => {
+                        console.error('❌ Error al obtener ubicación:', error);
+                        reject(error);
+                    },
+                    { 
+                        enableHighAccuracy: true,
+                        timeout: 20000,
+                        maximumAge: 0
+                    }
+                );
+            });
+            
+            if (position.coords.latitude && position.coords.longitude) {
+                console.log('✅ GPS funcionando correctamente en APK');
+                
+                if (repartidorUID) {
+                    await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                        gpsActivoAPK: true,
+                        ultimaUbicacionAPK: {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude,
+                            timestamp: Date.now()
+                        }
+                    });
+                }
+                
+                return true;
+            } else {
+                console.error('❌ Coordenadas GPS inválidas');
+                return false;
+            }
+            
+        } catch (error) {
+            console.error('❌ Error al solicitar permiso GPS en APK:', error);
+            
+            if (error.code === 1) {
+                console.error('⚠️ Usuario denegó permiso de ubicación');
+            } else if (error.code === 2) {
+                console.error('⚠️ Ubicación no disponible (GPS apagado?)');
+            } else if (error.code === 3) {
+                console.error('⚠️ Timeout al obtener ubicación');
+            }
+            
+            return false;
+        }
+    }
+
+    function iniciarTrackingGPS() {
+        if (!navigator.geolocation) {
+            console.error('❌ Geolocalización no soportada');
+            return;
+        }
+        
+        if (isTrackingEnabled) {
+            console.log('⚠️ GPS ya está activo');
+            return;
+        }
+        
+        console.log('📍 Iniciando tracking GPS mejorado...');
+        isTrackingEnabled = true;
+        gpsErrorCount = 0;
+        
+        const esAPK = window.matchMedia('(display-mode: standalone)').matches || 
+                      window.navigator.standalone ||
+                      document.referrer.includes('android-app://');
+        
+        const geoOptions = {
+            enableHighAccuracy: true,
+            timeout: esAPK ? 15000 : 10000,
+            maximumAge: 0
+        };
+        
+        console.log(`📱 Modo: ${esAPK ? 'APK Android' : 'Web'}`);
+        
+        watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const now = Date.now();
+                
+                if (now - lastLocationUpdate < LOCATION_UPDATE_INTERVAL) {
+                    return;
+                }
+                
+                lastLocationUpdate = now;
+                gpsErrorCount = 0;
+                
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                const accuracy = position.coords.accuracy;
+                const speed = position.coords.speed || 0;
+                const heading = position.coords.heading || 0;
+                
+                console.log(`📍 GPS OK [${esAPK ? 'APK' : 'Web'}]: ${lat.toFixed(6)}, ${lng.toFixed(6)} (±${Math.round(accuracy)}m)`);
+                
+                enviarUbicacionAFirebase(lat, lng, accuracy, speed, heading);
+                enviarUbicacionDirecta(lat, lng, accuracy, speed, heading);
+            },
+            (error) => {
+                gpsErrorCount++;
+                console.error(`❌ Error GPS [${esAPK ? 'APK' : 'Web'}] (${gpsErrorCount}/${MAX_GPS_ERRORS}):`, error.message);
+                
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        console.error('⚠️ Permiso GPS denegado');
+                        if (esAPK) {
+                            alert('⚠️ Permiso de ubicación denegado.\n\nPara que funcione en APK:\n\n1. Configuración → Aplicaciones\n2. Servi Aliados → Permisos\n3. Ubicación → "Permitir TODO EL TIEMPO"');
+                        }
+                        detenerTrackingGPS();
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        console.warn('📡 Señal GPS débil, reintentando...');
+                        if (esAPK && gpsErrorCount >= MAX_GPS_ERRORS) {
+                            alert('⚠️ No se puede obtener tu ubicación.\n\nVerifica que:\n1. GPS esté activado\n2. Tengas señal satelital\n3. Estés al aire libre o cerca de una ventana');
+                        }
+                        break;
+                    case error.TIMEOUT:
+                        console.warn('⏱️ Timeout GPS, reintentando...');
+                        break;
+                }
+            },
+            geoOptions
+        );
+        
+        console.log('✅ GPS iniciado - Actualización cada 2 segundos');
+    }
+
+    function detenerTrackingGPS() {
+        if (!isTrackingEnabled) {
+            return;
+        }
+        
+        if (watchId !== null) {
+            navigator.geolocation.clearWatch(watchId);
+            watchId = null;
+        }
+        
+        if (locationSendInterval) {
+            clearInterval(locationSendInterval);
+            locationSendInterval = null;
+        }
+        
+        detenerBackgroundGeolocation();
+        
+        isTrackingEnabled = false;
+        console.log('🛑 GPS detenido');
+        
+        document.getElementById('gpsIndicator').classList.remove('active');
+        
+        if (repartidorUID) {
+            update(ref(db, `repartidores_info/${repartidorUID}`), {
+                trackingActivo: false,
+                ultimaUbicacionTimestamp: Date.now()
+            });
+        }
+    }
+
+    async function enviarUbicacionAFirebase(lat, lng, accuracy, speed, heading) {
+        if (!repartidorUID) return;
+
+        try {
+            const timestamp = Date.now();
+            const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+            
+            await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                ubicacionActual: {
+                    lat: parseFloat(lat.toFixed(6)),
+                    lng: parseFloat(lng.toFixed(6)),
+                    accuracy: Math.round(accuracy),
+                    speed: Math.round(speed * 3.6),
+                    heading: Math.round(heading),
+                    timestamp: timestamp
+                },
+                ubicacionUrl: googleMapsUrl,
+                trackingActivo: true,
+                lastSeen: timestamp,
+                online: true
+            });
+            
+            console.log(`📍 Ubicación Firebase SDK: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+            
+        } catch (error) {
+            console.error('❌ Error al enviar ubicación Firebase SDK:', error);
+        }
+    }
+
+    async function enviarUbicacionDirecta(lat, lng, accuracy, speed, heading) {
+        if (!repartidorUID) return;
+
+        try {
+            const timestamp = Date.now();
+            const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+            
+            const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
+
+            await fetch(url, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ubicacionActual: {
+                        lat: parseFloat(lat.toFixed(6)),
+                        lng: parseFloat(lng.toFixed(6)),
+                        accuracy: Math.round(accuracy),
+                        speed: Math.round(speed * 3.6),
+                        heading: Math.round(heading),
+                        timestamp: timestamp
+                    },
+                    ubicacionUrl: googleMapsUrl,
+                    trackingActivo: true,
+                    lastSeen: timestamp,
+                    online: true
+                })
+            });
+
+            const pedidosResponse = await fetch('https://domicilios-1cd74-default-rtdb.firebaseio.com/pedidos_pendientes.json');
+            const pedidosData = await pedidosResponse.json();
+            
+            if (pedidosData) {
+                const promesas = [];
+                
+                Object.keys(pedidosData).forEach(pedidoId => {
+                    const pedido = pedidosData[pedidoId];
+                    
+                    if (pedido.repartidorUID === repartidorUID && pedido.estado !== 'Pendiente') {
+                        const pedidoUrl = `https://domicilios-1cd74-default-rtdb.firebaseio.com/pedidos_pendientes/${pedidoId}.json`;
+                        
+                        promesas.push(
+                            fetch(pedidoUrl, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    ubicacionRepartidor: {
+                                        lat: parseFloat(lat.toFixed(6)),
+                                        lng: parseFloat(lng.toFixed(6)),
+                                        accuracy: Math.round(accuracy),
+                                        speed: Math.round(speed * 3.6),
+                                        heading: Math.round(heading),
+                                        timestamp: timestamp,
+                                        googleMapsUrl: googleMapsUrl
+                                    }
+                                })
+                            })
+                        );
+                    }
+                });
+                
+                await Promise.all(promesas);
+            }
+
+            console.log(`✅ Ubicación enviada FETCH [${new Date(timestamp).toLocaleTimeString()}]`);
+
+        } catch (error) {
+            console.error('❌ Error al enviar ubicación FETCH:', error);
+        }
+    }
+
+    async function solicitarPermisoUbicacion() {
+        if (!navigator.geolocation) {
+            return false;
+        }
+        
+        try {
+            const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        console.log('✅ Permiso GPS concedido');
+                        console.log(`📍 Ubicación inicial: ${position.coords.latitude}, ${position.coords.longitude}`);
+                        console.log(`📏 Precisión: ±${Math.round(position.coords.accuracy)}m`);
+                        resolve(position);
+                    },
+                    (error) => {
+                        console.error('❌ Permiso GPS denegado:', error);
+                        reject(error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            });
+            
+            return true;
+            
+        } catch (error) {
+            return false;
+        }
+    }
+
+    // ========================================
+    // WAKE LOCK API
+    // ========================================
+    
+    async function solicitarWakeLock() {
+        if (!isWakeLockSupported) {
+            console.warn('⚠️ Wake Lock no soportado en este navegador');
+            return false;
+        }
+
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            console.log('✅ Wake Lock activado - App permanecerá activa');
+            
+            wakeLock.addEventListener('release', () => {
+                console.log('⚠️ Wake Lock liberado');
+            });
+            
+            return true;
+        } catch (error) {
+            console.error('❌ Error al solicitar Wake Lock:', error);
+            return false;
+        }
+    }
+
+    async function liberarWakeLock() {
+        if (wakeLock !== null) {
+            try {
+                await wakeLock.release();
+                wakeLock = null;
+                console.log('🛑 Wake Lock liberado');
+            } catch (error) {
+                console.error('❌ Error al liberar Wake Lock:', error);
+            }
+        }
+    }
+
+    function limpiarRecursos() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
+        }
+        if (locationSendInterval) {
+            clearInterval(locationSendInterval);
+            locationSendInterval = null;
+        }
+        console.log('🧹 Recursos limpiados');
+    }
+
+    // ========================================
+    // 🎤 SISTEMA DE GRABACIÓN EN TIEMPO REAL
+    // ========================================
+
+    async function iniciarGrabacionAudio() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+            
+            console.log('✅ Permiso de micrófono concedido');
+            
+            audioChunks = [];
+            
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
+                ? 'audio/webm' 
+                : 'audio/mp4';
+            
+            mediaRecorder = new MediaRecorder(stream, { 
+                mimeType: mimeType,
+                audioBitsPerSecond: 128000 
+            });
+            
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                    console.log('📦 Chunk de audio guardado:', event.data.size, 'bytes');
+                }
+            };
+            
+            mediaRecorder.onstop = () => {
+                console.log('🛑 Grabación detenida');
+                
+                stream.getTracks().forEach(track => {
+                    track.stop();
+                    console.log('🔇 Micrófono liberado');
+                });
+                
+                const audioBlob = new Blob(audioChunks, { type: mimeType });
+                
+                console.log('🎵 Audio generado:', (audioBlob.size / 1024).toFixed(2), 'KB');
+                
+                mostrarPreviewAudio(audioBlob);
+                
+                document.getElementById('recordingIndicator').classList.remove('active');
+                clearInterval(recordingTimerInterval);
+                
+                document.getElementById('recordAudioBtn').innerHTML = '🎤 Grabar Audio';
+            };
+            
+            mediaRecorder.start();
+            recordingStartTime = Date.now();
+            
+            console.log('🔴 GRABANDO...');
+            
+            document.getElementById('recordingIndicator').classList.add('active');
+            
+            document.getElementById('recordAudioBtn').innerHTML = '⏹️ Detener';
+            
+            recordingTimerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const seconds = (elapsed % 60).toString().padStart(2, '0');
+                document.getElementById('recordingTimer').textContent = `${minutes}:${seconds}`;
+            }, 1000);
+            
+        } catch (error) {
+            console.error('❌ Error al iniciar grabación:', error);
+            
+            if (error.name === 'NotAllowedError') {
+                alert('⚠️ Permiso de micrófono denegado.\n\nVe a Configuración → Aplicaciones → Servi Aliados → Permisos → Micrófono → Permitir');
+            } else if (error.name === 'NotFoundError') {
+                alert('❌ No se encontró ningún micrófono en el dispositivo');
+            } else {
+                alert('❌ Error al acceder al micrófono: ' + error.message);
+            }
+        }
+    }
+
+    function detenerGrabacionAudio() {
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            console.log('🛑 Deteniendo grabación...');
+        }
+    }
+
+    function mostrarPreviewAudio(audioBlob) {
+        const audioPreview = document.getElementById('audioPreview');
+        const previewAudio = document.getElementById('previewAudio');
+        
+        const audioURL = URL.createObjectURL(audioBlob);
+        
+        previewAudio.src = audioURL;
+        
+        selectedAudioFile = new File(
+            [audioBlob], 
+            `audio_${Date.now()}.${audioBlob.type.includes('webm') ? 'webm' : 'mp4'}`,
+            { type: audioBlob.type }
+        );
+        
+        audioPreview.style.display = 'block';
+        
+        console.log('🎵 Preview de audio listo');
+    }
+
+    document.getElementById('recordAudioBtn').addEventListener('click', async () => {
+        console.log('🎤 Botón presionado');
+        
+        if (mediaRecorder && mediaRecorder.state === 'recording') {
+            console.log('⏹️ Deteniendo grabación actual...');
+            detenerGrabacionAudio();
+            return;
+        }
+        
+        console.log('🔴 Iniciando nueva grabación...');
+        await iniciarGrabacionAudio();
+    });
+
+    document.getElementById('stopRecordingBtn').addEventListener('click', () => {
+        detenerGrabacionAudio();
+    });
+
+    document.getElementById('sendAudioFileBtn').addEventListener('click', async () => {
+        if (!selectedAudioFile) {
+            alert('⚠️ No hay audio para enviar');
+            return;
+        }
+        
+        console.log('📤 Enviando audio...');
+        await enviarAudioSeleccionado(selectedAudioFile);
+        
+        selectedAudioFile = null;
+        document.getElementById('audioPreview').style.display = 'none';
+        console.log('✅ Audio enviado y limpiado');
+    });
+
+    document.getElementById('cancelAudioBtn').addEventListener('click', () => {
+        selectedAudioFile = null;
+        document.getElementById('audioPreview').style.display = 'none';
+        
+        const previewAudio = document.getElementById('previewAudio');
+        previewAudio.pause();
+        previewAudio.src = '';
+        
+        audioChunks = [];
+        
+        console.log('🗑️ Audio cancelado');
+    });
+
+    async function enviarAudioSeleccionado(audioFile) {
+        if (!repartidorUID) {
+            console.error('❌ Error: Usuario no identificado');
+            alert('❌ Error: No se pudo identificar al usuario');
+            return;
+        }
+        
+        try {
+            console.log('📤 Subiendo audio a Firebase Storage...');
+            
+            const timestamp = Date.now();
+            
+            const extension = audioFile.name.split('.').pop() || 'mp3';
+            const audioPath = `chats/${repartidorUID}/audios/audio_${timestamp}.${extension}`;
+            
+            const progressDiv = document.getElementById('uploadProgress');
+            progressDiv.classList.add('active');
+            
+            const audioURL = await uploadFileToStorage(audioFile, audioPath);
+            
+            console.log('✅ Audio subido exitosamente:', audioURL);
+            
+            const duracionEstimada = Math.ceil(audioFile.size / 16000);
+            
+            await push(ref(db, `chats/${repartidorUID}`), {
+                remitente: repartidorNombre,
+                nombre_remitente: repartidorNombre,
+                texto: '🎙️ Audio',
+                timestamp: timestamp,
+                rol_remitente: "Repartidor",
+                tipo_adjunto: 'audio',
+                referencia_adjunto: audioURL,
+                duracion: duracionEstimada,
+                tamano_kb: Math.round(audioFile.size / 1024),
+                pedidoID: 'N/A'
+            });
+            
+            progressDiv.classList.remove('active');
+            
+            console.log(`✅ Audio enviado correctamente (${duracionEstimada}s, ${Math.round(audioFile.size / 1024)}KB)`);
+            
+        } catch (error) {
+            console.error('❌ Error al enviar audio:', error);
+            alert('❌ Error al enviar el audio: ' + error.message);
+            
+            document.getElementById('uploadProgress').classList.remove('active');
+        }
+    }
+
+    // ========================================
+    // FUNCIONES DEL SISTEMA DE ACTUALIZACIONES
+    // ========================================
+    
+    function compararVersiones(v1, v2) {
+        const partes1 = v1.split('.').map(Number);
+        const partes2 = v2.split('.').map(Number);
+        
+        for (let i = 0; i < 3; i++) {
+            if (partes1[i] > partes2[i]) return 1;
+            if (partes1[i] < partes2[i]) return -1;
+        }
+        return 0;
+    }
+
+    async function verificarActualizacion() {
+        try {
+            const versionRef = ref(db, 'app_config/version_actual');
+            const snapshot = await get(versionRef);
+            
+            if (!snapshot.exists()) {
+                console.warn('⚠️ No hay configuración de versión en Firebase');
+                return;
+            }
+            
+            const configVersion = snapshot.val();
+            const versionServidor = configVersion.numero || "1.0.0";
+            const changelog = configVersion.changelog || ["Mejoras generales"];
+            const obligatoria = configVersion.obligatoria || false;
+            
+            console.log('📱 Versión local:', APP_VERSION);
+            console.log('☁️ Versión servidor:', versionServidor);
+            
+            if (compararVersiones(versionServidor, APP_VERSION) > 0) {
+                console.log('🚀 Nueva versión disponible');
+                
+                const recordarHasta = localStorage.getItem('recordar_actualizacion_hasta');
+                const ahora = Date.now();
+                
+                if (obligatoria || !recordarHasta || ahora > parseInt(recordarHasta)) {
+                    mostrarActualizacion(versionServidor, changelog, obligatoria);
+                } else {
+                    document.getElementById('versionBadge').classList.add('show');
+                }
+            } else {
+                console.log('✅ App actualizada');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error al verificar actualización:', error);
+        }
+    }
+
+    function mostrarActualizacion(nuevaVersion, changelog, obligatoria) {
+        document.getElementById('currentVersion').textContent = APP_VERSION;
+        document.getElementById('newVersion').textContent = nuevaVersion;
+        
+        const changelogList = document.getElementById('changelogList');
+        changelogList.innerHTML = '';
+        
+        changelog.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = item;
+            changelogList.appendChild(li);
+        });
+        
+        if (obligatoria) {
+            document.querySelector('.btn-later').style.display = 'none';
+        } else {
+            document.querySelector('.btn-later').style.display = 'block';
+        }
+        
+        document.getElementById('updateModal').classList.add('show');
+        document.getElementById('versionBadge').classList.add('show');
+    }
+
+    window.mostrarModalActualizacion = function() {
+        document.getElementById('updateModal').classList.add('show');
+    }
+
+    window.actualizarApp = function() {
+        document.getElementById('loadingOverlay').classList.add('show');
+        
+        setTimeout(() => {
+            if ('caches' in window) {
+                caches.keys().then(names => {
+                    names.forEach(name => {
+                        caches.delete(name);
+                    });
+                });
+            }
+            
+            localStorage.removeItem('recordar_actualizacion_hasta');
+            window.location.reload(true);
+        }, 2000);
+    }
+
+    window.recordarMasTarde = function() {
+        const seisHoras = 6 * 60 * 60 * 1000;
+        const recordarHasta = Date.now() + seisHoras;
+        
+        localStorage.setItem('recordar_actualizacion_hasta', recordarHasta.toString());
+        
+        document.getElementById('updateModal').classList.remove('show');
+        document.getElementById('versionBadge').classList.add('show');
+        
+        console.log('⏰ Recordatorio configurado para 6 horas');
+    }
+
+    onValue(ref(db, 'app_config/version_actual'), (snapshot) => {
+        if (snapshot.exists()) {
+            const configVersion = snapshot.val();
+            const versionServidor = configVersion.numero;
+            
+            if (compararVersiones(versionServidor, APP_VERSION) > 0) {
+                document.getElementById('versionBadge').classList.add('show');
+            }
+        }
+    });
+
+    // ========================================
+    // FUNCIONES DE UTILIDAD
+    // ========================================
+    
+    function formatTime(ms) {
+        const totalSeconds = Math.floor(ms / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+        const pad = (num) => num.toString().padStart(2, '0');
+        return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+    
+    function updateTimers() {
+        if (timerInterval) clearInterval(timerInterval); 
+        timerInterval = setInterval(() => {
+            document.querySelectorAll('.pedido-item.asignado-timer').forEach(item => {
+                const timestampElement = item.querySelector('.timestamp-aceptado');
+                const timerElement = item.querySelector('.timer');
+                if (timestampElement && timerElement) {
+                    const timestamp = parseInt(timestampElement.textContent);
+                    const elapsed = Date.now() - timestamp;
+                    timerElement.textContent = `⏱️ Tiempo: ${formatTime(elapsed)}`;
+                }
+            });
+        }, 1000);
+    }
+    
+    function playNotificationSound() {
+        const audio = document.getElementById('notificationSound');
+        if (audio) {
+            audio.pause(); 
+            audio.currentTime = 0;
+            audio.play().catch(error => console.warn("Error audio:", error));
+        }
+    }
+
+    function showSection(sectionId) {
+        document.getElementById('chatSection').style.display = 'none';
+        document.getElementById('pendientesSection').style.display = 'none';
+        document.getElementById('asignadosSection').style.display = 'none';
+        document.getElementById('historialSection').style.display = 'none';
+        document.getElementById(sectionId).style.display = 'block';
+    }
+
+    document.getElementById('showChatBtn').addEventListener('click', () => showSection('chatSection'));
+    document.getElementById('showPendientesBtn').addEventListener('click', () => showSection('pendientesSection'));
+    document.getElementById('showAsignadosBtn').addEventListener('click', () => {
+        showSection('asignadosSection');
+        updateTimers(); 
+    });
+    document.getElementById('showHistorialBtn').addEventListener('click', () => { 
+        showSection('historialSection');
+        listenForHistorial(); 
+    });
+
+    // ========================================
+    // FUNCIONES MULTIMEDIA (FOTOS)
+    // ========================================
+    
+    async function uploadFileToStorage(file, path) {
+        return new Promise((resolve, reject) => {
+            const fileRef = storageRef(storage, path);
+            const uploadTask = uploadBytesResumable(fileRef, file);
+            
+            const progressDiv = document.getElementById('uploadProgress');
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            
+            progressDiv.classList.add('active');
+            
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    progressFill.style.width = progress + '%';
+                    progressText.textContent = Math.round(progress) + '%';
+                },
+                (error) => {
+                    progressDiv.classList.remove('active');
+                    reject(error);
+                },
+                async () => {
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    progressDiv.classList.remove('active');
+                    progressFill.style.width = '0%';
+                    progressText.textContent = '0%';
+                    resolve(downloadURL);
+                }
+            );
+        });
+    }
+    
+    document.getElementById('sendGalleryBtn').addEventListener('click', () => {
+        document.getElementById('galleryInput').click();
+    });
+    
+    document.getElementById('galleryInput').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file && file.type.startsWith('image/')) {
+            selectedImageFile = file;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                document.getElementById('previewImg').src = event.target.result;
+                document.getElementById('imagePreview').classList.add('active');
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    
+    document.getElementById('cancelImageBtn').addEventListener('click', () => {
+        selectedImageFile = null;
+        document.getElementById('imagePreview').classList.remove('active');
+        document.getElementById('galleryInput').value = '';
+    });
+
+    window.verImagenCompleta = function(imageUrl) {
+        document.getElementById('modalImage').src = imageUrl;
+        document.getElementById('imageModal').classList.add('active');
+    };
+
+    window.toggleAudio = function(audioId) {
+        const audio = document.getElementById(audioId);
+        const btn = document.getElementById('btn_' + audioId);
+        
+        if (!audio || !btn) return;
+        
+        if (audio.paused) {
+            audio.play();
+            btn.innerHTML = '⏸️';
+            
+            audio.onended = () => {
+                btn.innerHTML = '▶️';
+            };
+        } else {
+            audio.pause();
+            audio.currentTime = 0;
+            btn.innerHTML = '▶️';
+        }
+    };
+
+    // ========================================
+    // FUNCIONES DE LOGIN Y SESIÓN CORREGIDAS
+    // ========================================
+    
+    function saveQuickLoginData(email, password, name) {
+        localStorage.setItem('lastRepartidorEmail', email);
+        localStorage.setItem('lastRepartidorPassword', password);
+        localStorage.setItem('lastRepartidorName', name);
+    }
+    
+    function showRegistrationForm(email) {
+        document.getElementById('manualLoginForm').style.display = 'none';
+        document.getElementById('registrationForm').style.display = 'block';
+        document.getElementById('regEmailDisplay').value = email;
+        document.getElementById('loginContainer').style.display = 'flex';
+        document.getElementById('appContainer').style.display = 'none';
+    }
+    
+    async function solicitarPermisosMultimedia() {
+        return new Promise((resolve) => {
+            const permisosContainer = document.createElement('div');
+            permisosContainer.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.9); z-index: 5000;
+                display: flex; justify-content: center; align-items: center;
+                flex-direction: column; padding: 20px; box-sizing: border-box;
+            `;
+            
+            permisosContainer.innerHTML = `
+                <div style="background: #222; padding: 30px; border-radius: 15px; max-width: 400px; text-align: center;">
+                    <h2 style="color: #FFC300; margin-bottom: 20px;">🔐 Permisos Necesarios</h2>
+                    <p style="color: #D7D7D7; margin-bottom: 30px; line-height: 1.6;">
+                        Para usar todas las funciones necesitamos tu permiso para acceder a:
+                    </p>
+                    <div style="text-align: left; margin-bottom: 20px;">
+                        <p style="color: #FFC300; margin: 10px 0;">📍 <strong>Ubicación GPS</strong></p>
+                        <p style="color: #999; font-size: 0.9em; margin-left: 30px;">Tracking automático permanente (cada 2-3 segundos incluso en segundo plano)</p>
+                        
+                        <p style="color: #FFC300; margin: 10px 0; margin-top: 20px;">📷 <strong>Cámara/Galería</strong></p>
+                        <p style="color: #999; font-size: 0.9em; margin-left: 30px;">Para enviar fotos</p>
+                        
+                        <p style="color: #FFC300; margin: 10px 0; margin-top: 20px;">🎤 <strong>Micrófono</strong></p>
+                        <p style="color: #999; font-size: 0.9em; margin-left: 30px;">Para grabar y enviar audios</p>
+                    </div>
+                    <p style="color: #E67E22; font-size: 0.85em; margin-bottom: 20px;">
+                        ⚠️ El GPS se activará automáticamente y continuará activo incluso si minimizas la app o bloqueas la pantalla.
+                    </p>
+                    <button id="solicitarPermisosBtn" style="
+                        background: #FFC300; color: #111; 
+                        padding: 15px 30px; border: none; 
+                        border-radius: 8px; font-weight: bold; 
+                        font-size: 1.1em; cursor: pointer;
+                        width: 100%; margin-bottom: 10px;
+                    ">Solicitar Permisos</button>
+                    <button id="omitirPermisosBtn" style="
+                        background: #555; color: white; 
+                        padding: 10px 20px; border: none; 
+                        border-radius: 8px; cursor: pointer;
+                        width: 100%; font-size: 0.9em;
+                    ">Continuar sin permisos</button>
+                </div>
+            `;
+            
+            document.body.appendChild(permisosContainer);
+            
+            const solicitarBtn = document.getElementById('solicitarPermisosBtn');
+            const omitirBtn = document.getElementById('omitirPermisosBtn');
+            
+            solicitarBtn.addEventListener('click', async () => {
+                console.log('🔐 Solicitando permisos...');
+                
+                let gpsPermiso = false;
+                let micPermiso = false;
+                let cameraPermiso = false;
+                let permisosCompletos = true;
+                
+                try {
+                    const position = await new Promise((res, rej) => {
+                        navigator.geolocation.getCurrentPosition(res, rej, {
+                            enableHighAccuracy: true,
+                            timeout: 15000,
+                            maximumAge: 0
+                        });
+                    });
+                    gpsPermiso = true;
+                    console.log('✅ GPS permitido');
+                } catch (error) {
+                    console.warn('⚠️ GPS denegado:', error);
+                    permisosCompletos = false;
+                }
+                
+                try {
+                    const streamMic = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    streamMic.getTracks().forEach(track => track.stop());
+                    micPermiso = true;
+                    console.log('✅ Micrófono permitido');
+                } catch (error) {
+                    console.warn('⚠️ Micrófono denegado:', error);
+                    permisosCompletos = false;
+                }
+                
+                try {
+                    const streamCam = await navigator.mediaDevices.getUserMedia({ video: true });
+                    streamCam.getTracks().forEach(track => track.stop());
+                    cameraPermiso = true;
+                    console.log('✅ Cámara permitida');
+                } catch (error) {
+                    console.warn('⚠️ Cámara denegada:', error);
+                    permisosCompletos = false;
+                }
+                
+                try {
+                    document.body.removeChild(permisosContainer);
+                } catch (e) {
+                    console.warn('Modal ya removido');
+                }
+                
+                if (permisosCompletos) {
+                    console.log('✅ Todos los permisos concedidos');
+                } else if (gpsPermiso) {
+                    console.log('⚠️ GPS activado, otros permisos pendientes');
+                } else {
+                    console.log('⚠️ GPS no activado');
+                }
+                
+                resolve({ gpsPermiso, micPermiso, cameraPermiso });
+            });
+            
+            omitirBtn.addEventListener('click', () => {
+                console.log('⏭️ Permisos omitidos');
+                
+                try {
+                    document.body.removeChild(permisosContainer);
+                } catch (e) {
+                    console.warn('Modal ya removido');
+                }
+                
+                resolve({ gpsPermiso: false, micPermiso: false, cameraPermiso: false });
+            });
+        });
+    }
+
+    async function setLoginState(isLoggedIn, user = null) {
+        document.getElementById('loginContainer').style.display = isLoggedIn ? 'none' : 'flex';
+        document.getElementById('appContainer').style.display = isLoggedIn ? 'block' : 'none';
+        document.getElementById('manualLoginForm').style.display = 'block';
+        document.getElementById('registrationForm').style.display = 'none';
+        document.getElementById('loginError').textContent = '';
+        
+        if (isLoggedIn && user) { 
+            const uid = user.uid;
+            const email = user.email;
+            repartidorUID = uid;
+            
+            const repSnapshot = await get(ref(db, `repartidores_info/${repartidorUID}`));
+            const repData = repSnapshot.val() || {};
+            
+            if (!repData.nombre || !repData.telefono_principal || !repData.direccion_residencia) {
+                showRegistrationForm(email);
+                return; 
+            }
+            
+            repartidorNombre = repData.nombre; 
+            
+            await configurarPresenciaInicial();
+            
+            document.getElementById('repartidorName').textContent = repartidorNombre; 
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'block';
+
+            const esAppNativa = window.matchMedia('(display-mode: standalone)').matches || 
+                               window.navigator.standalone || 
+                               document.referrer.includes('android-app://');
+            
+            console.log('📱 Modo:', esAppNativa ? 'App Nativa' : 'Web');
+            
+            const permisosYaSolicitados = localStorage.getItem(`permisos_solicitados_${uid}`);
+            
+            if (esAppNativa || !permisosYaSolicitados) {
+                console.log('🔐 Solicitando permisos...');
+                const permisos = await solicitarPermisosMultimedia();
+                
+                if (!esAppNativa) {
+                    localStorage.setItem(`permisos_solicitados_${uid}`, 'true');
+                }
+                
+                if (permisos.gpsPermiso) {
+                    console.log('🚀 Iniciando GPS con permisos...');
+                    await iniciarTrackingGPSAutomatico();
+                } else {
+                    console.log('⚠️ GPS no activado - Continuar sin tracking');
+                }
+            } else {
+                console.log('🚀 Iniciando GPS (permisos previos)...');
+                await iniciarTrackingGPSAutomatico();
+            }
+
+            showSection('chatSection'); 
+            listenForPedidos();
+            listenForChat();
+            
+        } else {
+            if (repartidorUID) {
+                await marcarComoOffline();
+            }
+            
+            detenerHeartbeat();
+            detenerTrackingGPS();
+            await liberarWakeLock();
+            limpiarRecursos();
+            
+            repartidorUID = null;
+            repartidorNombre = "Repartidor";
+            pedidosActivos = {};
+            
+            if (timerInterval) clearInterval(timerInterval);
+            updateQuickLoginUI(); 
+        }
+    }
+
+    function updateQuickLoginUI() {
+        const lastEmail = localStorage.getItem('lastRepartidorEmail');
+        const lastName = localStorage.getItem('lastRepartidorName');
+        const quickLoginArea = document.getElementById('quickLoginArea');
+        if (lastEmail && lastName) {
+            quickLoginArea.style.display = 'block';
+            document.getElementById('quickLoginMessage').innerHTML = `<strong>¿Continuar como ${lastName}?</strong>`;
+        } else {
+            quickLoginArea.style.display = 'none';
+        }
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+        if (user) await setLoginState(true, user);
+        else await setLoginState(false);
+    });
+    
+    // ========================================
+    // EVENTOS DE LOGIN CORREGIDOS
+    // ========================================
+
+    document.getElementById('quickLoginBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('quickLoginBtn');
+        const errorElement = document.getElementById('loginError');
+        
+        if (btn.disabled) return;
+        
+        btn.textContent = 'Conectando...';
+        btn.disabled = true;
+        errorElement.textContent = '';
+        
+        const repEmail = localStorage.getItem('lastRepartidorEmail');
+        const repPassword = localStorage.getItem('lastRepartidorPassword');
+        
+        if (!repEmail || !repPassword) {
+            errorElement.textContent = '⚠️ No hay sesión guardada';
+            btn.textContent = 'Entrar Rápido (Un Clic)';
+            btn.disabled = false;
+            return;
+        }
+        
+        try { 
+            console.log('🔐 Iniciando sesión rápida...');
+            await signInWithEmailAndPassword(auth, repEmail, repPassword);
+            console.log('✅ Login rápido exitoso');
+        } catch (error) { 
+            console.error('❌ Error login rápido:', error);
+            localStorage.removeItem('lastRepartidorEmail');
+            localStorage.removeItem('lastRepartidorPassword');
+            localStorage.removeItem('lastRepartidorName');
+            updateQuickLoginUI();
+            errorElement.textContent = '❌ Sesión expirada. Inicia sesión nuevamente.';
+        } finally {
+            btn.textContent = 'Entrar Rápido (Un Clic)';
+            btn.disabled = false;
+        }
+    });
+    
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+        const errorElement = document.getElementById('loginError');
+        const loginBtn = document.getElementById('loginBtn');
+        
+        if (loginBtn.disabled) return;
+        
+        errorElement.textContent = '';
+        
+        if (!email || !password) {
+            errorElement.textContent = '⚠️ Completa ambos campos';
+            return;
+        }
+        
+        if (password.length < 6) {
+            errorElement.textContent = '⚠️ La contraseña debe tener al menos 6 caracteres';
+            return;
+        }
+        
+        loginBtn.textContent = 'Iniciando...';
+        loginBtn.disabled = true;
+        
+        try { 
+            console.log('🔐 Iniciando sesión con email/password...');
+            await signInWithEmailAndPassword(auth, email, password);
+            localStorage.setItem('tempPassword', password);
+            console.log('✅ Login exitoso');
+        } catch (error) { 
+            console.error('❌ Error login:', error);
+            if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
+                errorElement.textContent = '❌ Email o contraseña incorrectos';
+            } else if (error.code === 'auth/user-not-found') {
+                errorElement.textContent = '❌ Usuario no encontrado';
+            } else if (error.code === 'auth/too-many-requests') {
+                errorElement.textContent = '❌ Demasiados intentos. Intenta más tarde.';
+            } else {
+                errorElement.textContent = '❌ Error: ' + error.message;
+            }
+        } finally {
+            loginBtn.textContent = 'Iniciar Sesión';
+            loginBtn.disabled = false;
+        }
+    });
+
+    document.getElementById('registerBtn').addEventListener('click', async () => {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+        const errorElement = document.getElementById('loginError');
+        const registerBtn = document.getElementById('registerBtn');
+        
+        if (registerBtn.disabled) return;
+        
+        errorElement.textContent = '';
+        
+        if (!email || !password) {
+            errorElement.textContent = '⚠️ Completa ambos campos';
+            return;
+        }
+        
+        if (password.length < 6) {
+            errorElement.textContent = '⚠️ La contraseña debe tener al menos 6 caracteres';
+            return;
+        }
+        
+        registerBtn.textContent = 'Registrando...';
+        registerBtn.disabled = true;
+        
+        try {
+            console.log('📝 Creando cuenta...');
+            await createUserWithEmailAndPassword(auth, email, password);
+            localStorage.setItem('tempPassword', password);
+            showRegistrationForm(email);
+            console.log('✅ Cuenta creada, mostrando formulario de registro');
+        } catch (error) { 
+            console.error('❌ Error registro:', error);
+            if (error.code === 'auth/email-already-in-use') {
+                errorElement.textContent = '❌ Email ya registrado. Usa "Iniciar Sesión"';
+            } else if (error.code === 'auth/invalid-email') {
+                errorElement.textContent = '❌ Email inválido';
+            } else if (error.code === 'auth/weak-password') {
+                errorElement.textContent = '❌ Contraseña muy débil';
+            } else {
+                errorElement.textContent = '❌ Error: ' + error.message;
+            }
+        } finally {
+            registerBtn.textContent = 'Registrarse (Crear Cuenta)';
+            registerBtn.disabled = false;
+        }
+    });
+
+    document.getElementById('completeRegBtn').addEventListener('click', async () => {
+        const name = document.getElementById('regName').value.trim();
+        const phone = document.getElementById('regPhone').value.trim();
+        const address = document.getElementById('regAddress').value.trim();
+        const secondaryPhone = document.getElementById('regSecondaryPhone').value.trim();
+        
+        if (!name || !phone || !address) { 
+            alert('⚠️ Completa todos los campos obligatorios (*)');
+            return; 
+        }
+        
+        try {
+            const repartidorData = {
+                nombre: name, 
+                telefono_principal: phone, 
+                telefono_secundario: secondaryPhone || '',
+                direccion_residencia: address, 
+                email: auth.currentUser.email,
+                fechaRegistro: Date.now(),
+                online: true,
+                ultimaConexion: Date.now(),
+                lastSeen: Date.now()
+            };
+            
+            await set(ref(db, `repartidores_info/${auth.currentUser.uid}`), repartidorData);
+            
+            console.log('✅ Repartidor registrado');
+            
+            saveQuickLoginData(auth.currentUser.email, localStorage.getItem('tempPassword'), name);
+            await setLoginState(true, auth.currentUser);
+            
+        } catch (error) { 
+            console.error('❌ Error al guardar información:', error);
+            alert('❌ Error al guardar: ' + error.message);
+        }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+        await signOut(auth);
+    });
+    
+    document.getElementById('regLogoutBtn').addEventListener('click', async () => {
+        await signOut(auth);
+    });
+
+    // ========================================
+    // LÓGICA DE PEDIDOS CORREGIDA
+    // ========================================
+    
+    window.avanzarEstadoPedido = async function(pedidoId, estadoActual) {
+        const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
+        let proximoEstado = "";
+        let mensajeAlerta = "";
+
+        if (estadoActual === 'Pendiente') {
+            if (confirm(`¿Deseas tomar este pedido?`)) {
+                proximoEstado = 'Aceptado';
+                mensajeAlerta = "✅ Pedido Aceptado. Dirígete al punto de recogida.";
+                
+                try {
+                    if (navigator.geolocation) {
+                        const position = await new Promise((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject, {
+                                enableHighAccuracy: true,
+                                timeout: 10000,
+                                maximumAge: 0
+                            });
+                        });
+                        
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+                        
+                        await update(pedidoRef, {
+                            estado: proximoEstado,
+                            repartidorAsignado: repartidorNombre,
+                            repartidorUID: repartidorUID,
+                            timestampAceptado: Date.now(),
+                            ubicacionRepartidor: {
+                                lat: parseFloat(lat.toFixed(6)),
+                                lng: parseFloat(lng.toFixed(6)),
+                                accuracy: Math.round(position.coords.accuracy),
+                                speed: Math.round((position.coords.speed || 0) * 3.6),
+                                heading: Math.round(position.coords.heading || 0),
+                                timestamp: Date.now(),
+                                googleMapsUrl: googleMapsUrl
+                            }
+                        });
+                    } else {
+                        await update(pedidoRef, {
+                            estado: proximoEstado,
+                            repartidorAsignado: repartidorNombre,
+                            repartidorUID: repartidorUID,
+                            timestampAceptado: Date.now()
+                        });
+                    }
+                    
+                    pedidosActivos[pedidoId] = {
+                        estado: 'Aceptado',
+                        timestamp: Date.now()
+                    };
+                    
+                    console.log(mensajeAlerta);
+                    showSection('asignadosSection');
+                } catch (error) {
+                    console.error('❌ Error al aceptar pedido:', error);
+                    alert('❌ Error al aceptar el pedido: ' + error.message);
+                }
+            }
+            return;
+        }
+
+        if (estadoActual === 'Aceptado') {
+            proximoEstado = 'Esperando Pedido';
+            mensajeAlerta = "⏳ Estado actualizado: Esperando el despacho en el sitio.";
+        } else if (estadoActual === 'Esperando Pedido') {
+            proximoEstado = 'En Camino';
+            mensajeAlerta = "🚚 ¡Buen viaje! El administrador y el cliente saben que vas en camino.";
+        }
+
+        if (proximoEstado) {
+            try {
+                await update(pedidoRef, { estado: proximoEstado });
+                
+                if (pedidosActivos[pedidoId]) {
+                    pedidosActivos[pedidoId].estado = proximoEstado;
+                }
+                
+                console.log(mensajeAlerta);
+            } catch (error) {
+                console.error('❌ Error al actualizar estado:', error);
+                alert('❌ Error al actualizar el estado');
+            }
+        }
+    };
+
+    // ========================================
+    // LISTENER DE PEDIDOS
+    // ========================================
+    
+    function listenForPedidos() {
+        onValue(ref(db, 'pedidos_pendientes'), (snapshot) => {
+            const pedidosList = document.getElementById('pedidosList');
+            const pedidosAsignadosList = document.getElementById('pedidosAsignadosList');
+            const pendientesBadge = document.getElementById('pendientesBadge');
+            
+            pedidosList.innerHTML = '';
+            pedidosAsignadosList.innerHTML = '';
+            let asignadosCount = 0;
+            let pendientesCount = 0;
+            const data = snapshot.val();
+            
+            const pedidosAnteriores = localStorage.getItem('lastPedidosCount') ? parseInt(localStorage.getItem('lastPedidosCount')) : 0;
+            let tieneNuevoPedido = false; 
+
+            if (!data) {
+                pedidosList.innerHTML = '<p>No hay pedidos pendientes.</p>';
+                pedidosAsignadosList.innerHTML = '<p>No tienes pedidos asignados.</p>';
+                document.getElementById('asignadosCount').textContent = 0;
+                pendientesBadge.style.display = 'none';
+                localStorage.setItem('lastPedidosCount', 0);
+                
+                initialLoad = false;
+                return;
+            }
+
+            const pedidosEnFirebase = Object.keys(data);
+            Object.keys(pedidosActivos).forEach(pedidoId => {
+                if (!pedidosEnFirebase.includes(pedidoId)) {
+                    delete pedidosActivos[pedidoId];
+                }
+            });
+
+            Object.keys(data).forEach(pedidoId => {
+                const pedido = data[pedidoId];
+                const item = document.createElement('div');
+                item.classList.add('pedido-item');
+                
+                const contentHTML = `
+                    <p><strong>ID:</strong> ${pedidoId.substring(0, 8)}...</p>
+                    <p><strong>Cliente:</strong> ${pedido.nombreCliente}</p>
+                    <p><strong>Teléfono:</strong> ${pedido.telefonoCliente}</p>
+                    <p><strong>Dirección:</strong> ${pedido.direccionCliente}</p>
+                    <p><strong>Descripción:</strong> ${pedido.descripcion}</p>
+                    <p><strong>Monto:</strong> $${pedido.montoTotal.toFixed(2)}</p>
+                `;
+                
+                if (pedido.estado === 'Pendiente') {
+                    pendientesCount++;
+                    item.innerHTML = contentHTML + `
+                        <button onclick="window.avanzarEstadoPedido('${pedidoId}', 'Pendiente')" style="background: #4CAF50; color: white; width: 100%;">✅ Aceptar Pedido</button>
+                    `;
+                    pedidosList.appendChild(item);
+                    if (!localStorage.getItem(`pedido_seen_${pedidoId}`)) tieneNuevoPedido = true;
+
+                } else if (pedido.repartidorUID === repartidorUID) {
+                    asignadosCount++;
+                    item.classList.add('asignado-timer');
+                    
+                    let mainBtn = "";
+                    if (pedido.estado === 'Aceptado') {
+                        item.classList.add('asignado');
+                        mainBtn = `<button onclick="window.avanzarEstadoPedido('${pedidoId}', 'Aceptado')" style="background: var(--color-waiting); color:white; flex-grow: 1;">⏳ Estoy Esperando</button>`;
+                    } else if (pedido.estado === 'Esperando Pedido') {
+                        item.classList.add('esperando');
+                        mainBtn = `<button onclick="window.avanzarEstadoPedido('${pedidoId}', 'Esperando Pedido')" style="background: var(--color-delivery); color:white; flex-grow: 1;">🚚 Salgo a Entregar</button>`;
+                    } else if (pedido.estado === 'En Camino') {
+                        item.classList.add('en-camino');
+                        mainBtn = `<button onclick="window.completarPedido('${pedidoId}')" style="background: #27ae60; color:white; flex-grow: 1;">✅ Entrega Completada</button>`;
+                    }
+
+                    item.innerHTML = `
+                        <p style="text-align:right;">Estado: <strong style="color:white;">${pedido.estado}</strong></p>
+                        ${contentHTML}
+                        <span class="timestamp-aceptado" style="display:none;">${pedido.timestampAceptado}</span>
+                        <span class="timer">⏱️ Tiempo: Cargando...</span>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            ${mainBtn}
+                            <button onclick="window.iniciarCancelacion('${pedidoId}')" style="background:var(--color-accent-danger); color:white; flex-grow: 0.5;">❌ Cancelar</button>
+                        </div>
+                    `;
+                    pedidosAsignadosList.appendChild(item);
+                }
+                localStorage.setItem(`pedido_seen_${pedidoId}`, true);
+            });
+            
+            const pedidosActuales = Object.keys(data).length;
+            if (!initialLoad && (pedidosActuales > pedidosAnteriores || tieneNuevoPedido)) {
+                pendientesBadge.style.display = 'block';
+                playNotificationSound(); 
+            }
+            
+            document.getElementById('asignadosCount').textContent = asignadosCount;
+            pendientesBadge.style.display = pendientesCount > 0 ? 'block' : 'none';
+            localStorage.setItem('lastPedidosCount', pedidosActuales);
+            initialLoad = false;
+            updateTimers();
+        });
+    }
+
+    // ========================================
+    // COMPLETAR Y CANCELAR PEDIDOS
+    // ========================================
+    
+    window.completarPedido = async function(pedidoId) {
+        if (confirm(`✅ ¿Confirmas que entregaste este pedido exitosamente?`)) {
+            try {
+                const snapshot = await get(ref(db, `pedidos_pendientes/${pedidoId}`));
+                const pedidoData = snapshot.val();
+                
+                if (pedidoData) {
+                    pedidoData.estado = 'Completado';
+                    pedidoData.timestampEntregado = Date.now();
+                    
+                    await set(ref(db, `pedidos_historial/${pedidoId}`), pedidoData);
+                    await remove(ref(db, `pedidos_pendientes/${pedidoId}`));
+                    
+                    delete pedidosActivos[pedidoId];
+                    
+                    console.log('✅ Entrega registrada');
+                }
+            } catch (error) {
+                console.error('❌ Error al completar pedido:', error);
+                alert('❌ Error al completar el pedido');
+            }
+        }
+    }
+
+    window.iniciarCancelacion = (pedidoId) => {
+        currentPedidoIdToCancel = pedidoId;
+        document.getElementById('cancelModal').style.display = 'flex';
+    }
+    
+    window.ejecutarCancelacionConMotivo = async (motivo) => {
+        try {
+            const snapshot = await get(ref(db, `pedidos_pendientes/${currentPedidoIdToCancel}`));
+            const pedidoData = snapshot.val();
+            
+            if (pedidoData) {
+                pedidoData.estado = 'Cancelado';
+                pedidoData.timestampCancelado = Date.now();
+                pedidoData.motivoCancelacion = motivo;
+                pedidoData.canceladoPor = repartidorNombre;
+                
+                await set(ref(db, `pedidos_historial/${currentPedidoIdToCancel}`), pedidoData);
+                await remove(ref(db, `pedidos_pendientes/${currentPedidoIdToCancel}`));
+                
+                delete pedidosActivos[currentPedidoIdToCancel];
+                
+                console.log(`❌ Pedido cancelado: ${motivo}`);
+            }
+        } catch (error) {
+            console.error('❌ Error al cancelar pedido:', error);
+            alert('❌ Error al cancelar el pedido');
+        }
+        
+        document.getElementById('cancelModal').style.display = 'none';
+    }
+
+    // ========================================
+    // HISTORIAL
+    // ========================================
+    
+    function listenForHistorial() {
+        onValue(ref(db, 'pedidos_historial'), (snapshot) => {
+            const list = document.getElementById('pedidosHistorialList');
+            const data = snapshot.val();
+            list.innerHTML = '';
+            
+            if (!data) { 
+                list.innerHTML = '<p>Historial vacío.</p>'; 
+                return; 
+            }
+            
+            let historialDelRepartidor = [];
+            
+            Object.keys(data).forEach(id => {
+                const p = data[id];
+                if (p.repartidorUID === repartidorUID) {
+                    historialDelRepartidor.push({ id, ...p });
+                }
+            });
+            
+            historialDelRepartidor.sort((a, b) => {
+                const timestampA = a.timestampEntregado || a.timestampCancelado || 0;
+                const timestampB = b.timestampEntregado || b.timestampCancelado || 0;
+                return timestampB - timestampA;
+            });
+            
+            if (historialDelRepartidor.length === 0) {
+                list.innerHTML = '<p>No tienes historial aún.</p>';
+                return;
+            }
+            
+            historialDelRepartidor.forEach(p => {
+                const item = document.createElement('div');
+                item.className = 'pedido-item';
+                item.style.borderLeftColor = p.estado === 'Completado' ? '#27ae60' : 'var(--color-accent-danger)';
+                
+                const fecha = new Date(p.timestampEntregado || p.timestampCancelado).toLocaleString('es-CO', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                
+                item.innerHTML = `
+                    <p><strong>ID:</strong> ${p.id.substring(0, 8)}...</p>
+                    <p><strong>Estado:</strong> <span style="color: ${p.estado === 'Completado' ? '#27ae60' : 'var(--color-accent-danger)'};">${p.estado}</span></p>
+                    <p><strong>Cliente:</strong> ${p.nombreCliente}</p>
+                    <p><strong>Monto:</strong> $${p.montoTotal.toFixed(2)}</p>
+                    ${p.motivoCancelacion ? `<p><strong>Motivo:</strong> ${p.motivoCancelacion}</p>` : ''}
+                    <p><small>📅 ${fecha}</small></p>
+                `;
+                list.appendChild(item);
+            });
+        });
+    }
+
+    // ========================================
+    // CHAT CON MULTIMEDIA
+    // ========================================
+
+    function listenForChat() {
+        onValue(ref(db, `chats/${repartidorUID}`), (snapshot) => {
+            const chatBox = document.getElementById('chatBox');
+            chatBox.innerHTML = '';
+            const mensajes = snapshot.val();
+            
+            if (!mensajes) { 
+                chatBox.innerHTML = '<p style="text-align: center; color: #999;">Sin mensajes del admin.</p>'; 
+                return; 
+            }
+            
+            Object.keys(mensajes).sort((a,b) => mensajes[a].timestamp - mensajes[b].timestamp).forEach(key => {
+                const d = mensajes[key];
+                const div = document.createElement('div');
+                div.className = `mensaje ${d.rol_remitente === "Admin" ? 'admin-msg' : 'rep-msg'}`;
+                
+                let contenido = '';
+                
+                const esAudio = (d.tipo === 'audio' || d.tipo_adjunto === 'audio') && 
+                               (d.audioURL || d.referencia_adjunto);
+                
+                const esImagen = (d.tipo === 'imagen' && d.imagenURL) || 
+                                (d.tipo_adjunto === 'imagen' && d.referencia_adjunto);
+                
+                const audioURL = d.audioURL || d.referencia_adjunto;
+                const imagenURL = d.imagenURL || d.referencia_adjunto;
+                
+                if (esImagen) {
+                    contenido = `<img src="${imagenURL}" alt="Imagen" onclick="window.verImagenCompleta('${imagenURL}')" style="max-width: 200px; max-height: 200px; border-radius: 8px; margin-top: 5px; display: block; cursor: pointer;">`;
+                    
+                    if (d.texto && !d.texto.includes('🎤') && !d.texto.includes('📷')) {
+                        contenido = `<p style="margin-bottom: 5px;">${d.texto}</p>` + contenido;
+                    }
+                } 
+                else if (esAudio) {
+                    const esDelAdmin = d.rol_remitente === "Admin";
+                    const audioId = `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    
+                    contenido = `
+                        <div style="
+                            background: #E8E8E8;
+                            padding: 10px 15px;
+                            border-radius: 20px;
+                            display: flex;
+                            align-items: center;
+                            gap: 10px;
+                            max-width: 250px;
+                        ">
+                            <button onclick="toggleAudio('${audioId}')" style="
+                                background: ${esDelAdmin ? '#FFC300' : '#555'};
+                                border: none;
+                                border-radius: 50%;
+                                width: 40px;
+                                height: 40px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                cursor: pointer;
+                                font-size: 18px;
+                                color: white;
+                                flex-shrink: 0;
+                            " id="btn_${audioId}">
+                                ▶️
+                            </button>
+                            <audio id="${audioId}" src="${audioURL}" style="display: none;"></audio>
+                            <span style="
+                                font-size: 12px;
+                                color: #555;
+                                flex-grow: 1;
+                            ">[Reproducir Audio]</span>
+                        </div>
+                    `;
+                }
+                else if (d.texto && !d.texto.includes('🎤') && !d.texto.includes('📷')) {
+                    contenido = `<p style="margin: 0; word-wrap: break-word;">${d.texto}</p>`;
+                } 
+                else {
+                    contenido = `<p style="margin: 0; opacity: 0.6; font-style: italic;">Mensaje sin contenido</p>`;
+                }
+                
+                const hora = new Date(d.timestamp).toLocaleTimeString('es-CO', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                div.innerHTML = `
+                    ${contenido}
+                    <span class="chat-time" style="font-size: 10px; margin-top: 3px; display: block; text-align: right; opacity: 0.7;">${hora}</span>
+                `;
+                
+                chatBox.appendChild(div);
+            });
+            
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            console.log('💬 Chat actualizado:', Object.
+keys(mensajes).length, 'mensajes');
+        });
+    }
+
+    // ========================================
+    // ENVIAR MENSAJES
+    // ========================================
+    
+    document.getElementById('enviarBtn').addEventListener('click', enviarMensaje);
+    document.getElementById('mensajeInput').addEventListener('keypress', (e) => { 
+        if (e.key === "Enter") enviarMensaje(); 
+    });
+    
+    async function enviarMensaje() {
+        const input = document.getElementById('mensajeInput');
+        const texto = input.value.trim();
+        
+        if (selectedImageFile) {
+            try {
+                const timestamp = Date.now();
+                const imagePath = `chats/${repartidorUID}/imagenes/imagen_${timestamp}.jpg`;
+                const imageURL = await uploadFileToStorage(selectedImageFile, imagePath);
+                
+                await push(ref(db, `chats/${repartidorUID}`), {
+                    remitente: repartidorNombre,
+                    tipo: 'imagen',
+                    imagenURL: imageURL,
+                    texto: texto || '',
+                    timestamp: timestamp,
+                    rol_remitente: "Repartidor"
+                });
+                
+                selectedImageFile = null;
+                document.getElementById('imagePreview').classList.remove('active');
+                document.getElementById('galleryInput').value = '';
+                input.value = '';
+                
+            } catch (error) {
+                console.error('❌ Error al enviar imagen:', error);
+                alert('❌ Error al enviar la imagen');
+            }
+        } 
+        else if (texto) {
+            try {
+                await push(ref(db, `chats/${repartidorUID}`), {
+                    remitente: repartidorNombre,
+                    tipo: 'texto',
+                    texto: texto,
+                    timestamp: Date.now(),
+                    rol_remitente: "Repartidor"
+                });
+                input.value = '';
+            } catch (error) {
+                console.error('❌ Error al enviar mensaje:', error);
+                alert('❌ Error al enviar el mensaje');
+            }
+        }
+    }
+
+    // ========================================
+    // MANEJO DE VISIBILIDAD Y RECONEXIÓN CON BACKGROUND MODE
+    // ========================================
+    
+    document.addEventListener('visibilitychange', async () => {
+        if (document.hidden) {
+            // App en segundo plano
+            isBackgroundMode = true;
+            console.log('📱 App en SEGUNDO PLANO - Activando modo background...');
+            
+            if (sessionActive && repartidorUID) {
+                // Mantener heartbeat y GPS activos
+                if (!backgroundGeoInterval) {
+                    iniciarBackgroundGeolocation();
+                }
+                
+                // Marcar en Firebase que está en background
+                try {
+                    await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                        backgroundMode: true,
+                        lastBackgroundTimestamp: Date.now()
+                    });
+                } catch (error) {
+                    console.warn('⚠️ Error al marcar background:', error);
+                }
+            }
+        } else {
+            // App visible de nuevo
+            isBackgroundMode = false;
+            console.log('📱 App VISIBLE - Reactivando sistemas...');
+            
+            if (sessionActive && repartidorUID) {
+                await marcarComoOnline();
+                
+                if (!isTrackingEnabled) {
+                    console.log('📍 Reactivando GPS...');
+                    await iniciarTrackingGPSAutomatico();
+                }
+                
+                if (wakeLock === null && isWakeLockSupported) {
+                    await solicitarWakeLock();
+                }
+
+                if (!heartbeatInterval) {
+                    await iniciarHeartbeatPrincipal();
+                }
+                if (!heartbeatBackupInterval) {
+                    await iniciarHeartbeatBackup();
+                }
+                
+                try {
+                    await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                        backgroundMode: false,
+                        lastForegroundTimestamp: Date.now()
+                    });
+                } catch (error) {
+                    console.warn('⚠️ Error al marcar foreground:', error);
+                }
+                
+                console.log('✅ Todos los sistemas reactivados');
+            }
+        }
+    });
+
+    window.addEventListener('online', async () => {
+        console.log('🌐 Conexión restaurada');
+        if (sessionActive && repartidorUID) {
+            await marcarComoOnline();
+            
+            if (!isTrackingEnabled) {
+                console.log('📍 Reactivando GPS tras reconexión...');
+                await iniciarTrackingGPSAutomatico();
+            }
+
+            if (!heartbeatInterval) {
+                await iniciarHeartbeatPrincipal();
+            }
+            if (!heartbeatBackupInterval) {
+                await iniciarHeartbeatBackup();
+            }
+            
+            if (!backgroundGeoInterval && sessionActive) {
+                iniciarBackgroundGeolocation();
+            }
+            
+            console.log('✅ Presencia y GPS reactivados');
+        }
+    });
+
+    window.addEventListener('offline', () => {
+        console.log('📡 Sin conexión - Datos se guardarán al reconectar');
+        actualizarIndicadorConexion(false);
+    });
+
+    // ========================================
+    // EVENTO BEFOREUNLOAD - SESIÓN PERSISTENTE
+    // ========================================
+    
+    window.addEventListener('beforeunload', (event) => {
+        if (Object.keys(pedidosActivos).length > 0) {
+            const mensaje = '⚠️ Tienes pedidos activos. ¿Seguro que quieres salir?';
+            event.preventDefault();
+            event.returnValue = mensaje;
+            return mensaje;
+        }
+        
+        console.log('📱 App cerrándose - Sesión permanece activa');
+    });
+
+    // ========================================
+    // MONITOREO DE BATERÍA
+    // ========================================
+    
+    if ('getBattery' in navigator) {
+        navigator.getBattery().then(battery => {
+            const checkBattery = () => {
+                if (battery.level < 0.15 && !battery.charging && isTrackingEnabled) {
+                    console.warn(`⚠️ Batería baja: ${Math.round(battery.level * 100)}%`);
+                }
+            };
+            
+            battery.addEventListener('levelchange', checkBattery);
+            battery.addEventListener('chargingchange', checkBattery);
+            checkBattery();
+        });
+    }
+
+    // ========================================
+    // VERIFICACIÓN PERIÓDICA
+    // ========================================
+    
+    setInterval(() => {
+        if (isTrackingEnabled && sessionActive) {
+            const tiempoDesdeUltimaActualizacion = Date.now() - lastLocationUpdate;
+            if (tiempoDesdeUltimaActualizacion > 30000) {
+                console.warn(`⚠️ GPS sin actualizaciones por ${Math.round(tiempoDesdeUltimaActualizacion / 1000)}s`);
+            }
+        }
+    }, 60000);
+    
+    setInterval(() => {
+        if (sessionActive && repartidorUID) {
+            if (!heartbeatInterval) {
+                console.warn('⚠️ Heartbeat principal detenido, reiniciando...');
+                iniciarHeartbeatPrincipal();
+            }
+            if (!heartbeatBackupInterval) {
+                console.warn('⚠️ Heartbeat backup detenido, reiniciando...');
+                iniciarHeartbeatBackup();
+            }
+            
+            if (!isTrackingEnabled && sessionActive) {
+                console.warn('⚠️ GPS detenido inesperadamente, reiniciando...');
+                iniciarTrackingGPSAutomatico();
+            }
+            
+            if (!backgroundGeoInterval && sessionActive) {
+                console.warn('⚠️ Background GPS detenido, reiniciando...');
+                iniciarBackgroundGeolocation();
+            }
+        }
+    }, 30000);
+
+    // ========================================
+    // INICIALIZACIÓN
+    // ========================================
+    
+    window.addEventListener('load', () => {
+        console.log('🚀 Servi Aliados - Panel Repartidor');
+        console.log('📱 Versión:', APP_VERSION);
+        console.log('🔍 Características:');
+        console.log('   ✅ GPS Permanente (cada 2s)');
+        console.log('   ✅ Background GPS (cada 3s)');
+        console.log('   ✅ Heartbeat Triple');
+        console.log('   ✅ Presencia Persistente');
+        console.log('   ✅ Wake Lock');
+        console.log('   ✅ Auto-reconexión');
+        console.log('   ✅ Sesión persistente');
+        console.log('   ✅ GPS optimizado para APK Android');
+        console.log('   ✅ Tracking en segundo plano');
+        console.log('   ✅ Login corregido - sin cierres de sesión');
+        console.log('🔋 Wake Lock:', isWakeLockSupported ? 'Soportado' : 'No soportado');
+        console.log('🎤 MediaRecorder:', typeof MediaRecorder !== 'undefined' ? 'Soportado' : 'No soportado');
+        
+        setTimeout(verificarActualizacion, 2000);
+        updateQuickLoginUI();
+    });
+
+    setInterval(verificarActualizacion, 30 * 60 * 1000);
+
+    console.log('✅ Sistema inicializado correctamente v' + APP_VERSION);
+    console.log('📍 GPS se activará automáticamente al hacer login');
+    console.log('🔄 Actualización de ubicación: Cada 2 segundos (foreground) + Cada 3 segundos (background)');
+    console.log('💚 Presencia online: Persistente y redundante');
+    console.log('🚫 Sesión NO se cierra al salir de la app');
+    console.log('🔐 Sesión solo se cierra con el botón "Cerrar Sesión"');
+    console.log('📱 APK: Permisos GPS con timeout extendido y mensajes específicos');
+    console.log('🎤 Audio: Grabación completamente funcional');
+    console.log('📷 Fotos: Solo desde galería');
+    console.log('⭐ GPS continúa activo en segundo plano');
+    console.log('⭐ Heartbeat continúa incluso con app minimizada');
+    console.log('🔧 LOGIN CORREGIDO: Ya no cierra sesión al aceptar pedidos');
+    
+</script>
+</body>
+</html>
