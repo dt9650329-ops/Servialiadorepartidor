@@ -856,7 +856,6 @@
         </div>
     </div>
 </div>
-
 <!-- MODAL DE ACTUALIZACIÓN -->
 <div id="updateModal">
     <div class="update-content">
@@ -1145,7 +1144,6 @@
     let permisosCamaraOtorgado = false;
     let permisosMicrofonoOtorgado = false;
     let permisosUbicacionOtorgado = false;
-
     // ========================================
     // 🆕 SISTEMA DE PERMISOS MULTIMEDIA
     // ========================================
@@ -1445,7 +1443,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     }
     
     // ========================================
-    // SISTEMA GPS CON BACKGROUND GEOLOCATION MEJORADO
+    // 🔧 SISTEMA GPS CORREGIDO - FORMATO lat/lon
     // ========================================
     
     function iniciarBackgroundGeolocation() {
@@ -1478,7 +1476,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 const timestamp = Date.now();
                 const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
 
-                // 🆕 ENVÍO DIRECTO A FIREBASE - FORMATO CORRECTO PARA CLIENTE
+                // 🆕 FORMATO CORRECTO: lat y lon (NO lng)
                 const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
 
                 await fetch(url, {
@@ -1487,11 +1485,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     body: JSON.stringify({
                         ubicacion: {
                             lat: parseFloat(lat.toFixed(6)),
-                            lon: parseFloat(lng.toFixed(6))  // 🆕 'lon' en lugar de 'lng'
+                            lon: parseFloat(lng.toFixed(6))  // ✅ CORRECTO
                         },
                         ubicacionActual: {
                             lat: parseFloat(lat.toFixed(6)),
-                            lng: parseFloat(lng.toFixed(6)),
+                            lon: parseFloat(lng.toFixed(6)),  // ✅ CORRECTO
                             accuracy: Math.round(accuracy),
                             speed: Math.round(speed * 3.6),
                             heading: Math.round(heading),
@@ -1510,7 +1508,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             } catch (error) {
                 console.warn('⚠️ Error en background GPS:', error.message);
             }
-        }, 3000); // Cada 3 segundos
+        }, 3000);
 
         console.log('✅ Background Geolocation iniciado (cada 3s)');
     }
@@ -1651,7 +1649,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         
         console.log('✅ GPS iniciado - Actualización cada 2 segundos');
     }
-
     function detenerTrackingGPS() {
         if (!isTrackingEnabled) {
             return;
@@ -1682,6 +1679,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
 
+    // 🔧 FUNCIÓN CORREGIDA: enviarUbicacionAFirebase
     async function enviarUbicacionAFirebase(lat, lng, accuracy, speed, heading) {
         if (!repartidorUID) return;
 
@@ -1689,15 +1687,15 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             const timestamp = Date.now();
             const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
             
-            // 🆕 FORMATO CORRECTO: 'ubicacion' con 'lat' y 'lon' para el cliente
+            // ✅ FORMATO CORRECTO: lat y lon (NO lng)
             await update(ref(db, `repartidores_info/${repartidorUID}`), {
                 ubicacion: {
                     lat: parseFloat(lat.toFixed(6)),
-                    lon: parseFloat(lng.toFixed(6))  // 🆕 'lon' en lugar de 'lng'
+                    lon: parseFloat(lng.toFixed(6))  // ✅ CORRECTO
                 },
                 ubicacionActual: {
                     lat: parseFloat(lat.toFixed(6)),
-                    lng: parseFloat(lng.toFixed(6)),
+                    lon: parseFloat(lng.toFixed(6)),  // ✅ CORRECTO
                     accuracy: Math.round(accuracy),
                     speed: Math.round(speed * 3.6),
                     heading: Math.round(heading),
@@ -1716,6 +1714,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
 
+    // 🔧 FUNCIÓN CORREGIDA: enviarUbicacionDirecta
     async function enviarUbicacionDirecta(lat, lng, accuracy, speed, heading) {
         if (!repartidorUID) return;
 
@@ -1725,18 +1724,18 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             
             const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
 
-            // 🆕 FORMATO CORRECTO: 'ubicacion' con 'lat' y 'lon'
+            // ✅ FORMATO CORRECTO: lat y lon (NO lng)
             await fetch(url, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ubicacion: {
                         lat: parseFloat(lat.toFixed(6)),
-                        lon: parseFloat(lng.toFixed(6))  // 🆕 'lon' en lugar de 'lng'
+                        lon: parseFloat(lng.toFixed(6))  // ✅ CORRECTO
                     },
                     ubicacionActual: {
                         lat: parseFloat(lat.toFixed(6)),
-                        lng: parseFloat(lng.toFixed(6)),
+                        lon: parseFloat(lng.toFixed(6)),  // ✅ CORRECTO
                         accuracy: Math.round(accuracy),
                         speed: Math.round(speed * 3.6),
                         heading: Math.round(heading),
@@ -1761,6 +1760,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     if (pedido.repartidorUID === repartidorUID && pedido.estado !== 'Pendiente') {
                         const pedidoUrl = `https://domicilios-1cd74-default-rtdb.firebaseio.com/pedidos_pendientes/${pedidoId}.json`;
                         
+                        // ✅ FORMATO CORRECTO: lat y lon (NO lng)
                         promesas.push(
                             fetch(pedidoUrl, {
                                 method: 'PATCH',
@@ -1768,7 +1768,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                                 body: JSON.stringify({
                                     ubicacionRepartidor: {
                                         lat: parseFloat(lat.toFixed(6)),
-                                        lng: parseFloat(lng.toFixed(6)),
+                                        lon: parseFloat(lng.toFixed(6)),  // ✅ CORRECTO
                                         accuracy: Math.round(accuracy),
                                         speed: Math.round(speed * 3.6),
                                         heading: Math.round(heading),
@@ -1877,7 +1877,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // ========================================
 
     async function iniciarGrabacionAudio() {
-        // 🆕 Verificar permisos antes de grabar
         if (!permisosMicrofonoOtorgado) {
             alert('⚠️ No tienes permiso de micrófono.\n\nActiva los permisos desde el menú al iniciar sesión.');
             return;
@@ -2255,7 +2254,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         showSection('historialSection');
         listenForHistorial(); 
     });
-
     // ========================================
     // FUNCIONES MULTIMEDIA (FOTOS)
     // ========================================
@@ -2293,7 +2291,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     }
     
     document.getElementById('sendGalleryBtn').addEventListener('click', () => {
-        // 🆕 Verificar permisos antes de abrir galería
         if (!permisosCamaraOtorgado) {
             alert('⚠️ No tienes permiso de cámara/fotos.\n\nActiva los permisos desde el menú al iniciar sesión.');
             return;
@@ -2363,6 +2360,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         document.getElementById('loginContainer').style.display = 'flex';
         document.getElementById('appContainer').style.display = 'none';
     }
+
     async function setLoginState(isLoggedIn, user = null) {
         document.getElementById('loginContainer').style.display = isLoggedIn ? 'none' : 'flex';
         document.getElementById('appContainer').style.display = isLoggedIn ? 'block' : 'none';
@@ -2391,7 +2389,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             document.getElementById('loginContainer').style.display = 'none';
             document.getElementById('appContainer').style.display = 'block';
 
-            // 🆕 MOSTRAR MODAL DE PERMISOS AL LOGIN
             mostrarModalPermisos();
 
             showSection('chatSection'); 
@@ -2612,7 +2609,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     });
 
     // ========================================
-    // LÓGICA DE PEDIDOS
+    // 🔧 LÓGICA DE PEDIDOS - FUNCIÓN CORREGIDA
     // ========================================
     
     window.avanzarEstadoPedido = async function(pedidoId, estadoActual) {
@@ -2639,6 +2636,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         const lng = position.coords.longitude;
                         const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
                         
+                        // ✅ FORMATO CORRECTO: lat y lon (NO lng)
                         await update(pedidoRef, {
                             estado: proximoEstado,
                             repartidorAsignado: repartidorNombre,
@@ -2647,7 +2645,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             timestampAceptado: Date.now(),
                             ubicacionRepartidor: {
                                 lat: parseFloat(lat.toFixed(6)),
-                                lng: parseFloat(lng.toFixed(6)),
+                                lon: parseFloat(lng.toFixed(6)),  // ✅ CORRECTO
                                 accuracy: Math.round(position.coords.accuracy),
                                 speed: Math.round((position.coords.speed || 0) * 3.6),
                                 heading: Math.round(position.coords.heading || 0),
@@ -2705,7 +2703,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     };
 
     // ========================================
-    // LISTENER DE PEDIDOS
+    // RESTO DE FUNCIONES (sin cambios)
     // ========================================
     
     function listenForPedidos() {
@@ -2808,10 +2806,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         });
     }
 
-    // ========================================
-    // COMPLETAR Y CANCELAR PEDIDOS
-    // ========================================
-    
     window.completarPedido = async function(pedidoId) {
         if (confirm(`✅ ¿Confirmas que entregaste este pedido exitosamente?`)) {
             try {
@@ -2867,10 +2861,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         document.getElementById('cancelModal').style.display = 'none';
     }
 
-    // ========================================
-    // HISTORIAL
-    // ========================================
-    
     function listenForHistorial() {
         onValue(ref(db, 'pedidos_historial'), (snapshot) => {
             const list = document.getElementById('pedidosHistorialList');
@@ -2927,10 +2917,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             });
         });
     }
-
-    // ========================================
-    // CHAT CON MULTIMEDIA
-    // ========================================
 
     function listenForChat() {
         onValue(ref(db, `chats/${repartidorUID}`), (snapshot) => {
@@ -3031,10 +3017,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         });
     }
 
-    // ========================================
-    // ENVIAR MENSAJES
-    // ========================================
-    
     document.getElementById('enviarBtn').addEventListener('click', enviarMensaje);
     document.getElementById('mensajeInput').addEventListener('keypress', (e) => { 
         if (e.key === "Enter") enviarMensaje(); 
@@ -3054,8 +3036,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     remitente: repartidorNombre,
                     tipo: 'imagen',
                     imagenURL: imageURL,
-                    texto
-                    : texto || '',
+                    texto: texto || '',
                     timestamp: timestamp,
                     rol_remitente: "Repartidor"
                 });
@@ -3087,10 +3068,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
 
-    // ========================================
-    // MANEJO DE VISIBILIDAD Y RECONEXIÓN
-    // ========================================
-    
     document.addEventListener('visibilitychange', async () => {
         if (document.hidden) {
             isBackgroundMode = true;
@@ -3238,17 +3215,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         console.log('🚀 Servi Aliados - Panel Repartidor');
         console.log('📱 Versión:', APP_VERSION);
         console.log('🔍 Características:');
-        console.log('   ✅ GPS Permanente (cada 2s)');
+        console.log('   ✅ GPS con formato lat/lon CORREGIDO');
+        console.log('   ✅ Compatible con lectura del cliente');
         console.log('   ✅ Background GPS (cada 3s)');
         console.log('   ✅ Heartbeat Triple');
         console.log('   ✅ Presencia Persistente');
         console.log('   ✅ Wake Lock');
         console.log('   ✅ Auto-reconexión');
-        console.log('   ✅ Sesión persistente');
-        console.log('   ✅ GPS optimizado para APK Android');
-        console.log('   ✅ Tracking en segundo plano');
-        console.log('   ✅ Permisos multimedia solicitados');
-        console.log('   ✅ Ubicación formato lat/lon para cliente');
         console.log('🔋 Wake Lock:', isWakeLockSupported ? 'Soportado' : 'No soportado');
         console.log('🎤 MediaRecorder:', typeof MediaRecorder !== 'undefined' ? 'Soportado' : 'No soportado');
         
@@ -3259,10 +3232,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     setInterval(verificarActualizacion, 30 * 60 * 1000);
 
     console.log('✅ Sistema inicializado correctamente v' + APP_VERSION);
-    console.log('📍 GPS se activará con permisos otorgados');
-    console.log('🔄 Ubicación: lat/lon (compatible con cliente)');
-    console.log('🎤 Audio: Con verificación de permisos');
-    console.log('📷 Fotos: Con verificación de permisos');
+    console.log('📍 UBICACIÓN CORREGIDA: Formato lat/lon');
+    console.log('🗺️ Compatible con seguimiento del cliente');
     
 </script>
 </body>
