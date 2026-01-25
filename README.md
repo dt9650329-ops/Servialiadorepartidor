@@ -1,2 +1,2 @@
 # Servialiadorepartidor
-Página delcrepartidor
+Página del repartidor
