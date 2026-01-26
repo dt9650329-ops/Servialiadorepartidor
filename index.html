@@ -21,20 +21,13 @@
                 .catch(err => console.error('❌ Error SW:', err));
         }
     </script>
+    
     <!-- Eruda - Herramienta de depuración para móviles -->
-<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-<script>
-  // Inicializar Eruda
-  eruda.init();
-  console.log('✅ Eruda inicializado correctamente');
-    <!-- Eruda - Herramienta de depuración para móviles -->
-<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-<script>
-  // Inicializar Eruda
-  eruda.init();
-  console.log('✅ Eruda inicializado correctamente');
-</script>
-</script>
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>
+        eruda.init();
+        console.log('✅ Eruda inicializado correctamente');
+    </script>
     
     <title>Panel Repartidor - Servi Aliados</title>
     <style>
@@ -238,7 +231,6 @@
         .rep-msg .chat-time { 
             color: rgba(255, 255, 255, 0.7); 
         }
-
         /* Estilos para multimedia en chat */
         .mensaje img {
             max-width: 200px;
@@ -436,6 +428,7 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.3; }
         }
+        
         /* ESTILOS DEL SISTEMA DE ACTUALIZACIONES */
         #updateModal {
             position: fixed;
@@ -649,7 +642,7 @@
             10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
             20%, 40%, 60%, 80% { transform: translateX(5px); }
         }
-
+        
         /* Indicador de conexión persistente */
         .connection-status {
             position: fixed;
@@ -975,7 +968,7 @@
         <h2 style="color: var(--color-secondary); margin: 0;">Bienvenido, <span id="repartidorName"></span>!</h2>
         <div style="display: flex; gap: 10px; align-items: center;">
             <span id="appVersionDisplay" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 15px; font-size: 0.85em; font-weight: bold;">
-                v1.5.2
+                v1.5.3
             </span>
             <button id="logoutBtn" style="padding: 8px 15px; background: var(--color-accent-danger); color: white; border: none; border-radius: 5px; font-weight: bold;">Cerrar Sesión</button>
         </div>
@@ -1102,8 +1095,8 @@
     const auth = getAuth(app);
     const storage = getStorage(app);
 
-    // VERSIÓN ACTUALIZADA
-    const APP_VERSION = "1.5.2";
+    // VERSIÓN ACTUALIZADA - Incrementada por corrección de GPS
+    const APP_VERSION = "1.5.3";
     
     // Mostrar versión en el DOM cuando se cargue
     window.addEventListener('DOMContentLoaded', () => {
@@ -1140,7 +1133,6 @@
     // Variables para presencia persistente
     let heartbeatInterval = null;
     let sessionActive = false;
-    let heartbeatBackupInterval = null;
 
     // Variables para Wake Lock
     let wakeLock = null;
@@ -1267,8 +1259,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         const modal = document.getElementById('permisosModal');
         modal.classList.add('show');
     }
+
     // ========================================
-    // SISTEMA DE HEARTBEAT MÚLTIPLE
+    // ✅ SISTEMA DE HEARTBEAT SIMPLIFICADO (Solo Firebase SDK)
     // ========================================
     
     async function iniciarHeartbeatPrincipal() {
@@ -1286,52 +1279,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }, 8000);
 
         console.log('✅ Heartbeat principal iniciado (cada 8s)');
-    }
-
-    async function iniciarHeartbeatBackup() {
-        if (heartbeatBackupInterval) {
-            clearInterval(heartbeatBackupInterval);
-        }
-
-        heartbeatBackupInterval = setInterval(async () => {
-            if (sessionActive && repartidorUID) {
-                await enviarHeartbeatDirecto();
-            }
-        }, 10000);
-
-        console.log('✅ Heartbeat backup iniciado (cada 10s)');
-    }
-
-    async function enviarHeartbeatDirecto() {
-        if (!repartidorUID) return;
-
-        try {
-            const timestamp = Date.now();
-            const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
-
-            const response = await fetch(url, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    online: true,
-                    lastSeen: timestamp,
-                    ultimaConexion: timestamp,
-                    heartbeatBackup: true,
-                    timestampBackup: new Date(timestamp).toLocaleString('es-CO')
-                })
-            });
-
-            if (response.ok) {
-                console.log('💚 Heartbeat BACKUP OK:', new Date(timestamp).toLocaleTimeString());
-                actualizarIndicadorConexion(true);
-            } else {
-                console.warn('⚠️ Heartbeat backup falló:', response.status);
-            }
-
-        } catch (error) {
-            console.error('❌ Error en heartbeat backup:', error);
-            actualizarIndicadorConexion(false);
-        }
     }
 
     function actualizarIndicadorConexion(online) {
@@ -1379,12 +1326,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         } catch (error) {
             console.error('❌ Error al marcar como online:', error);
             actualizarIndicadorConexion(false);
-            
-            setTimeout(() => {
-                if (sessionActive && repartidorUID) {
-                    enviarHeartbeatDirecto();
-                }
-            }, 3000);
         }
     }
 
@@ -1393,12 +1334,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             clearInterval(heartbeatInterval);
             heartbeatInterval = null;
         }
-        if (heartbeatBackupInterval) {
-            clearInterval(heartbeatBackupInterval);
-            heartbeatBackupInterval = null;
-        }
         sessionActive = false;
-        console.log('🛑 Heartbeats detenidos');
+        console.log('🛑 Heartbeat detenido');
     }
 
     async function marcarComoOffline() {
@@ -1417,17 +1354,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 sesionCerradaManualmente: true
             });
             
-            const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
-            await fetch(url, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    online: false,
-                    lastSeen: timestamp,
-                    trackingActivo: false
-                })
-            });
-            
             console.log('🔴 Offline marcado correctamente');
             
         } catch (error) {
@@ -1444,7 +1370,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         try {
             await marcarComoOnline();
             await iniciarHeartbeatPrincipal();
-            await iniciarHeartbeatBackup();
             
             iniciarEnvioUbicacionDirecto();
             
@@ -1457,7 +1382,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     }
     
     // ========================================
-    // 🔧 SISTEMA GPS CORREGIDO - FORMATO lat/lon
+    // 🔧 SISTEMA GPS CORREGIDO - FORMATO lon (NO lng)
     // ========================================
     
     function iniciarBackgroundGeolocation() {
@@ -1483,41 +1408,36 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 });
 
                 const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
+                const lon = position.coords.longitude; // 🔥 CAMBIADO: lng → lon
                 const accuracy = position.coords.accuracy;
                 const speed = position.coords.speed || 0;
                 const heading = position.coords.heading || 0;
                 const timestamp = Date.now();
-                const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+                const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
 
-                // 🆕 FORMATO CORRECTO: lat y lon (NO lng)
-                const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
-
-                await fetch(url, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        ubicacion: {
-                            lat: parseFloat(lat.toFixed(6)),
-                            lon: parseFloat(lng.toFixed(6))  // ✅ CORRECTO
-                        },
-                        ubicacionActual: {
-                            lat: parseFloat(lat.toFixed(6)),
-                            lon: parseFloat(lng.toFixed(6)),  // ✅ CORRECTO
-                            accuracy: Math.round(accuracy),
-                            speed: Math.round(speed * 3.6),
-                            heading: Math.round(heading),
-                            timestamp: timestamp
-                        },
-                        ubicacionUrl: googleMapsUrl,
-                        trackingActivo: true,
-                        lastSeen: timestamp,
-                        online: true,
-                        backgroundMode: isBackgroundMode
-                    })
+                // 🆕 FORMATO CORREGIDO: lat y lon (NO lng)
+                const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+                await update(userStatusRef, {
+                    ubicacion: {
+                        lat: parseFloat(lat.toFixed(6)),
+                        lon: parseFloat(lon.toFixed(6)) // 🔥 CAMBIADO: lng → lon
+                    },
+                    ubicacionActual: {
+                        lat: parseFloat(lat.toFixed(6)),
+                        lon: parseFloat(lon.toFixed(6)), // 🔥 CAMBIADO: lng → lon
+                        accuracy: Math.round(accuracy),
+                        speed: Math.round(speed * 3.6),
+                        heading: Math.round(heading),
+                        timestamp: timestamp
+                    },
+                    ubicacionUrl: googleMapsUrl,
+                    trackingActivo: true,
+                    lastSeen: timestamp,
+                    online: true,
+                    backgroundMode: isBackgroundMode
                 });
 
-                console.log(`📍 BG GPS: ${lat.toFixed(6)}, ${lng.toFixed(6)} [${isBackgroundMode ? 'BACKGROUND' : 'FOREGROUND'}]`);
+                console.log(`📍 BG GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)} [${isBackgroundMode ? 'BACKGROUND' : 'FOREGROUND'}]`);
 
             } catch (error) {
                 console.warn('⚠️ Error en background GPS:', error.message);
@@ -1542,17 +1462,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
         locationSendInterval = setInterval(async () => {
             if (isTrackingEnabled && repartidorUID && lastLocationUpdate > 0) {
-                const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
-                
                 try {
-                    await fetch(url, {
-                        method: 'PATCH',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            trackingActivo: true,
-                            lastSeen: Date.now(),
-                            online: true
-                        })
+                    const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+                    await update(userStatusRef, {
+                        trackingActivo: true,
+                        lastSeen: Date.now(),
+                        online: true
                     });
                 } catch (error) {
                     console.warn('⚠️ Error en envío directo de ubicación:', error);
@@ -1625,15 +1540,15 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 gpsErrorCount = 0;
                 
                 const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
+                const lon = position.coords.longitude; // 🔥 CAMBIADO: lng → lon
                 const accuracy = position.coords.accuracy;
                 const speed = position.coords.speed || 0;
                 const heading = position.coords.heading || 0;
                 
-                console.log(`📍 GPS OK [${esAPK ? 'APK' : 'Web'}]: ${lat.toFixed(6)}, ${lng.toFixed(6)} (±${Math.round(accuracy)}m)`);
+                console.log(`📍 GPS OK [${esAPK ? 'APK' : 'Web'}]: ${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracy)}m)`);
                 
-                enviarUbicacionAFirebase(lat, lng, accuracy, speed, heading);
-                enviarUbicacionDirecta(lat, lng, accuracy, speed, heading);
+                enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading);
+                enviarUbicacionDirecta(lat, lon, accuracy, speed, heading);
             },
             (error) => {
                 gpsErrorCount++;
@@ -1663,6 +1578,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         
         console.log('✅ GPS iniciado - Actualización cada 2 segundos');
     }
+
     function detenerTrackingGPS() {
         if (!isTrackingEnabled) {
             return;
@@ -1693,23 +1609,21 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
 
-    // 🔧 FUNCIÓN CORREGIDA: enviarUbicacionAFirebase
-    async function enviarUbicacionAFirebase(lat, lng, accuracy, speed, heading) {
+    async function enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading) {
         if (!repartidorUID) return;
 
         try {
             const timestamp = Date.now();
-            const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+            const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
             
-            // ✅ FORMATO CORRECTO: lat y lon (NO lng)
             await update(ref(db, `repartidores_info/${repartidorUID}`), {
                 ubicacion: {
                     lat: parseFloat(lat.toFixed(6)),
-                    lon: parseFloat(lng.toFixed(6))  // ✅ CORRECTO
+                    lon: parseFloat(lon.toFixed(6)) // 🔥 CAMBIADO: lng → lon
                 },
                 ubicacionActual: {
                     lat: parseFloat(lat.toFixed(6)),
-                    lon: parseFloat(lng.toFixed(6)),  // ✅ CORRECTO
+                    lon: parseFloat(lon.toFixed(6)), // 🔥 CAMBIADO: lng → lon
                     accuracy: Math.round(accuracy),
                     speed: Math.round(speed * 3.6),
                     heading: Math.round(heading),
@@ -1721,49 +1635,22 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 online: true
             });
             
-            console.log(`📍 Ubicación Firebase SDK: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+            console.log(`📍 Ubicación Firebase SDK: ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
             
         } catch (error) {
             console.error('❌ Error al enviar ubicación Firebase SDK:', error);
         }
     }
 
-    // 🔧 FUNCIÓN CORREGIDA: enviarUbicacionDirecta
-    async function enviarUbicacionDirecta(lat, lng, accuracy, speed, heading) {
+    async function enviarUbicacionDirecta(lat, lon, accuracy, speed, heading) {
         if (!repartidorUID) return;
 
         try {
             const timestamp = Date.now();
-            const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+            const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
             
-            const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json`;
-
-            // ✅ FORMATO CORRECTO: lat y lon (NO lng)
-            await fetch(url, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ubicacion: {
-                        lat: parseFloat(lat.toFixed(6)),
-                        lon: parseFloat(lng.toFixed(6))  // ✅ CORRECTO
-                    },
-                    ubicacionActual: {
-                        lat: parseFloat(lat.toFixed(6)),
-                        lon: parseFloat(lng.toFixed(6)),  // ✅ CORRECTO
-                        accuracy: Math.round(accuracy),
-                        speed: Math.round(speed * 3.6),
-                        heading: Math.round(heading),
-                        timestamp: timestamp
-                    },
-                    ubicacionUrl: googleMapsUrl,
-                    trackingActivo: true,
-                    lastSeen: timestamp,
-                    online: true
-                })
-            });
-
-            const pedidosResponse = await fetch('https://domicilios-1cd74-default-rtdb.firebaseio.com/pedidos_pendientes.json');
-            const pedidosData = await pedidosResponse.json();
+            const pedidosSnapshot = await get(ref(db, 'pedidos_pendientes'));
+            const pedidosData = pedidosSnapshot.val();
             
             if (pedidosData) {
                 const promesas = [];
@@ -1772,24 +1659,19 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     const pedido = pedidosData[pedidoId];
                     
                     if (pedido.repartidorUID === repartidorUID && pedido.estado !== 'Pendiente') {
-                        const pedidoUrl = `https://domicilios-1cd74-default-rtdb.firebaseio.com/pedidos_pendientes/${pedidoId}.json`;
+                        const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
                         
-                        // ✅ FORMATO CORRECTO: lat y lon (NO lng)
                         promesas.push(
-                            fetch(pedidoUrl, {
-                                method: 'PATCH',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    ubicacionRepartidor: {
-                                        lat: parseFloat(lat.toFixed(6)),
-                                        lon: parseFloat(lng.toFixed(6)),  // ✅ CORRECTO
-                                        accuracy: Math.round(accuracy),
-                                        speed: Math.round(speed * 3.6),
-                                        heading: Math.round(heading),
-                                        timestamp: timestamp,
-                                        googleMapsUrl: googleMapsUrl
-                                    }
-                                })
+                            update(pedidoRef, {
+                                ubicacionRepartidor: {
+                                    lat: parseFloat(lat.toFixed(6)),
+                                    lon: parseFloat(lon.toFixed(6)), // 🔥 CAMBIADO: lng → lon
+                                    accuracy: Math.round(accuracy),
+                                    speed: Math.round(speed * 3.6),
+                                    heading: Math.round(heading),
+                                    timestamp: timestamp,
+                                    googleMapsUrl: googleMapsUrl
+                                }
                             })
                         );
                     }
@@ -1798,13 +1680,15 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 await Promise.all(promesas);
             }
 
-            console.log(`✅ Ubicación enviada FETCH [${new Date(timestamp).toLocaleTimeString()}]`);
+            console.log(`✅ Ubicación enviada [${new Date(timestamp).toLocaleTimeString()}]`);
 
         } catch (error) {
-            console.error('❌ Error al enviar ubicación FETCH:', error);
+            console.error('❌ Error al enviar ubicación:', error);
         }
     }
+    **PARTE 5/6 - JAVASCRIPT: AUDIO, LOGIN Y FUNCIONES AUXILIARES:**
 
+```javascript
     async function solicitarPermisoUbicacion() {
         if (!navigator.geolocation) {
             return false;
@@ -1886,6 +1770,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
         console.log('🧹 Recursos limpiados');
     }
+
     // ========================================
     // 🎤 SISTEMA DE GRABACIÓN EN TIEMPO REAL
     // ========================================
@@ -2268,6 +2153,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         showSection('historialSection');
         listenForHistorial(); 
     });
+
     // ========================================
     // FUNCIONES MULTIMEDIA (FOTOS)
     // ========================================
@@ -2444,7 +2330,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         if (user) await setLoginState(true, user);
         else await setLoginState(false);
     });
-    
     // ========================================
     // EVENTOS DE LOGIN
     // ========================================
@@ -2623,7 +2508,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     });
 
     // ========================================
-    // 🔧 LÓGICA DE PEDIDOS - FUNCIÓN CORREGIDA
+    // 🔧 LÓGICA DE PEDIDOS (CON lon CORREGIDO)
     // ========================================
     
     window.avanzarEstadoPedido = async function(pedidoId, estadoActual) {
@@ -2647,10 +2532,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         });
                         
                         const lat = position.coords.latitude;
-                        const lng = position.coords.longitude;
-                        const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+                        const lon = position.coords.longitude; // 🔥 CAMBIADO: lng → lon
+                        const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
                         
-                        // ✅ FORMATO CORRECTO: lat y lon (NO lng)
                         await update(pedidoRef, {
                             estado: proximoEstado,
                             repartidorAsignado: repartidorNombre,
@@ -2659,7 +2543,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             timestampAceptado: Date.now(),
                             ubicacionRepartidor: {
                                 lat: parseFloat(lat.toFixed(6)),
-                                lon: parseFloat(lng.toFixed(6)),  // ✅ CORRECTO
+                                lon: parseFloat(lon.toFixed(6)), // 🔥 CAMBIADO: lng → lon
                                 accuracy: Math.round(position.coords.accuracy),
                                 speed: Math.round((position.coords.speed || 0) * 3.6),
                                 heading: Math.round(position.coords.heading || 0),
@@ -2716,10 +2600,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     };
 
-    // ========================================
-    // RESTO DE FUNCIONES (sin cambios)
-    // ========================================
-    
     function listenForPedidos() {
         onValue(ref(db, 'pedidos_pendientes'), (snapshot) => {
             const pedidosList = document.getElementById('pedidosList');
@@ -3082,6 +2962,10 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
 
+    // ========================================
+    // EVENTOS DE VISIBILIDAD Y CONECTIVIDAD
+    // ========================================
+
     document.addEventListener('visibilitychange', async () => {
         if (document.hidden) {
             isBackgroundMode = true;
@@ -3120,9 +3004,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 if (!heartbeatInterval) {
                     await iniciarHeartbeatPrincipal();
                 }
-                if (!heartbeatBackupInterval) {
-                    await iniciarHeartbeatBackup();
-                }
                 
                 try {
                     await update(ref(db, `repartidores_info/${repartidorUID}`), {
@@ -3151,9 +3032,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             if (!heartbeatInterval) {
                 await iniciarHeartbeatPrincipal();
             }
-            if (!heartbeatBackupInterval) {
-                await iniciarHeartbeatBackup();
-            }
             
             if (!backgroundGeoInterval && sessionActive) {
                 iniciarBackgroundGeolocation();
@@ -3178,6 +3056,10 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         
         console.log('📱 App cerrándose - Sesión permanece activa');
     });
+
+    // ========================================
+    // MONITOREO Y MANTENIMIENTO
+    // ========================================
 
     if ('getBattery' in navigator) {
         navigator.getBattery().then(battery => {
@@ -3205,12 +3087,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     setInterval(() => {
         if (sessionActive && repartidorUID) {
             if (!heartbeatInterval) {
-                console.warn('⚠️ Heartbeat principal detenido, reiniciando...');
+                console.warn('⚠️ Heartbeat detenido, reiniciando...');
                 iniciarHeartbeatPrincipal();
-            }
-            if (!heartbeatBackupInterval) {
-                console.warn('⚠️ Heartbeat backup detenido, reiniciando...');
-                iniciarHeartbeatBackup();
             }
             
             if (!isTrackingEnabled && sessionActive && permisosUbicacionOtorgado) {
@@ -3225,14 +3103,18 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }, 30000);
 
+    // ========================================
+    // INICIALIZACIÓN
+    // ========================================
+
     window.addEventListener('load', () => {
         console.log('🚀 Servi Aliados - Panel Repartidor');
         console.log('📱 Versión:', APP_VERSION);
         console.log('🔍 Características:');
-        console.log('   ✅ GPS con formato lat/lon CORREGIDO');
-        console.log('   ✅ Compatible con lectura del cliente');
+        console.log('   ✅ GPS CORREGIDO: Formato lon (NO lng)');
+        console.log('   ✅ Compatible con Admin y Cliente');
         console.log('   ✅ Background GPS (cada 3s)');
-        console.log('   ✅ Heartbeat Triple');
+        console.log('   ✅ Heartbeat Simplificado (Firebase SDK)');
         console.log('   ✅ Presencia Persistente');
         console.log('   ✅ Wake Lock');
         console.log('   ✅ Auto-reconexión');
@@ -3246,8 +3128,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     setInterval(verificarActualizacion, 30 * 60 * 1000);
 
     console.log('✅ Sistema inicializado correctamente v' + APP_VERSION);
-    console.log('📍 UBICACIÓN CORREGIDA: Formato lat/lon');
-    console.log('🗺️ Compatible con seguimiento del cliente');
+    console.log('📍 UBICACIÓN CORREGIDA: Formato lon (NO lng)');
+    console.log('🗺️ Compatible con seguimiento Admin y Cliente');
+    console.log('🔥 CORRECCIÓN APLICADA: lng → lon en TODAS las funciones');
     
 </script>
 </body>
