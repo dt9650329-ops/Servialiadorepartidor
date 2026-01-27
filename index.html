@@ -28,7 +28,7 @@
         console.log('✅ Eruda inicializado correctamente');
     </script>
     
-    <title>Panel Repartidor - v1.7.2 MAPA CORREGIDO</title>
+    <title>Panel Repartidor - v1.8.0 OPTIMIZADO</title>
     <style>
         :root {
             --color-primary: #FFC300;
@@ -682,12 +682,12 @@
 
 <div id="gpsIndicator" class="gps-indicator">
     <div class="gps-dot"></div>
-    <span>📍 GPS Activo</span>
+    <span>📍 GPS Activo (15s)</span>
 </div>
 
 <div id="gps-indicator-repartidor" class="gps-indicator-repartidor">
     <div class="gps-dot"></div>
-    <span>🏍️ GPS Activo</span>
+    <span>🏍️ GPS Activo (15s)</span>
 </div>
 
 <div id="permisosModal">
@@ -700,7 +700,7 @@
                 <div class="permiso-icon">📍</div>
                 <div class="permiso-info">
                     <strong>Ubicación GPS</strong>
-                    <small>Tracking continuo cada 2-3 segundos</small>
+                    <small>Tracking cada 15 segundos (optimizado)</small>
                 </div>
             </div>
             
@@ -722,7 +722,7 @@
         </div>
         
         <div class="permisos-warning">
-            ⚠️ <strong>Importante:</strong> El GPS se activará automáticamente y continuará activo incluso si minimizas la app.
+            ⚠️ <strong>Importante:</strong> El GPS se activará automáticamente y enviará tu ubicación cada 15 segundos para optimizar costos de Firebase.
         </div>
         
         <div class="permisos-buttons">
@@ -794,7 +794,7 @@
         <h2 style="color: var(--color-secondary); margin: 0;">Bienvenido, <span id="repartidorName"></span>!</h2>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <span id="appVersionDisplay" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 15px; font-size: 0.85em; font-weight: bold;">
-                v1.7.2
+                v1.8.0
             </span>
             <button id="verMapaBtn" style="padding: 8px 15px; background: #2196F3; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">
                 🗺️ Ver Mapa Cliente
@@ -935,7 +935,7 @@
       projectId: "domicilios-1cd74",
       storageBucket: "domicilios-1cd74.firebasestorage.app",
       messagingSenderId: "771819437001",
-      appId: "1:771819437001:web:xxxxxxxxxxxxxx"
+      appId: "1:771819437001:web:b9c8f5e4d3a2c1b0a1b2c3"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -950,7 +950,7 @@
     window.onValue = onValue;
     window.off = off;
 
-    const APP_VERSION = "1.7.2";
+    const APP_VERSION = "1.8.0";
     
     window.addEventListener('DOMContentLoaded', () => {
         const versionDisplay = document.getElementById('appVersionDisplay');
@@ -973,12 +973,11 @@
     let selectedAudioFile = null;
     let mediaRecorder = null;
     let audioChunks = [];
-    let recordingStartTime = 0;
-    let recordingTimerInterval = null;
+    let isRecording = false;
     
     let watchId = null;
     let lastLocationUpdate = 0;
-    const LOCATION_UPDATE_INTERVAL = 2000;
+    const LOCATION_UPDATE_INTERVAL = 15000; // 🔥 15 SEGUNDOS (optimizado)
     let isTrackingEnabled = false;
     let pedidosActivos = {};
     let gpsErrorCount = 0;
@@ -1000,10 +999,7 @@
     let permisosMicrofonoOtorgado = false;
     let permisosUbicacionOtorgado = false;
 
-    // ========================================
-    // 🔥 VARIABLES DEL MAPA (CORREGIDAS v1.7.2)
-    // ========================================
-    
+    // 🔥 VARIABLES DEL MAPA (OPTIMIZADAS)
     let mapaCliente = null;
     let marcadorCliente = null;
     let marcadorRepartidor = null;
@@ -1013,10 +1009,54 @@
     let repartidorLocationWatchId = null;
     let isRepartidorLocationActive = false;
     let lastRepartidorLocationUpdate = 0;
-    const REPARTIDOR_LOCATION_INTERVAL = 5000;
+    const REPARTIDOR_LOCATION_INTERVAL = 15000; // 🔥 15 SEGUNDOS
+
+    // 🆕 VARIABLE PARA GUARDAR EL PEDIDO ACTIVO Y PERSISTIR UBICACIÓN
+    let activePedidoData = null;
 
     // ========================================
-    // 🔥 FUNCIONES DE DEBUGGING MEJORADAS
+    // 🆕 FUNCIONES PARA PERSISTIR UBICACIÓN DEL CLIENTE
+    // ========================================
+
+    function guardarUbicacionClienteEnStorage(clienteID, coords) {
+        try {
+            const data = {
+                clienteID: clienteID,
+                coords: coords,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('cliente_ubicacion_activa', JSON.stringify(data));
+            console.log('💾 Ubicación del cliente guardada en localStorage:', data);
+        } catch (error) {
+            console.error('❌ Error al guardar ubicación en localStorage:', error);
+        }
+    }
+
+    function cargarUbicacionClienteDeStorage() {
+        try {
+            const data = localStorage.getItem('cliente_ubicacion_activa');
+            if (data) {
+                const parsed = JSON.parse(data);
+                console.log('📂 Ubicación del cliente cargada desde localStorage:', parsed);
+                return parsed;
+            }
+        } catch (error) {
+            console.error('❌ Error al cargar ubicación desde localStorage:', error);
+        }
+        return null;
+    }
+
+    function limpiarUbicacionClienteDeStorage() {
+        try {
+            localStorage.removeItem('cliente_ubicacion_activa');
+            console.log('🗑️ Ubicación del cliente eliminada de localStorage');
+        } catch (error) {
+            console.error('❌ Error al limpiar ubicación de localStorage:', error);
+        }
+    }
+
+    // ========================================
+    // FUNCIONES DE DEBUGGING MEJORADAS
     // ========================================
 
     function logDebugCliente(mensaje, datos = null) {
@@ -1032,7 +1072,7 @@
     }
 
     // ========================================
-    // 🔥 INICIALIZAR MAPA (CORREGIDO v1.7.2)
+    // INICIALIZAR MAPA
     // ========================================
 
     function inicializarMapaCliente() {
@@ -1075,81 +1115,87 @@
     }
 
     // ========================================
-    // 🔥 AGREGAR MARCADOR DEL CLIENTE (CORREGIDO v1.7.2)
+    // 🔥 AGREGAR MARCADOR DEL CLIENTE (CORREGIDO CON "lon")
     // ========================================
 
     function agregarMarcadorClienteEnMapaRepartidor(coords) {
-    logDebugCliente('Intentando agregar marcador del cliente', coords);
-    
-    // 🔥 VALIDAR QUE COORDS TENGA "lon" (NO "lng")
-    if (!coords || !coords.lat || !coords.lon) {  // ⚠️ Cambiar "lng" por "lon"
-        console.error('❌ Coordenadas del cliente inválidas:', coords);
-        return;
-    }
+        logDebugCliente('Intentando agregar marcador del cliente', coords);
+        
+        // 🔥 VALIDAR QUE COORDS TENGA "lon" (NO "lng")
+        if (!coords || !coords.lat || !coords.lon) {
+            console.error('❌ Coordenadas del cliente inválidas:', coords);
+            return;
+        }
 
-    const lat = parseFloat(coords.lat);
-    const lon = parseFloat(coords.lon);  // ⚠️ Cambiar "lng" por "lon"
-    
-    if (isNaN(lat) || isNaN(lon)) {
-        console.error('❌ Coordenadas del cliente son NaN:', coords);
-        return;
-    }
+        const lat = parseFloat(coords.lat);
+        const lon = parseFloat(coords.lon);
+        
+        if (isNaN(lat) || isNaN(lon)) {
+            console.error('❌ Coordenadas del cliente son NaN:', coords);
+            return;
+        }
 
-    if (lat === 0 && lon === 0) {
-        console.warn('⚠️ Coordenadas en (0, 0) - ubicación inválida');
-        return;
-    }
+        if (lat === 0 && lon === 0) {
+            console.warn('⚠️ Coordenadas en (0, 0) - ubicación inválida');
+            return;
+        }
 
-    if (!mapaCliente) {
-        console.error('❌ Mapa no inicializado');
-        inicializarMapaCliente();
-        setTimeout(() => agregarMarcadorClienteEnMapaRepartidor(coords), 500);
-        return;
-    }
-    
-    clienteCoordsRepartidorApp = coords;
-    
-    try {
-        if (marcadorCliente) {
-            logDebugCliente('Actualizando marcador existente');
-            marcadorCliente.setLatLng([lat, lon]);
-        } else {
-            logDebugCliente('Creando nuevo marcador del cliente');
-            
-            const iconCliente = L.divIcon({
-                className: 'custom-marker-cliente',
-                html: '<div style="background-color: #4CAF50; width: 35px; height: 35px; border-radius: 50%; border: 4px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 18px;">📍</div>',
-                iconSize: [35, 35],
-                iconAnchor: [17, 17]
-            });
-
-            marcadorCliente = L.marker([lat, lon], { 
-                icon: iconCliente,
-                title: 'Cliente'
-            }).addTo(mapaCliente);
-            
-            marcadorCliente.bindPopup('<b>📍 Cliente</b><br>Ubicación actual');
-            
-            logDebugCliente('✅ Marcador del cliente agregado al mapa');
-            
-            // Centrar mapa en el cliente
-            mapaCliente.setView([lat, lon], 15);
+        if (!mapaCliente) {
+            console.error('❌ Mapa no inicializado');
+            inicializarMapaCliente();
+            setTimeout(() => agregarMarcadorClienteEnMapaRepartidor(coords), 500);
+            return;
         }
         
-        // Actualizar información de distancia si ya tenemos ubicación del repartidor
-        if (repartidorCoords) {
-            calcularDistanciaYDireccion();
-        } else {
-            document.getElementById('distancia-cliente').textContent = '📏 Esperando tu ubicación GPS...';
-            document.getElementById('direccion-cliente').textContent = '🧭 Activando GPS del repartidor...';
+        clienteCoordsRepartidorApp = coords;
+        
+        // 🆕 GUARDAR EN LOCALSTORAGE
+        if (window.currentClienteID) {
+            guardarUbicacionClienteEnStorage(window.currentClienteID, coords);
         }
         
-    } catch (error) {
-        console.error('❌ Error al agregar marcador del cliente:', error);
+        try {
+            if (marcadorCliente) {
+                logDebugCliente('Actualizando marcador existente');
+                marcadorCliente.setLatLng([lat, lon]);
+            } else {
+                logDebugCliente('Creando nuevo marcador del cliente');
+                
+                const iconCliente = L.divIcon({
+                    className: 'custom-marker-cliente',
+                    html: '<div style="background-color: #4CAF50; width: 35px; height: 35px; border-radius: 50%; border: 4px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 18px;">📍</div>',
+                    iconSize: [35, 35],
+                    iconAnchor: [17, 17]
+                });
+
+                marcadorCliente = L.marker([lat, lon], { 
+                    icon: iconCliente,
+                    title: 'Cliente'
+                }).addTo(mapaCliente);
+                
+                marcadorCliente.bindPopup('<b>📍 Cliente</b><br>Ubicación actual');
+                
+                logDebugCliente('✅ Marcador del cliente agregado al mapa');
+                
+                // Centrar mapa en el cliente
+                mapaCliente.setView([lat, lon], 15);
+            }
+            
+            // Actualizar información de distancia si ya tenemos ubicación del repartidor
+            if (repartidorCoords) {
+                calcularDistanciaYDireccion();
+            } else {
+                document.getElementById('distancia-cliente').textContent = '📏 Esperando tu ubicación GPS...';
+                document.getElementById('direccion-cliente').textContent = '🧭 Activando GPS del repartidor...';
+            }
+            
+        } catch (error) {
+            console.error('❌ Error al agregar marcador del cliente:', error);
+        }
     }
-}
+
     // ========================================
-    // 🔥 AGREGAR MARCADOR DEL REPARTIDOR (CORREGIDO v1.7.2)
+    // AGREGAR MARCADOR DEL REPARTIDOR
     // ========================================
 
     function agregarMarcadorRepartidorEnMapa(coords) {
@@ -1160,7 +1206,10 @@
             return;
         }
 
-        if (isNaN(coords.lat) || isNaN(coords.lon)) {
+        const lat = parseFloat(coords.lat);
+        const lon = parseFloat(coords.lon);
+        
+        if (isNaN(lat) || isNaN(lon)) {
             console.error('❌ Coordenadas del repartidor son NaN:', coords);
             return;
         }
@@ -1175,11 +1224,10 @@
         try {
             if (marcadorRepartidor) {
                 logDebugRepartidor('Actualizando marcador existente');
-                marcadorRepartidor.setLatLng([coords.lat, coords.lon]);
+                marcadorRepartidor.setLatLng([lat, lon]);
             } else {
                 logDebugRepartidor('Creando nuevo marcador del repartidor');
                 
-                // 🔥 CORRECCIÓN: Usar marcador HTML personalizado más simple
                 const iconRepartidor = L.divIcon({
                     className: 'custom-marker-repartidor',
                     html: '<div style="background-color: #2196F3; width: 35px; height: 35px; border-radius: 50%; border: 4px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 18px;">🏍️</div>',
@@ -1187,7 +1235,7 @@
                     iconAnchor: [17, 17]
                 });
 
-                marcadorRepartidor = L.marker([coords.lat, coords.lon], { 
+                marcadorRepartidor = L.marker([lat, lon], { 
                     icon: iconRepartidor,
                     title: 'Tú (Repartidor)'
                 }).addTo(mapaCliente);
@@ -1284,151 +1332,156 @@
     }
 
     // ========================================
-    // 🔥 INICIAR SEGUIMIENTO DEL CLIENTE (CORREGIDO v1.7.2)
+    // 🔥 INICIAR SEGUIMIENTO DEL CLIENTE (CORREGIDO CON "lon" Y PERSISTENCIA)
     // ========================================
 
     function iniciarSeguimientoCliente(clienteID) {
-    console.log('');
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('👁️ INICIANDO SEGUIMIENTO DEL CLIENTE v1.7.3 CORREGIDO');
-    console.log('═══════════════════════════════════════════════════════════');
-    logDebugCliente(`Cliente ID recibido: ${clienteID}`);
-    
-    if (!clienteID) {
-        console.error('❌ ERROR CRÍTICO: clienteID es null o undefined');
-        alert('⚠️ Error: No se pudo obtener el ID del cliente. El mapa no mostrará su ubicación.');
-        return;
-    }
-    
-    window.currentClienteID = clienteID;
-    
-    // Detener listener anterior si existe
-    if (clienteUbicacionListener) {
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('👁️ INICIANDO SEGUIMIENTO DEL CLIENTE v1.8.0');
+        console.log('═══════════════════════════════════════════════════════════');
+        logDebugCliente(`Cliente ID recibido: ${clienteID}`);
+        
+        if (!clienteID) {
+            console.error('❌ ERROR CRÍTICO: clienteID es null o undefined');
+            alert('⚠️ Error: No se pudo obtener el ID del cliente. El mapa no mostrará su ubicación.');
+            return;
+        }
+        
+        window.currentClienteID = clienteID;
+        
+        // 🆕 INTENTAR CARGAR UBICACIÓN GUARDADA PRIMERO
+        const ubicacionGuardada = cargarUbicacionClienteDeStorage();
+        if (ubicacionGuardada && ubicacionGuardada.clienteID === clienteID) {
+            console.log('📂 Restaurando ubicación del cliente desde localStorage');
+            agregarMarcadorClienteEnMapaRepartidor(ubicacionGuardada.coords);
+        }
+        
+        // Detener listener anterior si existe
+        if (clienteUbicacionListener) {
+            try {
+                off(ref(db, `usuarios/${clienteID}`), 'value', clienteUbicacionListener);
+                logDebugCliente('🛑 Listener anterior detenido');
+            } catch (error) {
+                console.warn('⚠️ Error al detener listener anterior:', error);
+            }
+        }
+        
+        // 🔥 USAR "usuarios/" (NO "users/")
+        const clienteRef = ref(db, `usuarios/${clienteID}`);
+        logDebugCliente(`✅ Usando ruta correcta: usuarios/${clienteID}`);
+        
         try {
-            off(ref(db, `usuarios/${clienteID}`), 'value', clienteUbicacionListener);
-            logDebugCliente('🛑 Listener anterior detenido');
+            clienteUbicacionListener = onValue(clienteRef, (snapshot) => {
+                logDebugCliente('📡 Snapshot recibido del cliente');
+                
+                if (!snapshot.exists()) {
+                    console.warn('⚠️ Datos del cliente no disponibles en Firebase');
+                    console.warn(`⚠️ Ruta intentada: usuarios/${clienteID}`);
+                    document.getElementById('distancia-cliente').textContent = '📏 Cliente no encontrado en la base de datos';
+                    return;
+                }
+                
+                const clienteData = snapshot.val();
+                logDebugCliente('📊 Datos completos del cliente:', clienteData);
+                
+                if (!clienteData.gpsActivo) {
+                    console.warn('⚠️ GPS del cliente no está activo');
+                    console.warn('   gpsActivo:', clienteData.gpsActivo);
+                    document.getElementById('distancia-cliente').textContent = '📏 GPS del cliente desactivado';
+                    document.getElementById('direccion-cliente').textContent = '🧭 Esperando que el cliente active GPS...';
+                    return;
+                }
+                
+                logDebugCliente('✅ GPS del cliente ACTIVO');
+                
+                // 🔥 BUSCAR CON "lon" (NO "lng")
+                let clienteCoords = null;
+                
+                // Opción 1: ubicacionActual (con "lon")
+                if (clienteData.ubicacionActual && 
+                    clienteData.ubicacionActual.lat && 
+                    clienteData.ubicacionActual.lon) {
+                    
+                    clienteCoords = {
+                        lat: parseFloat(clienteData.ubicacionActual.lat),
+                        lon: parseFloat(clienteData.ubicacionActual.lon)
+                    };
+                    logDebugCliente('✅ Ubicación encontrada en ubicacionActual:', clienteCoords);
+                }
+                // Opción 2: ubicacion (con "lon")
+                else if (clienteData.ubicacion && 
+                         clienteData.ubicacion.lat && 
+                         clienteData.ubicacion.lon) {
+                    
+                    clienteCoords = {
+                        lat: parseFloat(clienteData.ubicacion.lat),
+                        lon: parseFloat(clienteData.ubicacion.lon)
+                    };
+                    logDebugCliente('✅ Ubicación encontrada en ubicacion:', clienteCoords);
+                }
+                // Opción 3: campos directos
+                else if (clienteData.lat && clienteData.lon) {
+                    clienteCoords = {
+                        lat: parseFloat(clienteData.lat),
+                        lon: parseFloat(clienteData.lon)
+                    };
+                    logDebugCliente('✅ Ubicación encontrada en campos directos:', clienteCoords);
+                }
+                
+                if (!clienteCoords) {
+                    console.error('❌ NO SE PUDO OBTENER UBICACIÓN DEL CLIENTE');
+                    console.error('Estructura de datos recibida:', clienteData);
+                    console.error('Campos buscados:');
+                    console.error('  - ubicacionActual.lat/lon:', clienteData.ubicacionActual);
+                    console.error('  - ubicacion.lat/lon:', clienteData.ubicacion);
+                    console.error('  - lat/lon directos:', clienteData.lat, clienteData.lon);
+                    document.getElementById('distancia-cliente').textContent = '📏 No se pudo obtener ubicación del cliente';
+                    document.getElementById('direccion-cliente').textContent = '🧭 Verifica que el cliente tenga GPS activo';
+                    return;
+                }
+                
+                logDebugCliente('🎯 Coordenadas finales del cliente:', clienteCoords);
+                
+                // VALIDACIÓN
+                if (isNaN(clienteCoords.lat) || isNaN(clienteCoords.lon)) {
+                    console.error('❌ Coordenadas inválidas (NaN):', clienteCoords);
+                    return;
+                }
+                
+                if (clienteCoords.lat === 0 && clienteCoords.lon === 0) {
+                    console.warn('⚠️ Coordenadas en (0, 0) - ubicación inválida');
+                    document.getElementById('distancia-cliente').textContent = '📏 Ubicación del cliente inválida';
+                    return;
+                }
+                
+                // Validar rango de coordenadas de Colombia
+                if (clienteCoords.lat < -4.5 || clienteCoords.lat > 13.5 || 
+                    clienteCoords.lon < -79.5 || clienteCoords.lon > -66.5) {
+                    console.warn('⚠️ Coordenadas fuera del rango de Colombia:', clienteCoords);
+                }
+                
+                logDebugCliente('✅ Coordenadas validadas correctamente');
+                logDebugCliente('📍 Agregando marcador del cliente al mapa...');
+                
+                agregarMarcadorClienteEnMapaRepartidor(clienteCoords);
+                
+            }, (error) => {
+                console.error('❌ Error en listener del cliente:', error);
+                alert(`❌ Error al obtener ubicación del cliente:\n\n${error.message}`);
+            });
+            
+            logDebugCliente('✅ Listener de ubicación del cliente activado');
+            console.log('═══════════════════════════════════════════════════════════');
+            console.log('');
         } catch (error) {
-            console.warn('⚠️ Error al detener listener anterior:', error);
+            console.error('❌ Error al configurar listener:', error);
+            alert(`❌ Error al iniciar seguimiento:\n\n${error.message}`);
         }
     }
-    
-    // 🔥 CORRECCIÓN #1: USAR "usuarios/" (NO "users/")
-    const clienteRef = ref(db, `usuarios/${clienteID}`);
-    logDebugCliente(`✅ Usando ruta correcta: usuarios/${clienteID}`);
-    
-    try {
-        clienteUbicacionListener = onValue(clienteRef, (snapshot) => {
-            logDebugCliente('📡 Snapshot recibido del cliente');
-            
-            if (!snapshot.exists()) {
-                console.warn('⚠️ Datos del cliente no disponibles en Firebase');
-                console.warn(`⚠️ Ruta intentada: usuarios/${clienteID}`);
-                document.getElementById('distancia-cliente').textContent = '📏 Cliente no encontrado en la base de datos';
-                return;
-            }
-            
-            const clienteData = snapshot.val();
-            logDebugCliente('📊 Datos completos del cliente:', clienteData);
-            
-            // 🔥 VERIFICAR GPS ACTIVO
-            if (!clienteData.gpsActivo) {
-                console.warn('⚠️ GPS del cliente no está activo');
-                console.warn('   gpsActivo:', clienteData.gpsActivo);
-                document.getElementById('distancia-cliente').textContent = '📏 GPS del cliente desactivado';
-                document.getElementById('direccion-cliente').textContent = '🧭 Esperando que el cliente active GPS...';
-                return;
-            }
-            
-            logDebugCliente('✅ GPS del cliente ACTIVO');
-            
-            // 🔥 CORRECCIÓN #2: BÚSQUEDA EN MÚLTIPLES CAMPOS CON "lon" (NO "lng")
-            let clienteCoords = null;
-            
-            // Opción 1: ubicacionActual (con "lon")
-            if (clienteData.ubicacionActual && 
-                clienteData.ubicacionActual.lat && 
-                clienteData.ubicacionActual.lon) {  // ⚠️ Nota: "lon" no "lng"
-                
-                clienteCoords = {
-                    lat: parseFloat(clienteData.ubicacionActual.lat),
-                    lon: parseFloat(clienteData.ubicacionActual.lon)  // ⚠️ "lon"
-                };
-                logDebugCliente('✅ Ubicación encontrada en ubicacionActual:', clienteCoords);
-            }
-            // Opción 2: ubicacion (con "lon")
-            else if (clienteData.ubicacion && 
-                     clienteData.ubicacion.lat && 
-                     clienteData.ubicacion.lon) {  // ⚠️ "lon"
-                
-                clienteCoords = {
-                    lat: parseFloat(clienteData.ubicacion.lat),
-                    lon: parseFloat(clienteData.ubicacion.lon)  // ⚠️ "lon"
-                };
-                logDebugCliente('✅ Ubicación encontrada en ubicacion:', clienteCoords);
-            }
-            // Opción 3: campos directos
-            else if (clienteData.lat && clienteData.lon) {  // ⚠️ "lon"
-                clienteCoords = {
-                    lat: parseFloat(clienteData.lat),
-                    lon: parseFloat(clienteData.lon)  // ⚠️ "lon"
-                };
-                logDebugCliente('✅ Ubicación encontrada en campos directos:', clienteCoords);
-            }
-            
-            if (!clienteCoords) {
-                console.error('❌ NO SE PUDO OBTENER UBICACIÓN DEL CLIENTE');
-                console.error('Estructura de datos recibida:', clienteData);
-                console.error('Campos buscados:');
-                console.error('  - ubicacionActual.lat/lon:', clienteData.ubicacionActual);
-                console.error('  - ubicacion.lat/lon:', clienteData.ubicacion);
-                console.error('  - lat/lon directos:', clienteData.lat, clienteData.lon);
-                document.getElementById('distancia-cliente').textContent = '📏 No se pudo obtener ubicación del cliente';
-                document.getElementById('direccion-cliente').textContent = '🧭 Verifica que el cliente tenga GPS activo';
-                return;
-            }
-            
-            logDebugCliente('🎯 Coordenadas finales del cliente:', clienteCoords);
-            
-            // 🔥 VALIDACIÓN ROBUSTA
-            if (isNaN(clienteCoords.lat) || isNaN(clienteCoords.lon)) {
-                console.error('❌ Coordenadas inválidas (NaN):', clienteCoords);
-                return;
-            }
-            
-            if (clienteCoords.lat === 0 && clienteCoords.lon === 0) {
-                console.warn('⚠️ Coordenadas en (0, 0) - ubicación inválida');
-                document.getElementById('distancia-cliente').textContent = '📏 Ubicación del cliente inválida';
-                return;
-            }
-            
-            // Validar rango de coordenadas de Colombia
-            if (clienteCoords.lat < -4.5 || clienteCoords.lat > 13.5 || 
-                clienteCoords.lon < -79.5 || clienteCoords.lon > -66.5) {
-                console.warn('⚠️ Coordenadas fuera del rango de Colombia:', clienteCoords);
-                // No bloqueamos, pero alertamos
-            }
-            
-            logDebugCliente('✅ Coordenadas validadas correctamente');
-            logDebugCliente('📍 Agregando marcador del cliente al mapa...');
-            
-            // 🔥 IMPORTANTE: La función espera { lat, lon } no { lat, lng }
-            agregarMarcadorClienteEnMapaRepartidor(clienteCoords);
-            
-        }, (error) => {
-            console.error('❌ Error en listener del cliente:', error);
-            alert(`❌ Error al obtener ubicación del cliente:\n\n${error.message}`);
-        });
-        
-        logDebugCliente('✅ Listener de ubicación del cliente activado');
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('');
-    } catch (error) {
-        console.error('❌ Error al configurar listener:', error);
-        alert(`❌ Error al iniciar seguimiento:\n\n${error.message}`);
-    }
-}
+
     // ========================================
-    // ENVIAR UBICACIÓN DEL REPARTIDOR A FIREBASE
+    // 🔥 ENVÍO DE UBICACIÓN DEL REPARTIDOR (OPTIMIZADO A 15 SEGUNDOS)
     // ========================================
 
     function iniciarEnvioUbicacionRepartidor() {
@@ -1442,7 +1495,7 @@
             return;
         }
         
-        logDebugRepartidor('Iniciando envío automático de ubicación...');
+        logDebugRepartidor('Iniciando envío automático de ubicación (cada 15s)...');
         isRepartidorLocationActive = true;
         
         document.getElementById('gps-indicator-repartidor').classList.add('active');
@@ -1451,6 +1504,7 @@
             (position) => {
                 const now = Date.now();
                 
+                // 🔥 OPTIMIZACIÓN: Solo enviar cada 15 segundos
                 if (now - lastRepartidorLocationUpdate < REPARTIDOR_LOCATION_INTERVAL) {
                     return;
                 }
@@ -1461,7 +1515,7 @@
                 const lon = position.coords.longitude;
                 const accuracy = position.coords.accuracy;
                 
-                logDebugRepartidor(`📍 Ubicación: ${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracy)}m)`);
+                logDebugRepartidor(`📍 Ubicación: ${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracy)}m) [15s]`);
                 
                 // Actualizar marcador en el mapa
                 agregarMarcadorRepartidorEnMapa({ lat, lon });
@@ -1479,7 +1533,7 @@
             }
         );
         
-        logDebugRepartidor('✅ Sistema de ubicación iniciado (cada 5s)');
+        logDebugRepartidor('✅ Sistema de ubicación iniciado (cada 15s - optimizado)');
     }
 
     async function enviarUbicacionRepartidorAFirebase(lat, lon, accuracy) {
@@ -1508,7 +1562,7 @@
                 gpsActivo: true
             });
             
-            logDebugRepartidor(`✅ Ubicación → Firebase: ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+            logDebugRepartidor(`✅ Ubicación → Firebase: ${lat.toFixed(6)}, ${lon.toFixed(6)} [15s]`);
             
         } catch (error) {
             console.error('❌ Error al enviar ubicación:', error);
@@ -1565,12 +1619,16 @@
         
         document.getElementById('mapa-cliente-container').style.display = 'none';
         
+        // 🆕 LIMPIAR LOCALSTORAGE
+        limpiarUbicacionClienteDeStorage();
+        
         clienteCoordsRepartidorApp = null;
         repartidorCoords = null;
         window.currentClienteID = null;
         
         logDebugMapa('✅ Seguimiento detenido completamente');
     }
+
     // ========================================
     // SISTEMA DE PERMISOS MULTIMEDIA
     // ========================================
@@ -1644,7 +1702,7 @@
         const resumen = `
 📊 RESUMEN DE PERMISOS:
 
-${permisosUbicacionOtorgado ? '✅' : '❌'} Ubicación GPS
+${permisosUbicacionOtorgado ? '✅' : '❌'} Ubicación GPS (optimizada cada 15s)
 ${permisosCamaraOtorgado ? '✅' : '❌'} Cámara/Fotos
 ${permisosMicrofonoOtorgado ? '✅' : '❌'} Micrófono/Audio
 
@@ -1801,7 +1859,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     }
     
     // ========================================
-    // SISTEMA GPS CORREGIDO
+    // 🔥 SISTEMA GPS OPTIMIZADO (15 SEGUNDOS)
     // ========================================
     
     function iniciarBackgroundGeolocation() {
@@ -1809,6 +1867,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             clearInterval(backgroundGeoInterval);
         }
 
+        // 🔥 OPTIMIZACIÓN: De 3s a 15s
         backgroundGeoInterval = setInterval(async () => {
             if (!repartidorUID) return;
             
@@ -1854,14 +1913,14 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     backgroundMode: isBackgroundMode
                 });
 
-                console.log(`📍 BG GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)} [${isBackgroundMode ? 'BACKGROUND' : 'FOREGROUND'}]`);
+                console.log(`📍 BG GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)} [${isBackgroundMode ? 'BACKGROUND' : 'FOREGROUND'}] [15s]`);
 
             } catch (error) {
                 console.warn('⚠️ Error en background GPS:', error.message);
             }
-        }, 3000);
+        }, 15000); // 🔥 15 SEGUNDOS (optimizado)
 
-        console.log('✅ Background Geolocation iniciado (cada 3s)');
+        console.log('✅ Background Geolocation iniciado (cada 15s - optimizado)');
     }
 
     function detenerBackgroundGeolocation() {
@@ -1877,6 +1936,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             clearInterval(locationSendInterval);
         }
 
+        // 🔥 OPTIMIZACIÓN: De 5s a 15s
         locationSendInterval = setInterval(async () => {
             if (isTrackingEnabled && repartidorUID && lastLocationUpdate > 0) {
                 try {
@@ -1890,13 +1950,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     console.warn('⚠️ Error en envío directo de ubicación:', error);
                 }
             }
-        }, 5000);
+        }, 15000); // 🔥 15 SEGUNDOS (optimizado)
 
-        console.log('✅ Envío directo de ubicación iniciado');
+        console.log('✅ Envío directo de ubicación iniciado (cada 15s - optimizado)');
     }
 
     async function iniciarTrackingGPSAutomatico() {
-        console.log('🚀 Iniciando GPS automático al login...');
+        console.log('🚀 Iniciando GPS automático al login (optimizado)...');
         
         if (!permisosUbicacionOtorgado) {
             console.warn('⚠️ No se puede iniciar GPS sin permisos de ubicación');
@@ -1929,7 +1989,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             return;
         }
         
-        console.log('📍 Iniciando tracking GPS mejorado...');
+        console.log('📍 Iniciando tracking GPS optimizado (15s)...');
         isTrackingEnabled = true;
         gpsErrorCount = 0;
         
@@ -1949,6 +2009,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             (position) => {
                 const now = Date.now();
                 
+                // 🔥 OPTIMIZACIÓN: Solo actualizar cada 15 segundos
                 if (now - lastLocationUpdate < LOCATION_UPDATE_INTERVAL) {
                     return;
                 }
@@ -1962,7 +2023,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 const speed = position.coords.speed || 0;
                 const heading = position.coords.heading || 0;
                 
-                console.log(`📍 GPS OK [${esAPK ? 'APK' : 'Web'}]: ${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracy)}m)`);
+                console.log(`📍 GPS OK [${esAPK ? 'APK' : 'Web'}]: ${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracy)}m) [15s]`);
                 
                 enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading);
                 enviarUbicacionDirecta(lat, lon, accuracy, speed, heading);
@@ -1990,7 +2051,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             geoOptions
         );
         
-        console.log('✅ GPS iniciado - Actualización cada 2 segundos');
+        console.log('✅ GPS iniciado - Actualización cada 15 segundos (optimizado)');
     }
 
     function detenerTrackingGPS() {
@@ -2049,7 +2110,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 online: true
             });
             
-            console.log(`📍 Ubicación Firebase SDK: ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+            console.log(`📍 Ubicación Firebase SDK: ${lat.toFixed(6)}, ${lon.toFixed(6)} [15s]`);
             
         } catch (error) {
             console.error('❌ Error al enviar ubicación Firebase SDK:', error);
@@ -2094,7 +2155,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 await Promise.all(promesas);
             }
 
-            console.log(`✅ Ubicación enviada [${new Date(timestamp).toLocaleTimeString()}]`);
+            console.log(`✅ Ubicación enviada [${new Date(timestamp).toLocaleTimeString()}] [15s]`);
 
         } catch (error) {
             console.error('❌ Error al enviar ubicación:', error);
@@ -2138,738 +2199,91 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
 
-    function limpiarRecursos() {
-        if (timerInterval) {
-            clearInterval(timerInterval);
-            timerInterval = null;
-        }
-        if (locationSendInterval) {
-            clearInterval(locationSendInterval);
-            locationSendInterval = null;
-        }
-        console.log('🧹 Recursos limpiados');
-    }
-
     // ========================================
-    // FUNCIONES DE UTILIDAD
+    // MANEJO DE VISIBILIDAD DE PÁGINA
     // ========================================
     
-    function formatTime(ms) {
-        const totalSeconds = Math.floor(ms / 1000);
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-        const pad = (num) => num.toString().padStart(2, '0');
-        return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-    }
-    
-    function updateTimers() {
-        if (timerInterval) clearInterval(timerInterval); 
-        timerInterval = setInterval(() => {
-            document.querySelectorAll('.pedido-item.asignado-timer').forEach(item => {
-                const timestampElement = item.querySelector('.timestamp-aceptado');
-                const timerElement = item.querySelector('.timer');
-                if (timestampElement && timerElement) {
-                    const timestamp = parseInt(timestampElement.textContent);
-                    const elapsed = Date.now() - timestamp;
-                    timerElement.textContent = `⏱️ Tiempo: ${formatTime(elapsed)}`;
-                }
-            });
-        }, 1000);
-    }
-    
-    function playNotificationSound() {
-        const audio = document.getElementById('notificationSound');
-        if (audio) {
-            audio.pause(); 
-            audio.currentTime = 0;
-            audio.play().catch(error => console.warn("Error audio:", error));
-        }
-    }
-
-    function showSection(sectionId) {
-        document.getElementById('chatSection').style.display = 'none';
-        document.getElementById('pendientesSection').style.display = 'none';
-        document.getElementById('asignadosSection').style.display = 'none';
-        document.getElementById('historialSection').style.display = 'none';
-        document.getElementById(sectionId).style.display = 'block';
-    }
-
-    document.getElementById('showChatBtn').addEventListener('click', () => showSection('chatSection'));
-    document.getElementById('showPendientesBtn').addEventListener('click', () => showSection('pendientesSection'));
-    document.getElementById('showAsignadosBtn').addEventListener('click', () => {
-        showSection('asignadosSection');
-        updateTimers(); 
-    });
-    document.getElementById('showHistorialBtn').addEventListener('click', () => { 
-        showSection('historialSection');
-        listenForHistorial(); 
-    });
-
-    // ========================================
-    // COMPLETAR PEDIDO
-    // ========================================
-    
-    window.completarPedido = async function(pedidoId) {
-        if (!confirm(`✅ ¿Confirmas que entregaste este pedido exitosamente?`)) {
-            return;
-        }
-
-        try {
-            console.log(`🔄 Completando pedido: ${pedidoId}`);
+    document.addEventListener('visibilitychange', async () => {
+        if (document.hidden) {
+            console.log('📱 App en segundo plano');
+            isBackgroundMode = true;
             
-            const pedidoPendienteRef = ref(db, `pedidos_pendientes/${pedidoId}`);
-            const snapshot = await get(pedidoPendienteRef);
-            
-            if (!snapshot.exists()) {
-                console.error('❌ Pedido no encontrado en pedidos_pendientes');
-                alert('❌ Error: El pedido no existe o ya fue procesado');
-                return;
-            }
-            
-            const pedidoData = snapshot.val();
-            console.log('📦 Datos del pedido obtenidos:', pedidoData);
-            
-            const pedidoCompletado = {
-                ...pedidoData,
-                estado: 'Completado',
-                estadoHistorial: 'Completado',
-                timestampEntregado: Date.now(),
-                timestampCompletado: Date.now(),
-                completadoPor: repartidorNombre,
-                repartidorUID: repartidorUID,
-                id: pedidoId
-            };
-            
-            const historialRef = ref(db, `pedidos_historial/${pedidoId}`);
-            await set(historialRef, pedidoCompletado);
-            console.log('✅ Pedido guardado en historial');
-            
-            if (pedidoData.clienteIdAsignado) {
-                const clienteRef = ref(db, `usuarios/${pedidoData.clienteIdAsignado}`);
-                await update(clienteRef, {
-                    pedidoActivoId: null,
-                    tienePedidoAsignado: false,
-                    ultimoPedidoCompletado: pedidoId,
-                    timestampUltimaEntrega: Date.now()
+            if (repartidorUID) {
+                await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                    navegadorActivo: false,
+                    backgroundMode: true
                 });
             }
-            
-            await remove(pedidoPendienteRef);
-            delete pedidosActivos[pedidoId];
-            
-            window.detenerSeguimiento();
-            
-            alert('✅ ¡Entrega registrada exitosamente!');
-            console.log('🎉 Pedido completado exitosamente:', pedidoId);
-            
-        } catch (error) {
-            console.error('❌ Error al completar pedido:', error);
-            alert(`❌ Error al completar el pedido:\n\n${error.message}`);
-        }
-    }
-
-    // ========================================
-    // 🔥 AVANZAR ESTADO PEDIDO (CORREGIDO)
-    // ========================================
-    
-    window.avanzarEstadoPedido = async function(pedidoId, estadoActual) {
-        const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
-        let proximoEstado = "";
-        let mensajeAlerta = "";
-
-        if (estadoActual === 'Pendiente') {
-            if (confirm(`¿Deseas tomar este pedido?`)) {
-                proximoEstado = 'Aceptado';
-                mensajeAlerta = "✅ Pedido Aceptado. Dirígete al punto de recogida.";
-                
-                try {
-                    console.log('═══════════════════════════════════════════════════════════');
-                    console.log('🔍 ACEPTANDO PEDIDO - BÚSQUEDA DE CLIENTE ID');
-                    console.log('═══════════════════════════════════════════════════════════');
-                    
-                    const pedidoSnapshot = await get(pedidoRef);
-                    const pedidoData = pedidoSnapshot.val();
-                    
-                    console.log('📦 Datos completos del pedido:', pedidoData);
-                    console.log('');
-                    console.log('🔎 Buscando clienteID en diferentes campos:');
-                    console.log('   clienteIdAsignado:', pedidoData?.clienteIdAsignado);
-                    console.log('   clienteID:', pedidoData?.clienteID);
-                    console.log('   usuarioId:', pedidoData?.usuarioId);
-                    console.log('   userId:', pedidoData?.userId);
-                    console.log('   cliente_id:', pedidoData?.cliente_id);
-                    console.log('   user_id:', pedidoData?.user_id);
-                    console.log('   clientId:', pedidoData?.clientId);
-                    console.log('');
-                    
-                    const clienteID = pedidoData?.clienteIdAsignado ||
-                                     pedidoData?.clienteID || 
-                                     pedidoData?.usuarioId ||
-                                     pedidoData?.userId ||
-                                     pedidoData?.cliente_id ||
-                                     pedidoData?.user_id ||
-                                     pedidoData?.clientId;
-                    
-                    console.log('✅ Cliente ID seleccionado:', clienteID);
-                    console.log('═══════════════════════════════════════════════════════════');
-                    console.log('');
-                    
-                    if (!clienteID) {
-                        console.error('❌ ERROR CRÍTICO: NO SE ENCONTRÓ CLIENTE ID EN NINGÚN CAMPO');
-                        console.error('Estructura completa del pedido:', JSON.stringify(pedidoData, null, 2));
-                        alert('❌ ERROR: Este pedido no tiene un cliente asociado.\n\nNo se puede iniciar el seguimiento.\n\nContacta al administrador.');
-                    }
-                    
-                    if (navigator.geolocation) {
-                        const position = await new Promise((resolve, reject) => {
-                            navigator.geolocation.getCurrentPosition(resolve, reject, {
-                                enableHighAccuracy: true,
-                                timeout: 10000,
-                                maximumAge: 0
-                            });
-                        });
-                        
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-                        const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
-                        
-                        await update(pedidoRef, {
-                            estado: proximoEstado,
-                            repartidorAsignado: repartidorNombre,
-                            repartidorUID: repartidorUID,
-                            repartidorIdAsignado: repartidorUID,
-                            timestampAceptado: Date.now(),
-                            ubicacionRepartidor: {
-                                lat: parseFloat(lat.toFixed(6)),
-                                lon: parseFloat(lon.toFixed(6)),
-                                accuracy: Math.round(position.coords.accuracy),
-                                speed: Math.round((position.coords.speed || 0) * 3.6),
-                                heading: Math.round(position.coords.heading || 0),
-                                timestamp: Date.now(),
-                                googleMapsUrl: googleMapsUrl
-                            }
-                        });
-                    } else {
-                        await update(pedidoRef, {
-                            estado: proximoEstado,
-                            repartidorAsignado: repartidorNombre,
-                            repartidorUID: repartidorUID,
-                            repartidorIdAsignado: repartidorUID,
-                            timestampAceptado: Date.now()
-                        });
-                    }
-                    
-                    pedidosActivos[pedidoId] = {
-                        estado: 'Aceptado',
-                        timestamp: Date.now()
-                    };
-                    
-                    if (clienteID) {
-                        console.log('🗺️ Iniciando mapa y seguimiento del cliente...');
-                        
-                        document.getElementById('mapa-cliente-container').style.display = 'block';
-                        
-                        if (!mapaCliente) {
-                            inicializarMapaCliente();
-                        }
-                        
-                        iniciarEnvioUbicacionRepartidor();
-                        
-                        iniciarSeguimientoCliente(clienteID);
-                        
-                        document.getElementById('verMapaBtn').textContent = '🗺️ Ocultar Mapa';
-                        
-                        console.log('✅ Sistemas de seguimiento iniciados');
-                    } else {
-                        console.error('❌ No se puede iniciar seguimiento: clienteID no encontrado');
-                    }
-                    
-                    console.log(mensajeAlerta);
-                    showSection('asignadosSection');
-                } catch (error) {
-                    console.error('❌ Error al aceptar pedido:', error);
-                    alert('❌ Error al aceptar el pedido: ' + error.message);
-                }
-            }
-            return;
-        }
-
-        if (estadoActual === 'Aceptado') {
-            proximoEstado = 'Esperando Pedido';
-            mensajeAlerta = "⏳ Estado actualizado: Esperando el despacho en el sitio.";
-        } else if (estadoActual === 'Esperando Pedido') {
-            proximoEstado = 'En Camino';
-            mensajeAlerta = "🚚 ¡Buen viaje! El administrador y el cliente saben que vas en camino.";
-        }
-
-        if (proximoEstado) {
-            try {
-                await update(pedidoRef, { estado: proximoEstado });
-                
-                if (pedidosActivos[pedidoId]) {
-                    pedidosActivos[pedidoId].estado = proximoEstado;
-                }
-                
-                console.log(mensajeAlerta);
-            } catch (error) {
-                console.error('❌ Error al actualizar estado:', error);
-                alert('❌ Error al actualizar el estado');
-            }
-        }
-    };
-
-    // ========================================
-    // CANCELACIÓN DE PEDIDOS
-    // ========================================
-
-    window.iniciarCancelacion = (pedidoId) => {
-        currentPedidoIdToCancel = pedidoId;
-        document.getElementById('cancelModal').style.display = 'flex';
-    }
-    
-    window.ejecutarCancelacionConMotivo = async (motivo) => {
-        try {
-            console.log(`🔄 Cancelando pedido: ${currentPedidoIdToCancel}`);
-            
-            const pedidoPendienteRef = ref(db, `pedidos_pendientes/${currentPedidoIdToCancel}`);
-            const snapshot = await get(pedidoPendienteRef);
-            
-            if (!snapshot.exists()) {
-                console.error('❌ Pedido no encontrado');
-                alert('❌ Error: El pedido no existe');
-                return;
-            }
-            
-            const pedidoData = snapshot.val();
-            
-            const pedidoCancelado = {
-                ...pedidoData,
-                estado: 'Cancelado',
-                estadoHistorial: 'Cancelado',
-                timestampCancelado: Date.now(),
-                motivoCancelacion: motivo,
-                canceladoPor: repartidorNombre,
-                repartidorUID: repartidorUID,
-                id: currentPedidoIdToCancel
-            };
-            
-            await set(ref(db, `pedidos_historial/${currentPedidoIdToCancel}`), pedidoCancelado);
-            
-            if (pedidoData.clienteIdAsignado) {
-                const clienteRef = ref(db, `usuarios/${pedidoData.clienteIdAsignado}`);
-                await update(clienteRef, {
-                    pedidoActivoId: null,
-                    tienePedidoAsignado: false,
-                    ultimoPedidoCancelado: currentPedidoIdToCancel,
-                    timestampUltimaCancelacion: Date.now()
-                });
-            }
-            
-            await remove(pedidoPendienteRef);
-            delete pedidosActivos[currentPedidoIdToCancel];
-            
-            window.detenerSeguimiento();
-            
-            alert(`❌ Pedido cancelado correctamente.\n\nMotivo: ${motivo}`);
-            
-        } catch (error) {
-            console.error('❌ Error al cancelar pedido:', error);
-            alert('❌ Error al cancelar el pedido: ' + error.message);
-        }
-        
-        document.getElementById('cancelModal').style.display = 'none';
-    }
-    // ========================================
-    // LISTENER DE PEDIDOS
-    // ========================================
-
-    function listenForPedidos() {
-        onValue(ref(db, 'pedidos_pendientes'), (snapshot) => {
-            const pedidosList = document.getElementById('pedidosList');
-            const pedidosAsignadosList = document.getElementById('pedidosAsignadosList');
-            const pendientesBadge = document.getElementById('pendientesBadge');
-            
-            pedidosList.innerHTML = '';
-            pedidosAsignadosList.innerHTML = '';
-            let asignadosCount = 0;
-            let pendientesCount = 0;
-            const data = snapshot.val();
-            
-            const pedidosAnteriores = localStorage.getItem('lastPedidosCount') ? parseInt(localStorage.getItem('lastPedidosCount')) : 0;
-            let tieneNuevoPedido = false; 
-
-            if (!data) {
-                pedidosList.innerHTML = '<p>No hay pedidos pendientes.</p>';
-                pedidosAsignadosList.innerHTML = '<p>No tienes pedidos asignados.</p>';
-                document.getElementById('asignadosCount').textContent = 0;
-                pendientesBadge.style.display = 'none';
-                localStorage.setItem('lastPedidosCount', 0);
-                
-                initialLoad = false;
-                return;
-            }
-
-            const pedidosEnFirebase = Object.keys(data);
-            Object.keys(pedidosActivos).forEach(pedidoId => {
-                if (!pedidosEnFirebase.includes(pedidoId)) {
-                    delete pedidosActivos[pedidoId];
-                }
-            });
-
-            Object.keys(data).forEach(pedidoId => {
-                const pedido = data[pedidoId];
-                const item = document.createElement('div');
-                item.classList.add('pedido-item');
-                
-                const contentHTML = `
-                    <p><strong>ID:</strong> ${pedidoId.substring(0, 8)}...</p>
-                    <p><strong>Cliente:</strong> ${pedido.nombreCliente}</p>
-                    <p><strong>Teléfono:</strong> ${pedido.telefonoCliente}</p>
-                    <p><strong>Dirección:</strong> ${pedido.direccionCliente}</p>
-                    <p><strong>Descripción:</strong> ${pedido.descripcion}</p>
-                    <p><strong>Monto:</strong> $${pedido.montoTotal.toLocaleString('es-CO')}</p>
-                `;
-                
-                if (pedido.estado === 'Pendiente') {
-                    pendientesCount++;
-                    item.innerHTML = contentHTML + `
-                        <button onclick="window.avanzarEstadoPedido('${pedidoId}', 'Pendiente')" style="background: #4CAF50; color: white; width: 100%;">✅ Aceptar Pedido</button>
-                    `;
-                    pedidosList.appendChild(item);
-                    if (!localStorage.getItem(`pedido_seen_${pedidoId}`)) tieneNuevoPedido = true;
-
-                } else if (pedido.repartidorUID === repartidorUID) {
-                    asignadosCount++;
-                    item.classList.add('asignado-timer');
-                    
-                    let mainBtn = "";
-                    if (pedido.estado === 'Aceptado') {
-                        item.classList.add('asignado');
-                        mainBtn = `<button onclick="window.avanzarEstadoPedido('${pedidoId}', 'Aceptado')" style="background: var(--color-waiting); color:white; flex-grow: 1;">⏳ Estoy Esperando</button>`;
-                    } else if (pedido.estado === 'Esperando Pedido') {
-                        item.classList.add('esperando');
-                        mainBtn = `<button onclick="window.avanzarEstadoPedido('${pedidoId}', 'Esperando Pedido')" style="background: var(--color-delivery); color:white; flex-grow: 1;">🚚 Salgo a Entregar</button>`;
-                    } else if (pedido.estado === 'En Camino') {
-                        item.classList.add('en-camino');
-                        mainBtn = `<button onclick="window.completarPedido('${pedidoId}')" style="background: #27ae60; color:white; flex-grow: 1;">✅ Entrega Completada</button>`;
-                    }
-
-                    item.innerHTML = `
-                        <p style="text-align:right;">Estado: <strong style="color:white;">${pedido.estado}</strong></p>
-                        ${contentHTML}
-                        <span class="timestamp-aceptado" style="display:none;">${pedido.timestampAceptado}</span>
-                        <span class="timer">⏱️ Tiempo: Cargando...</span>
-                        <div style="display: flex; gap: 10px; margin-top: 10px;">
-                            ${mainBtn}
-                            <button onclick="window.iniciarCancelacion('${pedidoId}')" style="background:var(--color-accent-danger); color:white; flex-grow: 0.5;">❌ Cancelar</button>
-                        </div>
-                    `;
-                    pedidosAsignadosList.appendChild(item);
-                }
-                localStorage.setItem(`pedido_seen_${pedidoId}`, true);
-            });
-            
-            const pedidosActuales = Object.keys(data).length;
-            if (!initialLoad && (pedidosActuales > pedidosAnteriores || tieneNuevoPedido)) {
-                pendientesBadge.style.display = 'block';
-                playNotificationSound(); 
-            }
-            
-            document.getElementById('asignadosCount').textContent = asignadosCount;
-            pendientesBadge.style.display = pendientesCount > 0 ? 'block' : 'none';
-            localStorage.setItem('lastPedidosCount', pedidosActuales);
-            initialLoad = false;
-            updateTimers();
-        });
-    }
-
-    // ========================================
-    // HISTORIAL
-    // ========================================
-
-    function listenForHistorial() {
-        onValue(ref(db, 'pedidos_historial'), (snapshot) => {
-            const list = document.getElementById('pedidosHistorialList');
-            const data = snapshot.val();
-            list.innerHTML = '';
-            
-            if (!data) { 
-                list.innerHTML = '<p>Historial vacío.</p>'; 
-                return; 
-            }
-            
-            let historialDelRepartidor = [];
-            
-            Object.keys(data).forEach(id => {
-                const p = data[id];
-                if (p.repartidorUID === repartidorUID) {
-                    historialDelRepartidor.push({ id, ...p });
-                }
-            });
-            
-            historialDelRepartidor.sort((a, b) => {
-                const timestampA = a.timestampEntregado || a.timestampCancelado || 0;
-                const timestampB = b.timestampEntregado || b.timestampCancelado || 0;
-                return timestampB - timestampA;
-            });
-            
-            if (historialDelRepartidor.length === 0) {
-                list.innerHTML = '<p>No tienes historial aún.</p>';
-                return;
-            }
-            
-            historialDelRepartidor.forEach(p => {
-                const item = document.createElement('div');
-                item.className = 'pedido-item';
-                item.style.borderLeftColor = p.estado === 'Completado' ? '#27ae60' : 'var(--color-accent-danger)';
-                
-                const fecha = new Date(p.timestampEntregado || p.timestampCancelado).toLocaleString('es-CO', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-                
-                item.innerHTML = `
-                    <p><strong>ID:</strong> ${p.id.substring(0, 8)}...</p>
-                    <p><strong>Estado:</strong> <span style="color: ${p.estado === 'Completado' ? '#27ae60' : 'var(--color-accent-danger)'};">${p.estado}</span></p>
-                    <p><strong>Cliente:</strong> ${p.nombreCliente}</p>
-                    <p><strong>Monto:</strong> $${p.montoTotal.toLocaleString('es-CO')}</p>
-                    ${p.motivoCancelacion ? `<p><strong>Motivo:</strong> ${p.motivoCancelacion}</p>` : ''}
-                    <p><small>📅 ${fecha}</small></p>
-                `;
-                list.appendChild(item);
-            });
-        });
-    }
-
-    // ========================================
-    // CHAT
-    // ========================================
-
-    function listenForChat() {
-        onValue(ref(db, `chats/${repartidorUID}`), (snapshot) => {
-            const chatBox = document.getElementById('chatBox');
-            chatBox.innerHTML = '';
-            const mensajes = snapshot.val();
-            
-            if (!mensajes) { 
-                chatBox.innerHTML = '<p style="text-align: center; color: #999;">Sin mensajes del admin.</p>'; 
-                return; 
-            }
-            
-            Object.keys(mensajes).sort((a,b) => mensajes[a].timestamp - mensajes[b].timestamp).forEach(key => {
-                const d = mensajes[key];
-                const div = document.createElement('div');
-                div.className = `mensaje ${d.rol_remitente === "Admin" ? 'admin-msg' : 'rep-msg'}`;
-                
-                let contenido = '';
-                
-                const esAudio = (d.tipo === 'audio' || d.tipo_adjunto === 'audio') && 
-                               (d.audioURL || d.referencia_adjunto);
-                
-                const esImagen = (d.tipo === 'imagen' && d.imagenURL) || 
-                                (d.tipo_adjunto === 'imagen' && d.referencia_adjunto);
-                
-                const audioURL = d.audioURL || d.referencia_adjunto;
-                const imagenURL = d.imagenURL || d.referencia_adjunto;
-                
-                if (esImagen) {
-                    contenido = `<img src="${imagenURL}" alt="Imagen" onclick="window.verImagenCompleta('${imagenURL}')" style="max-width: 200px; max-height: 200px; border-radius: 8px; margin-top: 5px; display: block; cursor: pointer;">`;
-                    
-                    if (d.texto && !d.texto.includes('🎤') && !d.texto.includes('📷')) {
-                        contenido = `<p style="margin-bottom: 5px;">${d.texto}</p>` + contenido;
-                    }
-                } 
-                else if (esAudio) {
-                    const esDelAdmin = d.rol_remitente === "Admin";
-                    const audioId = `audio_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                    
-                    contenido = `
-                        <div style="
-                            background: #E8E8E8;
-                            padding: 10px 15px;
-                            border-radius: 20px;
-                            display: flex;
-                            align-items: center;
-                            gap: 10px;
-                            max-width: 250px;
-                        ">
-                            <button onclick="toggleAudio('${audioId}')" style="
-                                background: ${esDelAdmin ? '#FFC300' : '#555'};
-                                border: none;
-                                border-radius: 50%;
-                                width: 40px;
-                                height: 40px;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                cursor: pointer;
-                                font-size: 18px;
-                                color: white;
-                                flex-shrink: 0;
-                            " id="btn_${audioId}">
-                                ▶️
-                            </button>
-                            <audio id="${audioId}" src="${audioURL}" style="display: none;"></audio>
-                            <span style="
-                                font-size: 12px;
-                                color: #555;
-                                flex-grow: 1;
-                            ">[Reproducir Audio]</span>
-                        </div>
-                    `;
-                }
-                else if (d.texto && !d.texto.includes('🎤') && !d.texto.includes('📷')) {
-                    contenido = `<p style="margin: 0; word-wrap: break-word;">${d.texto}</p>`;
-                } 
-                else {
-                    contenido = `<p style="margin: 0; opacity: 0.6; font-style: italic;">Mensaje sin contenido</p>`;
-                }
-                
-                const hora = new Date(d.timestamp).toLocaleTimeString('es-CO', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                });
-                
-                div.innerHTML = `
-                    ${contenido}
-                    <span class="chat-time" style="font-size: 10px; margin-top: 3px; display: block; text-align: right; opacity: 0.7;">${hora}</span>
-                `;
-                
-                chatBox.appendChild(div);
-            });
-            
-            chatBox.scrollTop = chatBox.scrollHeight;
-        });
-    }
-
-    window.verImagenCompleta = function(imageUrl) {
-        document.getElementById('modalImage').src = imageUrl;
-        document.getElementById('imageModal').classList.add('active');
-    };
-
-    window.toggleAudio = function(audioId) {
-        const audio = document.getElementById(audioId);
-        const btn = document.getElementById('btn_' + audioId);
-        
-        if (!audio || !btn) return;
-        
-        if (audio.paused) {
-            audio.play();
-            btn.innerHTML = '⏸️';
-            
-            audio.onended = () => {
-                btn.innerHTML = '▶️';
-            };
         } else {
-            audio.pause();
-            audio.currentTime = 0;
-            btn.innerHTML = '▶️';
+            console.log('📱 App en primer plano');
+            isBackgroundMode = false;
+            
+            if (repartidorUID) {
+                await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                    navegadorActivo: true,
+                    backgroundMode: false
+                });
+            }
+            
+            if (isWakeLockSupported && wakeLock === null) {
+                await solicitarWakeLock();
+            }
         }
-    };
-
-    document.getElementById('enviarBtn').addEventListener('click', enviarMensaje);
-    document.getElementById('mensajeInput').addEventListener('keypress', (e) => { 
-        if (e.key === "Enter") enviarMensaje(); 
     });
+
+    // ========================================
+    // MANEJO DE CIERRE DE APP/NAVEGADOR
+    // ========================================
     
-    async function enviarMensaje() {
-        const input = document.getElementById('mensajeInput');
-        const texto = input.value.trim();
+    window.addEventListener('beforeunload', async (event) => {
+        console.log('⚠️ Cerrando aplicación...');
         
-        if (selectedImageFile) {
+        detenerTrackingGPS();
+        detenerEnvioUbicacionRepartidor();
+        detenerBackgroundGeolocation();
+        detenerHeartbeat();
+        await liberarWakeLock();
+        
+        if (repartidorUID) {
             try {
-                const timestamp = Date.now();
-                const imagePath = `chats/${repartidorUID}/imagenes/imagen_${timestamp}.jpg`;
-                const imageURL = await uploadFileToStorage(selectedImageFile, imagePath);
-                
-                await push(ref(db, `chats/${repartidorUID}`), {
-                    remitente: repartidorNombre,
-                    tipo: 'imagen',
-                    imagenURL: imageURL,
-                    texto: texto || '',
-                    timestamp: timestamp,
-                    rol_remitente: "Repartidor"
-                });
-                
-                selectedImageFile = null;
-                document.getElementById('imagePreview').classList.remove('active');
-                document.getElementById('galleryInput').value = '';
-                input.value = '';
-                
+                await marcarComoOffline();
             } catch (error) {
-                console.error('❌ Error al enviar imagen:', error);
-                alert('❌ Error al enviar la imagen');
-            }
-        } 
-        else if (texto) {
-            try {
-                await push(ref(db, `chats/${repartidorUID}`), {
-                    remitente: repartidorNombre,
-                    tipo: 'texto',
-                    texto: texto,
-                    timestamp: Date.now(),
-                    rol_remitente: "Repartidor"
-                });
-                input.value = '';
-            } catch (error) {
-                console.error('❌ Error al enviar mensaje:', error);
-                alert('❌ Error al enviar el mensaje');
+                console.error('❌ Error al marcar offline:', error);
             }
         }
-    }
+    });
+
+    window.addEventListener('pagehide', async () => {
+        console.log('📴 Página oculta');
+        if (repartidorUID) {
+            try {
+                await marcarComoOffline();
+            } catch (error) {
+                console.error('❌ Error al marcar offline:', error);
+            }
+        }
+    });
 
     // ========================================
-    // MULTIMEDIA
+    // SISTEMA DE MULTIMEDIA (FOTOS/AUDIOS)
     // ========================================
-
-    async function uploadFileToStorage(file, path) {
-        return new Promise((resolve, reject) => {
-            const fileRef = storageRef(storage, path);
-            const uploadTask = uploadBytesResumable(fileRef, file);
-            
-            const progressDiv = document.getElementById('uploadProgress');
-            const progressFill = document.getElementById('progressFill');
-            const progressText = document.getElementById('progressText');
-            
-            progressDiv.classList.add('active');
-            
-            uploadTask.on('state_changed',
-                (snapshot) => {
-                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                    progressFill.style.width = progress + '%';
-                    progressText.textContent = Math.round(progress) + '%';
-                },
-                (error) => {
-                    progressDiv.classList.remove('active');
-                    reject(error);
-                },
-                async () => {
-                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                    progressDiv.classList.remove('active');
-                    progressFill.style.width = '0%';
-                    progressText.textContent = '0%';
-                    resolve(downloadURL);
-                }
-            );
-        });
-    }
     
     document.getElementById('sendGalleryBtn').addEventListener('click', () => {
         if (!permisosCamaraOtorgado) {
-            alert('⚠️ No tienes permiso de cámara/fotos.\n\nActiva los permisos desde el menú al iniciar sesión.');
+            alert('⚠️ No tienes permiso de cámara/galería.\n\nActiva el permiso en Configuración para enviar fotos.');
             return;
         }
-        
         document.getElementById('galleryInput').click();
     });
-    
+
     document.getElementById('galleryInput').addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file && file.type.startsWith('image/')) {
+        if (file) {
+            if (file.size > 5 * 1024 * 1024) {
+                alert('⚠️ La imagen es muy grande (máx. 5MB)');
+                return;
+            }
+            
             selectedImageFile = file;
             const reader = new FileReader();
             reader.onload = (event) => {
@@ -2879,38 +2293,32 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             reader.readAsDataURL(file);
         }
     });
-    
+
     document.getElementById('cancelImageBtn').addEventListener('click', () => {
         selectedImageFile = null;
         document.getElementById('imagePreview').classList.remove('active');
         document.getElementById('galleryInput').value = '';
     });
 
-    async function iniciarGrabacionAudio() {
+    document.getElementById('recordAudioBtn').addEventListener('click', async () => {
         if (!permisosMicrofonoOtorgado) {
-            alert('⚠️ No tienes permiso de micrófono.\n\nActiva los permisos desde el menú al iniciar sesión.');
+            alert('⚠️ No tienes permiso de micrófono.\n\nActiva el permiso en Configuración para grabar audios.');
+            return;
+        }
+        
+        if (isRecording) {
+            console.warn('⚠️ Ya hay una grabación en progreso');
             return;
         }
         
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            
+            mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'audio/webm;codecs=opus'
             });
             
             audioChunks = [];
-            
-            const mimeType = MediaRecorder.isTypeSupported('audio/webm') 
-                ? 'audio/webm' 
-                : 'audio/mp4';
-            
-            mediaRecorder = new MediaRecorder(stream, { 
-                mimeType: mimeType,
-                audioBitsPerSecond: 128000 
-            });
             
             mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
@@ -2918,74 +2326,53 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 }
             };
             
-            mediaRecorder.onstop = () => {
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                selectedAudioFile = new File([audioBlob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
+                
+                const audioUrl = URL.createObjectURL(audioBlob);
+                document.getElementById('previewAudio').src = audioUrl;
+                document.getElementById('audioPreview').style.display = 'block';
+                
                 stream.getTracks().forEach(track => track.stop());
                 
-                const audioBlob = new Blob(audioChunks, { type: mimeType });
-                mostrarPreviewAudio(audioBlob);
-                
+                isRecording = false;
                 document.getElementById('recordingIndicator').classList.remove('active');
-                clearInterval(recordingTimerInterval);
-                document.getElementById('recordAudioBtn').innerHTML = '🎤 Grabar Audio';
             };
             
             mediaRecorder.start();
-            recordingStartTime = Date.now();
+            isRecording = true;
             
             document.getElementById('recordingIndicator').classList.add('active');
-            document.getElementById('recordAudioBtn').innerHTML = '⏹️ Detener';
             
-            recordingTimerInterval = setInterval(() => {
-                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
-                const minutes = Math.floor(elapsed / 60).toString().padStart(2, '0');
-                const seconds = (elapsed % 60).toString().padStart(2, '0');
-                document.getElementById('recordingTimer').textContent = `${minutes}:${seconds}`;
+            let seconds = 0;
+            const timerElement = document.getElementById('recordingTimer');
+            const recordingTimer = setInterval(() => {
+                seconds++;
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                timerElement.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                
+                if (seconds >= 120) {
+                    mediaRecorder.stop();
+                    clearInterval(recordingTimer);
+                }
             }, 1000);
             
-        } catch (error) {
-            console.error('❌ Error al iniciar grabación:', error);
+            document.getElementById('stopRecordingBtn').onclick = () => {
+                if (mediaRecorder && isRecording) {
+                    mediaRecorder.stop();
+                    clearInterval(recordingTimer);
+                }
+            };
             
-            if (error.name === 'NotAllowedError') {
-                alert('⚠️ Permiso de micrófono denegado.');
-            } else {
-                alert('❌ Error al acceder al micrófono: ' + error.message);
-            }
+            console.log('🎤 Grabación iniciada');
+            
+        } catch (error) {
+            console.error('❌ Error al grabar audio:', error);
+            alert('❌ No se pudo acceder al micrófono.\n\nVerifica los permisos.');
+            isRecording = false;
         }
-    }
-
-    function detenerGrabacionAudio() {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            mediaRecorder.stop();
-        }
-    }
-
-    function mostrarPreviewAudio(audioBlob) {
-        const audioPreview = document.getElementById('audioPreview');
-        const previewAudio = document.getElementById('previewAudio');
-        
-        const audioURL = URL.createObjectURL(audioBlob);
-        previewAudio.src = audioURL;
-        
-        selectedAudioFile = new File(
-            [audioBlob], 
-            `audio_${Date.now()}.${audioBlob.type.includes('webm') ? 'webm' : 'mp4'}`,
-            { type: audioBlob.type }
-        );
-        
-        audioPreview.style.display = 'block';
-    }
-
-    document.getElementById('recordAudioBtn').addEventListener('click', async () => {
-        if (mediaRecorder && mediaRecorder.state === 'recording') {
-            detenerGrabacionAudio();
-            return;
-        }
-        
-        await iniciarGrabacionAudio();
-    });
-
-    document.getElementById('stopRecordingBtn').addEventListener('click', () => {
-        detenerGrabacionAudio();
     });
 
     document.getElementById('sendAudioFileBtn').addEventListener('click', async () => {
@@ -2994,489 +2381,829 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             return;
         }
         
-        await enviarAudioSeleccionado(selectedAudioFile);
-        
-        selectedAudioFile = null;
-        document.getElementById('audioPreview').style.display = 'none';
+        try {
+            document.getElementById('uploadProgress').classList.add('active');
+            
+            const audioRef = storageRef(storage, `chat_audios/${repartidorUID}_${Date.now()}.webm`);
+            const uploadTask = uploadBytesResumable(audioRef, selectedAudioFile);
+            
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    document.getElementById('progressFill').style.width = progress + '%';
+                    document.getElementById('progressText').textContent = Math.round(progress) + '%';
+                },
+                (error) => {
+                    console.error('❌ Error al subir audio:', error);
+                    alert('❌ Error al enviar audio');
+                    document.getElementById('uploadProgress').classList.remove('active');
+                },
+                async () => {
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    
+                    const messageRef = push(ref(db, `chats/${repartidorUID}`));
+                    await set(messageRef, {
+                        tipo: 'audio',
+                        audioUrl: downloadURL,
+                        remitente: 'repartidor',
+                        timestamp: Date.now(),
+                        repartidorNombre: repartidorNombre
+                    });
+                    
+                    document.getElementById('uploadProgress').classList.remove('active');
+                    document.getElementById('audioPreview').style.display = 'none';
+                    selectedAudioFile = null;
+                    
+                    console.log('✅ Audio enviado correctamente');
+                }
+            );
+            
+        } catch (error) {
+            console.error('❌ Error al enviar audio:', error);
+            alert('❌ Error al enviar audio');
+            document.getElementById('uploadProgress').classList.remove('active');
+        }
     });
 
     document.getElementById('cancelAudioBtn').addEventListener('click', () => {
         selectedAudioFile = null;
         document.getElementById('audioPreview').style.display = 'none';
-        
-        const previewAudio = document.getElementById('previewAudio');
-        previewAudio.pause();
-        previewAudio.src = '';
-        
-        audioChunks = [];
     });
 
-    async function enviarAudioSeleccionado(audioFile) {
-        if (!repartidorUID) {
-            alert('❌ Error: No se pudo identificar al usuario');
-            return;
+    document.getElementById('enviarBtn').addEventListener('click', async () => {
+        if (selectedImageFile) {
+            await enviarImagen();
+        } else {
+            const mensaje = document.getElementById('mensajeInput').value.trim();
+            if (mensaje) {
+                await enviarMensajeTexto(mensaje);
+                document.getElementById('mensajeInput').value = '';
+            }
         }
+    });
+
+    document.getElementById('mensajeInput').addEventListener('keypress', async (e) => {
+        if (e.key === 'Enter' && !selectedImageFile) {
+            const mensaje = e.target.value.trim();
+            if (mensaje) {
+                await enviarMensajeTexto(mensaje);
+                e.target.value = '';
+            }
+        }
+    });
+
+    async function enviarImagen() {
+        if (!selectedImageFile) return;
         
         try {
-            const timestamp = Date.now();
-            const extension = audioFile.name.split('.').pop() || 'mp3';
-            const audioPath = `chats/${repartidorUID}/audios/audio_${timestamp}.${extension}`;
+            document.getElementById('uploadProgress').classList.add('active');
             
-            const progressDiv = document.getElementById('uploadProgress');
-            progressDiv.classList.add('active');
+            const imageRef = storageRef(storage, `chat_images/${repartidorUID}_${Date.now()}.jpg`);
+            const uploadTask = uploadBytesResumable(imageRef, selectedImageFile);
             
-            const audioURL = await uploadFileToStorage(audioFile, audioPath);
-            
-            const duracionEstimada = Math.ceil(audioFile.size / 16000);
-            
-            await push(ref(db, `chats/${repartidorUID}`), {
-                remitente: repartidorNombre,
-                nombre_remitente: repartidorNombre,
-                texto: '🎙️ Audio',
-                timestamp: timestamp,
-                rol_remitente: "Repartidor",
-                tipo_adjunto: 'audio',
-                referencia_adjunto: audioURL,
-                duracion: duracionEstimada,
-                tamano_kb: Math.round(audioFile.size / 1024),
-                pedidoID: 'N/A'
-            });
-            
-            progressDiv.classList.remove('active');
+            uploadTask.on('state_changed',
+                (snapshot) => {
+                    const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    document.getElementById('progressFill').style.width = progress + '%';
+                    document.getElementById('progressText').textContent = Math.round(progress) + '%';
+                },
+                (error) => {
+                    console.error('❌ Error al subir imagen:', error);
+                    alert('❌ Error al enviar imagen');
+                    document.getElementById('uploadProgress').classList.remove('active');
+                },
+                async () => {
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    
+                    const messageRef = push(ref(db, `chats/${repartidorUID}`));
+                    await set(messageRef, {
+                        tipo: 'imagen',
+                        imagenUrl: downloadURL,
+                        remitente: 'repartidor',
+                        timestamp: Date.now(),
+                        repartidorNombre: repartidorNombre
+                    });
+                    
+                    document.getElementById('uploadProgress').classList.remove('active');
+                    document.getElementById('imagePreview').classList.remove('active');
+                    document.getElementById('galleryInput').value = '';
+                    selectedImageFile = null;
+                    
+                    console.log('✅ Imagen enviada correctamente');
+                }
+            );
             
         } catch (error) {
-            console.error('❌ Error al enviar audio:', error);
-            alert('❌ Error al enviar el audio: ' + error.message);
-            
+            console.error('❌ Error al enviar imagen:', error);
+            alert('❌ Error al enviar imagen');
             document.getElementById('uploadProgress').classList.remove('active');
         }
     }
 
-    // ========================================
-    // SISTEMA DE LOGIN Y REGISTRO
-    // ========================================
-
-    function saveQuickLoginData(email, password, name) {
-        localStorage.setItem('lastRepartidorEmail', email);
-        localStorage.setItem('lastRepartidorPassword', password);
-        localStorage.setItem('lastRepartidorName', name);
+    async function enviarMensajeTexto(mensaje) {
+        try {
+            const messageRef = push(ref(db, `chats/${repartidorUID}`));
+            await set(messageRef, {
+                mensaje: mensaje,
+                remitente: 'repartidor',
+                timestamp: Date.now(),
+                repartidorNombre: repartidorNombre
+            });
+            
+            console.log('✅ Mensaje enviado:', mensaje);
+            
+        } catch (error) {
+            console.error('❌ Error al enviar mensaje:', error);
+            alert('❌ Error al enviar mensaje');
+        }
     }
+
+    // ========================================
+    // CHAT
+    // ========================================
     
-    function showRegistrationForm(email) {
-        document.getElementById('manualLoginForm').style.display = 'none';
-        document.getElementById('registrationForm').style.display = 'block';
-        document.getElementById('regEmailDisplay').value = email;
-        document.getElementById('loginContainer').style.display = 'flex';
-        document.getElementById('appContainer').style.display = 'none';
-    }
-
-    async function setLoginState(isLoggedIn, user = null) {
-        document.getElementById('loginContainer').style.display = isLoggedIn ? 'none' : 'flex';
-        document.getElementById('appContainer').style.display = isLoggedIn ? 'block' : 'none';
-        document.getElementById('manualLoginForm').style.display = 'block';
-        document.getElementById('registrationForm').style.display = 'none';
-        document.getElementById('loginError').textContent = '';
+    function escucharChat() {
+        if (!repartidorUID) return;
         
-        if (isLoggedIn && user) { 
-            const uid = user.uid;
-            const email = user.email;
-            repartidorUID = uid;
-            window.currentRepartidorUID = uid;
+        const chatRef = ref(db, `chats/${repartidorUID}`);
+        onValue(chatRef, (snapshot) => {
+            const data = snapshot.val();
+            const chatBox = document.getElementById('chatBox');
+            chatBox.innerHTML = '';
             
-            const repSnapshot = await get(ref(db, `repartidores_info/${repartidorUID}`));
-            const repData = repSnapshot.val() || {};
-            
-            if (!repData.nombre || !repData.telefono_principal || !repData.direccion_residencia) {
-                showRegistrationForm(email);
-                return; 
+            if (!data) {
+                chatBox.innerHTML = '<p style="color: #999;">No hay mensajes aún...</p>';
+                return;
             }
             
-            repartidorNombre = repData.nombre;
-            window.currentRepartidorNombre = repartidorNombre;
+            Object.keys(data).forEach(key => {
+                const msg = data[key];
+                const msgDiv = document.createElement('div');
+                
+                if (msg.tipo === 'imagen') {
+                    msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
+                    msgDiv.innerHTML = `
+                        <img src="${msg.imagenUrl}" onclick="mostrarImagenCompleta('${msg.imagenUrl}')">
+                        <span class="chat-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+                    `;
+                } else if (msg.tipo === 'audio') {
+                    msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
+                    msgDiv.innerHTML = `
+                        <audio src="${msg.audioUrl}" controls></audio>
+                        <span class="chat-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+                    `;
+                } else {
+                    msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
+                    msgDiv.innerHTML = `
+                        ${msg.mensaje}
+                        <span class="chat-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+                    `;
+                }
+                
+                chatBox.appendChild(msgDiv);
+            });
             
-            await configurarPresenciaInicial();
-            
-            document.getElementById('repartidorName').textContent = repartidorNombre; 
-            document.getElementById('loginContainer').style.display = 'none';
-            document.getElementById('appContainer').style.display = 'block';
+            chatBox.scrollTop = chatBox.scrollHeight;
+        });
+    }
 
-            mostrarModalPermisos();
+    window.mostrarImagenCompleta = function(url) {
+        document.getElementById('modalImage').src = url;
+        document.getElementById('imageModal').classList.add('active');
+    }
 
-            showSection('chatSection'); 
-            listenForPedidos();
-            listenForChat();
+    // ========================================
+    // PEDIDOS
+    // ========================================
+    
+    function escucharPedidos() {
+        if (!repartidorUID) return;
+        
+        const pedidosRef = ref(db, 'pedidos_pendientes');
+        
+        onValue(pedidosRef, (snapshot) => {
+            const data = snapshot.val();
+            const listaPendientes = document.getElementById('pedidosList');
+            const listaAsignados = document.getElementById('pedidosAsignadosList');
             
-        } else {
-            if (repartidorUID) {
-                await marcarComoOffline();
+            let contadorPendientes = 0;
+            let contadorAsignados = 0;
+            
+            listaPendientes.innerHTML = '';
+            listaAsignados.innerHTML = '';
+            
+            if (!data) {
+                listaPendientes.innerHTML = '<p style="color: #999;">No hay pedidos pendientes.</p>';
+                listaAsignados.innerHTML = '<p style="color: #999;">No tienes pedidos asignados.</p>';
+                document.getElementById('pendientesBadge').style.display = 'none';
+                document.getElementById('asignadosCount').textContent = '0';
+                return;
             }
             
-            detenerHeartbeat();
-            detenerTrackingGPS();
-            window.detenerSeguimiento();
+            Object.keys(data).forEach(pedidoId => {
+                const pedido = data[pedidoId];
+                
+                if (pedido.estado === 'Pendiente') {
+                    contadorPendientes++;
+                    mostrarPedidoPendiente(pedido, pedidoId, listaPendientes);
+                    
+                    if (!initialLoad && !pedidosActivos[pedidoId]) {
+                        reproducirNotificacion();
+                    }
+                    pedidosActivos[pedidoId] = true;
+                    
+                } else if (pedido.repartidorUID === repartidorUID && 
+                          (pedido.estado === 'Aceptado' || pedido.estado === 'Esperando' || pedido.estado === 'En Camino')) {
+                    contadorAsignados++;
+                    mostrarPedidoAsignado(pedido, pedidoId, listaAsignados);
+                    
+                    // 🆕 GUARDAR DATOS DEL PEDIDO ACTIVO PARA PERSISTENCIA
+                    if (!activePedidoData || activePedidoData.pedidoId !== pedidoId) {
+                        activePedidoData = {
+                            pedidoId: pedidoId,
+                            clienteUID: pedido.clienteUID,
+                            estado: pedido.estado
+                        };
+                    }
+                }
+            });
             
-            await liberarWakeLock();
-            limpiarRecursos();
-            
-            repartidorUID = null;
-            repartidorNombre = "Repartidor";
-            window.currentRepartidorUID = null;
-            window.currentRepartidorNombre = null;
-            window.currentClienteID = null;
-            
-            pedidosActivos = {};
-            
-            if (timerInterval) clearInterval(timerInterval);
-            updateQuickLoginUI(); 
-        }
-    }
-
-    function updateQuickLoginUI() {
-        const lastEmail = localStorage.getItem('lastRepartidorEmail');
-        const lastName = localStorage.getItem('lastRepartidorName');
-        const quickLoginArea = document.getElementById('quickLoginArea');
-        if (lastEmail && lastName) {
-            quickLoginArea.style.display = 'block';
-            document.getElementById('quickLoginMessage').innerHTML = `<strong>¿Continuar como ${lastName}?</strong>`;
-        } else {
-            quickLoginArea.style.display = 'none';
-        }
-    }
-
-    onAuthStateChanged(auth, async (user) => {
-        if (user) await setLoginState(true, user);
-        else await setLoginState(false);
-    });
-
-    document.getElementById('quickLoginBtn').addEventListener('click', async () => {
-        const btn = document.getElementById('quickLoginBtn');
-        const errorElement = document.getElementById('loginError');
-        
-        if (btn.disabled) return;
-        
-        btn.textContent = 'Conectando...';
-        btn.disabled = true;
-        errorElement.textContent = '';
-        
-        const repEmail = localStorage.getItem('lastRepartidorEmail');
-        const repPassword = localStorage.getItem('lastRepartidorPassword');
-        
-        if (!repEmail || !repPassword) {
-            errorElement.textContent = '⚠️ No hay sesión guardada';
-            btn.textContent = 'Entrar Rápido (Un Clic)';
-            btn.disabled = false;
-            return;
-        }
-        
-        try { 
-            await signInWithEmailAndPassword(auth, repEmail, repPassword);
-        } catch (error) { 
-            console.error('❌ Error login rápido:', error);
-            localStorage.removeItem('lastRepartidorEmail');
-            localStorage.removeItem('lastRepartidorPassword');
-            localStorage.removeItem('lastRepartidorName');
-            updateQuickLoginUI();
-            errorElement.textContent = '❌ Sesión expirada. Inicia sesión nuevamente.';
-        } finally {
-            btn.textContent = 'Entrar Rápido (Un Clic)';
-            btn.disabled = false;
-        }
-    });
-    
-    document.getElementById('loginBtn').addEventListener('click', async () => {
-        const email = document.getElementById('loginEmail').value.trim();
-        const password = document.getElementById('loginPassword').value.trim();
-        const errorElement = document.getElementById('loginError');
-        const loginBtn = document.getElementById('loginBtn');
-        
-        if (loginBtn.disabled) return;
-        
-        errorElement.textContent = '';
-        
-        if (!email || !password) {
-            errorElement.textContent = '⚠️ Completa ambos campos';
-            return;
-        }
-        
-        if (password.length < 6) {
-            errorElement.textContent = '⚠️ La contraseña debe tener al menos 6 caracteres';
-            return;
-        }
-        
-        loginBtn.textContent = 'Iniciando...';
-        loginBtn.disabled = true;
-        
-        try { 
-            await signInWithEmailAndPassword(auth, email, password);
-            localStorage.setItem('tempPassword', password);
-        } catch (error) { 
-            console.error('❌ Error login:', error);
-            if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password') {
-                errorElement.textContent = '❌ Email o contraseña incorrectos';
-            } else if (error.code === 'auth/user-not-found') {
-                errorElement.textContent = '❌ Usuario no encontrado';
-            } else if (error.code === 'auth/too-many-requests') {
-                errorElement.textContent = '❌ Demasiados intentos. Intenta más tarde.';
+            if (contadorPendientes === 0) {
+                listaPendientes.innerHTML = '<p style="color: #999;">No hay pedidos pendientes.</p>';
+                document.getElementById('pendientesBadge').style.display = 'none';
             } else {
-                errorElement.textContent = '❌ Error: ' + error.message;
+                document.getElementById('pendientesBadge').style.display = 'inline-block';
+                document.getElementById('pendientesBadge').textContent = contadorPendientes;
             }
-        } finally {
-            loginBtn.textContent = 'Iniciar Sesión';
-            loginBtn.disabled = false;
-        }
-    });
+            
+            if (contadorAsignados === 0) {
+                listaAsignados.innerHTML = '<p style="color: #999;">No tienes pedidos asignados.</p>';
+                activePedidoData = null; // 🆕 LIMPIAR DATOS DEL PEDIDO ACTIVO
+            }
+            
+            document.getElementById('asignadosCount').textContent = contadorAsignados;
+            
+            initialLoad = false;
+        });
+    }
 
-    document.getElementById('registerBtn').addEventListener('click', async () => {
-        const email = document.getElementById('loginEmail').value.trim();
-        const password = document.getElementById('loginPassword').value.trim();
-        const errorElement = document.getElementById('loginError');
-        const registerBtn = document.getElementById('registerBtn');
+    function mostrarPedidoPendiente(pedido, pedidoId, container) {
+        const div = document.createElement('div');
+        div.className = 'pedido-item';
         
-        if (registerBtn.disabled) return;
+        div.innerHTML = `
+            <strong>Pedido #${pedidoId.slice(-6)}</strong><br>
+            📦 ${pedido.producto || 'N/A'}<br>
+            💵 ${pedido.precio || 'N/A'}<br>
+            📍 ${pedido.direccion || 'N/A'}<br>
+            👤 ${pedido.nombre || 'N/A'}<br>
+            📞 ${pedido.telefono || 'N/A'}<br>
+            📝 ${pedido.detalles || 'Sin detalles'}<br>
+            <button onclick="window.aceptarPedido('${pedidoId}')" 
+                    style="background: var(--color-primary); color: var(--color-background); margin-top: 10px;">
+                ✅ Aceptar Pedido
+            </button>
+        `;
         
-        errorElement.textContent = '';
+        container.appendChild(div);
+    }
+
+    function mostrarPedidoAsignado(pedido, pedidoId, container) {
+        const div = document.createElement('div');
+        div.className = 'pedido-item asignado';
         
-        if (!email || !password) {
-            errorElement.textContent = '⚠️ Completa ambos campos';
-            return;
+        if (pedido.estado === 'Esperando') {
+            div.classList.add('esperando');
+        } else if (pedido.estado === 'En Camino') {
+            div.classList.add('en-camino');
         }
         
-        if (password.length < 6) {
-            errorElement.textContent = '⚠️ La contraseña debe tener al menos 6 caracteres';
-            return;
+        let estadoBotones = '';
+        
+        if (pedido.estado === 'Aceptado') {
+            estadoBotones = `
+                <button onclick="window.cambiarEstadoPedido('${pedidoId}', 'Esperando')" 
+                        style="background: var(--color-waiting); color: white;">
+                    ⏳ Marcar como Esperando
+                </button>
+            `;
+        } else if (pedido.estado === 'Esperando') {
+            estadoBotones = `
+                <button onclick="window.cambiarEstadoPedido('${pedidoId}', 'En Camino')" 
+                        style="background: var(--color-delivery); color: white;">
+                    🚚 Marcar En Camino
+                </button>
+            `;
+        } else if (pedido.estado === 'En Camino') {
+            estadoBotones = `
+                <button onclick="window.completarPedido('${pedidoId}')" 
+                        style="background: #27ae60; color: white;">
+                    ✅ Completar Pedido
+                </button>
+            `;
         }
         
-        registerBtn.textContent = 'Registrando...';
-        registerBtn.disabled = true;
+        const tiempoTranscurrido = pedido.tiempoAceptado ? calcularTiempoTranscurrido(pedido.tiempoAceptado) : '00:00';
+        
+        div.innerHTML = `
+            <strong>🚚 Pedido #${pedidoId.slice(-6)}</strong><br>
+            🏷️ Estado: <strong style="color: var(--color-primary);">${pedido.estado}</strong><br>
+            ${pedido.estado !== 'Aceptado' ? `<span class="timer">⏱️ ${tiempoTranscurrido}</span>` : ''}
+            <hr style="border-color: #444; margin: 10px 0;">
+            📦 ${pedido.producto || 'N/A'}<br>
+            💵 ${pedido.precio || 'N/A'}<br>
+            📍 ${pedido.direccion || 'N/A'}<br>
+            👤 ${pedido.nombre || 'N/A'}<br>
+            📞 ${pedido.telefono || 'N/A'}<br>
+            📝 ${pedido.detalles || 'Sin detalles'}<br>
+            ${estadoBotones}
+            <button onclick="window.iniciarCancelacion('${pedidoId}')" 
+                    style="background: var(--color-accent-danger); color: white;">
+                ❌ Cancelar Domicilio
+            </button>
+        `;
+        
+        container.appendChild(div);
+    }
+
+    function calcularTiempoTranscurrido(timestamp) {
+        const ahora = Date.now();
+        const diferencia = ahora - timestamp;
+        const minutos = Math.floor(diferencia / 60000);
+        const segundos = Math.floor((diferencia % 60000) / 1000);
+        return `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+    }
+
+    window.aceptarPedido = async function(pedidoId) {
+        try {
+            const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
+            const snapshot = await get(pedidoRef);
+            
+            if (!snapshot.exists()) {
+                alert('❌ El pedido ya no existe');
+                return;
+            }
+            
+            const pedido = snapshot.val();
+            
+            await update(pedidoRef, {
+                estado: 'Aceptado',
+                repartidorUID: repartidorUID,
+                repartidorNombre: repartidorNombre,
+                tiempoAceptado: Date.now()
+            });
+            
+            console.log('✅ Pedido aceptado:', pedidoId);
+            alert('✅ Pedido aceptado correctamente');
+            
+            // 🆕 INICIAR SEGUIMIENTO DEL CLIENTE INMEDIATAMENTE
+            if (pedido.clienteUID) {
+                setTimeout(() => {
+                    document.getElementById('showAsignadosBtn').click();
+                    iniciarSeguimientoCliente(pedido.clienteUID);
+                    document.getElementById('mapa-cliente-container').style.display = 'block';
+                }, 500);
+            }
+            
+        } catch (error) {
+            console.error('❌ Error al aceptar pedido:', error);
+            alert('❌ Error al aceptar el pedido');
+        }
+    }
+
+    window.cambiarEstadoPedido = async function(pedidoId, nuevoEstado) {
+        try {
+            const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
+            
+            await update(pedidoRef, {
+                estado: nuevoEstado,
+                [`tiempo${nuevoEstado.replace(' ', '')}`]: Date.now()
+            });
+            
+            console.log(`✅ Estado cambiado a: ${nuevoEstado}`);
+            
+        } catch (error) {
+            console.error('❌ Error al cambiar estado:', error);
+            alert('❌ Error al cambiar el estado del pedido');
+        }
+    }
+
+    window.completarPedido = async function(pedidoId) {
+        const confirmacion = confirm('¿Confirmar que el pedido ha sido completado?');
+        if (!confirmacion) return;
         
         try {
-            await createUserWithEmailAndPassword(auth, email, password);
-            localStorage.setItem('tempPassword', password);
-            showRegistrationForm(email);
-        } catch (error) { 
-            console.error('❌ Error registro:', error);
-            if (error.code === 'auth/email-already-in-use') {
-                errorElement.textContent = '❌ Email ya registrado. Usa "Iniciar Sesión"';
-            } else if (error.code === 'auth/invalid-email') {
-                errorElement.textContent = '❌ Email inválido';
-            } else if (error.code === 'auth/weak-password') {
-                errorElement.textContent = '❌ Contraseña muy débil';
-            } else {
-                errorElement.textContent = '❌ Error: ' + error.message;
+            const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
+            const snapshot = await get(pedidoRef);
+            
+            if (!snapshot.exists()) {
+                alert('❌ El pedido no existe');
+                return;
             }
-        } finally {
-            registerBtn.textContent = 'Registrarse (Crear Cuenta)';
-            registerBtn.disabled = false;
+            
+            const pedido = snapshot.val();
+            
+            await set(ref(db, `pedidos_historial/${pedidoId}`), {
+                ...pedido,
+                estado: 'Completado',
+                tiempoCompletado: Date.now()
+            });
+            
+            await remove(pedidoRef);
+            
+            window.detenerSeguimiento(); // 🆕 DETENER SEGUIMIENTO AL COMPLETAR
+            
+            console.log('✅ Pedido completado:', pedidoId);
+            alert('✅ Pedido completado y movido al historial');
+            
+        } catch (error) {
+            console.error('❌ Error al completar pedido:', error);
+            alert('❌ Error al completar el pedido');
+        }
+    }
+
+    window.iniciarCancelacion = function(pedidoId) {
+        currentPedidoIdToCancel = pedidoId;
+        document.getElementById('cancelModal').style.display = 'flex';
+    }
+
+    window.ejecutarCancelacionConMotivo = async function(motivo) {
+        if (!currentPedidoIdToCancel) return;
+        
+        try {
+            const pedidoRef = ref(db, `pedidos_pendientes/${currentPedidoIdToCancel}`);
+            const snapshot = await get(pedidoRef);
+            
+            if (!snapshot.exists()) {
+                alert('❌ El pedido no existe');
+                document.getElementById('cancelModal').style.display = 'none';
+                return;
+            }
+            
+            const pedido = snapshot.val();
+            
+            await set(ref(db, `pedidos_historial/${currentPedidoIdToCancel}`), {
+                ...pedido,
+                estado: 'Cancelado',
+                motivoCancelacion: motivo,
+                canceladoPor: 'Repartidor',
+                tiempoCancelado: Date.now()
+            });
+            
+            await remove(pedidoRef);
+            
+            window.detenerSeguimiento(); // 🆕 DETENER SEGUIMIENTO AL CANCELAR
+            
+            document.getElementById('cancelModal').style.display = 'none';
+            currentPedidoIdToCancel = null;
+            
+            console.log('✅ Pedido cancelado con motivo:', motivo);
+            alert(`✅ Pedido cancelado\n\nMotivo: ${motivo}`);
+            
+        } catch (error) {
+            console.error('❌ Error al cancelar pedido:', error);
+            alert('❌ Error al cancelar el pedido');
+        }
+    }
+
+    function escucharHistorial() {
+        if (!repartidorUID) return;
+        
+        const historialRef = ref(db, 'pedidos_historial');
+        
+        onValue(historialRef, (snapshot) => {
+            const data = snapshot.val();
+            const listaHistorial = document.getElementById('pedidosHistorialList');
+            
+            listaHistorial.innerHTML = '';
+            
+            if (!data) {
+                listaHistorial.innerHTML = '<p style="color: #999;">No hay pedidos en el historial.</p>';
+                return;
+            }
+            
+            const pedidosArray = Object.entries(data)
+                .filter(([_, pedido]) => pedido.repartidorUID === repartidorUID)
+                .sort((a, b) => (b[1].tiempoCompletado || b[1].tiempoCancelado || 0) - (a[1].tiempoCompletado || a[1].tiempoCancelado || 0));
+            
+            if (pedidosArray.length === 0) {
+                listaHistorial.innerHTML = '<p style="color: #999;">No tienes pedidos en el historial.</p>';
+                return;
+            }
+            
+            pedidosArray.forEach(([pedidoId, pedido]) => {
+                const div = document.createElement('div');
+                div.className = 'pedido-item';
+                div.style.borderLeft = pedido.estado === 'Completado' ? '5px solid #27ae60' : '5px solid #C0392B';
+                
+                const fecha = pedido.tiempoCompletado || pedido.tiempoCancelado;
+                const fechaTexto = fecha ? new Date(fecha).toLocaleString() : 'N/A';
+                
+                div.innerHTML = `
+                    <strong>${pedido.estado === 'Completado' ? '✅' : '❌'} Pedido #${pedidoId.slice(-6)}</strong><br>
+                    🏷️ Estado: <strong>${pedido.estado}</strong><br>
+                    ${pedido.motivoCancelacion ? `📝 Motivo: ${pedido.motivoCancelacion}<br>` : ''}
+                    📅 Fecha: ${fechaTexto}<br>
+                    <hr style="border-color: #444; margin: 10px 0;">
+                    📦 ${pedido.producto || 'N/A'}<br>
+                    💵 ${pedido.precio || 'N/A'}<br>
+                    📍 ${pedido.direccion || 'N/A'}<br>
+                    👤 ${pedido.nombre || 'N/A'}
+                `;
+                
+                listaHistorial.appendChild(div);
+            });
+        });
+    }
+
+    function reproducirNotificacion() {
+        const audio = document.getElementById('notificationSound');
+        audio.play().catch(err => console.warn('No se pudo reproducir notificación:', err));
+    }
+
+    // ========================================
+    // NAVEGACIÓN
+    // ========================================
+    
+    document.getElementById('showChatBtn').addEventListener('click', () => {
+        document.getElementById('chatSection').style.display = 'block';
+        document.getElementById('pendientesSection').style.display = 'none';
+        document.getElementById('asignadosSection').style.display = 'none';
+        document.getElementById('historialSection').style.display = 'none';
+        window.detenerSeguimiento(); // 🆕 DETENER AL CAMBIAR DE SECCIÓN
+    });
+
+    document.getElementById('showPendientesBtn').addEventListener('click', () => {
+        document.getElementById('chatSection').style.display = 'none';
+        document.getElementById('pendientesSection').style.display = 'block';
+        document.getElementById('asignadosSection').style.display = 'none';
+        document.getElementById('historialSection').style.display = 'none';
+        window.detenerSeguimiento(); // 🆕 DETENER AL CAMBIAR DE SECCIÓN
+    });
+
+    document.getElementById('showAsignadosBtn').addEventListener('click', () => {
+        document.getElementById('chatSection').style.display = 'none';
+        document.getElementById('pendientesSection').style.display = 'none';
+        document.getElementById('asignadosSection').style.display = 'block';
+        document.getElementById('historialSection').style.display = 'none';
+        
+        // 🆕 RESTAURAR SEGUIMIENTO SI HAY PEDIDO ACTIVO
+        if (activePedidoData && activePedidoData.clienteUID) {
+            setTimeout(() => {
+                iniciarSeguimientoCliente(activePedidoData.clienteUID);
+                document.getElementById('mapa-cliente-container').style.display = 'block';
+            }, 300);
+        }
+    });
+
+    document.getElementById('showHistorialBtn').addEventListener('click', () => {
+        document.getElementById('chatSection').style.display = 'none';
+        document.getElementById('pendientesSection').style.display = 'none';
+        document.getElementById('asignadosSection').style.display = 'none';
+        document.getElementById('historialSection').style.display = 'block';
+        window.detenerSeguimiento(); // 🆕 DETENER AL CAMBIAR DE SECCIÓN
+    });
+
+    document.getElementById('verMapaBtn').addEventListener('click', () => {
+        document.getElementById('showAsignadosBtn').click();
+        
+        setTimeout(() => {
+            const mapaContainer = document.getElementById('mapa-cliente-container');
+            if (mapaContainer.style.display === 'none') {
+                mapaContainer.style.display = 'block';
+                inicializarMapaCliente();
+                
+                // 🆕 RESTAURAR SEGUIMIENTO
+                if (activePedidoData && activePedidoData.clienteUID) {
+                    iniciarSeguimientoCliente(activePedidoData.clienteUID);
+                }
+            }
+        }, 100);
+    });
+
+    // ========================================
+    // AUTENTICACIÓN
+    // ========================================
+    
+    document.getElementById('registerBtn').addEventListener('click', async () => {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        
+        if (!email || !password) {
+            document.getElementById('loginError').textContent = 'Por favor completa todos los campos';
+            return;
+        }
+        
+        if (password.length < 6) {
+            document.getElementById('loginError').textContent = 'La contraseña debe tener al menos 6 caracteres';
+            return;
+        }
+        
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const uid = userCredential.user.uid;
+            
+            localStorage.setItem('lastRepartidorEmail', email);
+            localStorage.setItem('lastRepartidorPassword', password);
+            
+            console.log('✅ Usuario registrado:', uid);
+            
+        } catch (error) {
+            console.error('❌ Error al registrar:', error);
+            
+            if (error.code === 'auth/email-already-in-use') {
+                document.getElementById('loginError').textContent = 'Este correo ya está registrado. Usa "Iniciar Sesión".';
+            } else if (error.code === 'auth/invalid-email') {
+                document.getElementById('loginError').textContent = 'Correo electrónico inválido';
+            } else if (error.code === 'auth/weak-password') {
+                document.getElementById('loginError').textContent = 'La contraseña es muy débil';
+            } else {
+                document.getElementById('loginError').textContent = 'Error: ' + error.message;
+            }
+        }
+    });
+
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        
+        if (!email || !password) {
+            document.getElementById('loginError').textContent = 'Por favor completa todos los campos';
+            return;
+        }
+        
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+            
+            localStorage.setItem('lastRepartidorEmail', email);
+            localStorage.setItem('lastRepartidorPassword', password);
+            
+            console.log('✅ Inicio de sesión exitoso');
+            
+        } catch (error) {
+            console.error('❌ Error al iniciar sesión:', error);
+            
+            if (error.code === 'auth/user-not-found') {
+                document.getElementById('loginError').textContent = 'Usuario no encontrado. Regístrate primero.';
+            } else if (error.code === 'auth/wrong-password') {
+                document.getElementById('loginError').textContent = 'Contraseña incorrecta';
+            } else if (error.code === 'auth/invalid-email') {
+                document.getElementById('loginError').textContent = 'Correo electrónico inválido';
+            } else {
+                document.getElementById('loginError').textContent = 'Error: ' + error.message;
+            }
         }
     });
 
     document.getElementById('completeRegBtn').addEventListener('click', async () => {
-        const name = document.getElementById('regName').value.trim();
-        const phone = document.getElementById('regPhone').value.trim();
-        const address = document.getElementById('regAddress').value.trim();
-        const secondaryPhone = document.getElementById('regSecondaryPhone').value.trim();
+        const nombre = document.getElementById('regName').value.trim();
+        const telefono = document.getElementById('regPhone').value.trim();
+        const telefonoSecundario = document.getElementById('regSecondaryPhone').value.trim();
+        const direccion = document.getElementById('regAddress').value.trim();
         
-        if (!name || !phone || !address) { 
-            alert('⚠️ Completa todos los campos obligatorios (*)');
-            return; 
+        if (!nombre || !telefono || !direccion) {
+            alert('❌ Por favor completa todos los campos obligatorios (*)');
+            return;
         }
         
         try {
-            const repartidorData = {
-                nombre: name, 
-                telefono_principal: phone, 
-                telefono_secundario: secondaryPhone || '',
-                direccion_residencia: address, 
+            await set(ref(db, `repartidores_info/${repartidorUID}`), {
+                nombre: nombre,
+                telefono: telefono,
+                telefonoSecundario: telefonoSecundario || '',
+                direccion: direccion,
                 email: auth.currentUser.email,
+                uid: repartidorUID,
                 fechaRegistro: Date.now(),
-                online: true,
-                ultimaConexion: Date.now(),
-                lastSeen: Date.now()
-            };
+                online: false,
+                trackingActivo: false,
+                appVersion: APP_VERSION
+            });
             
-            await set(ref(db, `repartidores_info/${auth.currentUser.uid}`), repartidorData);
+            repartidorNombre = nombre;
+            window.currentRepartidorNombre = nombre;
             
-            saveQuickLoginData(auth.currentUser.email, localStorage.getItem('tempPassword'), name);
-            await setLoginState(true, auth.currentUser);
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('appContainer').style.display = 'block';
+            document.getElementById('repartidorName').textContent = nombre;
             
-        } catch (error) { 
-            console.error('❌ Error al guardar información:', error);
-            alert('❌ Error al guardar: ' + error.message);
+            await configurarPresenciaInicial();
+            
+            escucharChat();
+            escucharPedidos();
+            escucharHistorial();
+            
+            mostrarModalPermisos();
+            
+            console.log('✅ Registro completado');
+            
+        } catch (error) {
+            console.error('❌ Error al completar registro:', error);
+            alert('❌ Error al guardar información: ' + error.message);
+        }
+    });
+
+    document.getElementById('regLogoutBtn').addEventListener('click', async () => {
+        try {
+            await signOut(auth);
+            console.log('✅ Sesión cerrada');
+        } catch (error) {
+            console.error('❌ Error al cerrar sesión:', error);
         }
     });
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
-        await signOut(auth);
-    });
-    
-    document.getElementById('regLogoutBtn').addEventListener('click', async () => {
-        await signOut(auth);
-    });
-
-    // ========================================
-    // EVENTOS DE VISIBILIDAD Y CONECTIVIDAD
-    // ========================================
-
-    document.addEventListener('visibilitychange', async () => {
-        if (document.hidden) {
-            isBackgroundMode = true;
-            
-            if (sessionActive && repartidorUID) {
-                if (!backgroundGeoInterval) {
-                    iniciarBackgroundGeolocation();
-                }
-                
-                try {
-                    await update(ref(db, `repartidores_info/${repartidorUID}`), {
-                        backgroundMode: true,
-                        lastBackgroundTimestamp: Date.now()
-                    });
-                } catch (error) {
-                    console.warn('⚠️ Error al marcar background:', error);
-                }
-            }
-        } else {
-            isBackgroundMode = false;
-            
-            if (sessionActive && repartidorUID) {
-                await marcarComoOnline();
-                
-                if (!isTrackingEnabled && permisosUbicacionOtorgado) {
-                    await iniciarTrackingGPSAutomatico();
-                }
-                
-                if (wakeLock === null && isWakeLockSupported) {
-                    await solicitarWakeLock();
-                }
-
-                if (!heartbeatInterval) {
-                    await iniciarHeartbeatPrincipal();
-                }
-                
-                try {
-                    await update(ref(db, `repartidores_info/${repartidorUID}`), {
-                        backgroundMode: false,
-                        lastForegroundTimestamp: Date.now()
-                    });
-                } catch (error) {
-                    console.warn('⚠️ Error al marcar foreground:', error);
-                }
-            }
-        }
-    });
-
-    window.addEventListener('online', async () => {
-        if (sessionActive && repartidorUID) {
-            await marcarComoOnline();
-            
-            if (!isTrackingEnabled && permisosUbicacionOtorgado) {
-                await iniciarTrackingGPSAutomatico();
-            }
-
-            if (!heartbeatInterval) {
-                await iniciarHeartbeatPrincipal();
-            }
-            
-            if (!backgroundGeoInterval && sessionActive) {
-                iniciarBackgroundGeolocation();
-            }
-        }
-    });
-
-    window.addEventListener('offline', () => {
-        actualizarIndicadorConexion(false);
-    });
-
-    window.addEventListener('beforeunload', (event) => {
-        if (Object.keys(pedidosActivos).length > 0) {
-            const mensaje = '⚠️ Tienes pedidos activos. ¿Seguro que quieres salir?';
-            event.preventDefault();
-            event.returnValue = mensaje;
-            return mensaje;
-        }
-    });
-
-    // ========================================
-    // MONITOREO Y MANTENIMIENTO
-    // ========================================
-
-    setInterval(() => {
-        if (sessionActive && repartidorUID) {
-            if (!heartbeatInterval) {
-                iniciarHeartbeatPrincipal();
-            }
-            
-            if (!isTrackingEnabled && sessionActive && permisosUbicacionOtorgado) {
-                iniciarTrackingGPSAutomatico();
-            }
-            
-            if (!backgroundGeoInterval && sessionActive) {
-                iniciarBackgroundGeolocation();
-            }
-        }
-    }, 30000);
-
-    // ========================================
-    // BOTÓN VER MAPA CLIENTE
-    // ========================================
-    
-    document.getElementById('verMapaBtn').addEventListener('click', () => {
-        const mapaContainer = document.getElementById('mapa-cliente-container');
+        const confirmacion = confirm('¿Seguro que deseas cerrar sesión?');
+        if (!confirmacion) return;
         
-        if (mapaContainer.style.display === 'none' || !mapaContainer.style.display) {
-            const asignadosCount = parseInt(document.getElementById('asignadosCount').textContent);
+        try {
+            await marcarComoOffline();
+            detenerTrackingGPS();
+            detenerEnvioUbicacionRepartidor();
+            detenerBackgroundGeolocation();
+            detenerHeartbeat();
+            await liberarWakeLock();
             
-            if (asignadosCount > 0) {
-                showSection('asignadosSection');
-                mapaContainer.style.display = 'block';
+            await signOut(auth);
+            
+            console.log('✅ Sesión cerrada correctamente');
+            
+        } catch (error) {
+            console.error('❌ Error al cerrar sesión:', error);
+        }
+    });
+
+    const lastEmail = localStorage.getItem('lastRepartidorEmail');
+    const lastPassword = localStorage.getItem('lastRepartidorPassword');
+    
+    if (lastEmail && lastPassword) {
+        document.getElementById('quickLoginArea').style.display = 'block';
+        document.getElementById('quickLoginMessage').textContent = `Última sesión: ${lastEmail}`;
+        
+        document.getElementById('quickLoginBtn').addEventListener('click', async () => {
+            try {
+                await signInWithEmailAndPassword(auth, lastEmail, lastPassword);
+                console.log('✅ Inicio de sesión rápido exitoso');
+            } catch (error) {
+                console.error('❌ Error en inicio rápido:', error);
+                alert('❌ Error al iniciar sesión rápida. Ingresa manualmente.');
+            }
+        });
+    }
+
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            repartidorUID = user.uid;
+            window.currentRepartidorUID = user.uid;
+            
+            console.log('👤 Usuario autenticado:', user.uid);
+            
+            const repRef = ref(db, `repartidores_info/${user.uid}`);
+            const snapshot = await get(repRef);
+            
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                repartidorNombre = data.nombre || 'Repartidor';
+                window.currentRepartidorNombre = repartidorNombre;
                 
-                if (!mapaCliente) {
-                    inicializarMapaCliente();
-                }
+                document.getElementById('loginContainer').style.display = 'none';
+                document.getElementById('appContainer').style.display = 'block';
+                document.getElementById('repartidorName').textContent = repartidorNombre;
                 
-                setTimeout(() => {
-                    if (mapaCliente) {
-                        mapaCliente.invalidateSize();
-                    }
-                }, 200);
+                await configurarPresenciaInicial();
                 
-                document.getElementById('verMapaBtn').textContent = '🗺️ Ocultar Mapa';
+                escucharChat();
+                escucharPedidos();
+                escucharHistorial();
+                
+                mostrarModalPermisos();
+                
+                console.log('✅ App iniciada correctamente');
+                
             } else {
-                alert('⚠️ No tienes pedidos asignados.\n\nAcepta un pedido primero para ver la ubicación del cliente.');
+                document.getElementById('manualLoginForm').style.display = 'none';
+                document.getElementById('registrationForm').style.display = 'block';
+                document.getElementById('regEmailDisplay').value = user.email;
             }
+            
         } else {
-            mapaContainer.style.display = 'none';
-            document.getElementById('verMapaBtn').textContent = '🗺️ Ver Mapa Cliente';
+            repartidorUID = null;
+            window.currentRepartidorUID = null;
+            window.currentRepartidorNombre = null;
+            
+            detenerTrackingGPS();
+            detenerEnvioUbicacionRepartidor();
+            detenerBackgroundGeolocation();
+            detenerHeartbeat();
+            await liberarWakeLock();
+            
+            document.getElementById('loginContainer').style.display = 'flex';
+            document.getElementById('appContainer').style.display = 'none';
+            document.getElementById('manualLoginForm').style.display = 'block';
+            document.getElementById('registrationForm').style.display = 'none';
+            
+            console.log('👤 Usuario no autenticado');
         }
-    });
-
-    // ========================================
-    // INICIALIZACIÓN FINAL
-    // ========================================
-
-    window.addEventListener('load', () => {
-        console.log('');
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('🚀 SERVI ALIADOS - PANEL REPARTIDOR v1.7.2 MAPA CORREGIDO');
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('');
-        console.log('🔥 CORRECCIONES APLICADAS:');
-        console.log('  ✅ CORRECCIÓN #1: Buscar en "usuarios/" (NO en "users/")');
-        console.log('  ✅ CORRECCIÓN #2: Usar "lon" (NO "lng")');
-        console.log('  ✅ CORRECCIÓN #3: Validación robusta de coordenadas');
-        console.log('  ✅ CORRECCIÓN #4: Marcadores Leaflet simplificados y funcionales');
-        console.log('');
-        console.log('📋 CARACTERÍSTICAS ACTIVAS:');
-        console.log('  ✅ Sistema de seguimiento cliente ↔ repartidor');
-        console.log('  ✅ Mapa del cliente con ubicación en tiempo real');
-        console.log('  ✅ GPS del repartidor enviando ubicación cada 5s');
-        console.log('  ✅ Marcadores visibles en el mapa');
-        console.log('  ✅ Debugging completo activado');
-        console.log('');
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('');
-        
-        updateQuickLoginUI();
     });
 
 </script>
