@@ -8,15 +8,12 @@
     <meta http-equiv="Permissions-Policy" content="camera=*, microphone=*, geolocation=*">
     <meta http-equiv="Feature-Policy" content="camera *; microphone *; geolocation *">
     
-    <!-- Configuración para APK Android -->
     <meta name="theme-color" content="#FFC300">
     <meta name="mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.json">
     
-    <!-- Leaflet CSS para Mapas -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
-    <!-- Service Worker para operaciones en segundo plano -->
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('/service-worker.js')
@@ -25,16 +22,14 @@
         }
     </script>
     
-    <!-- Eruda - Herramienta de depuración para móviles -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>
         eruda.init();
         console.log('✅ Eruda inicializado correctamente');
     </script>
     
-    <title>Panel Repartidor - Servi Aliados</title>
+    <title>Panel Repartidor - v1.7.2 MAPA CORREGIDO</title>
     <style>
-        /* Paleta de Colores de Servi Aliados */
         :root {
             --color-primary: #FFC300;
             --color-secondary: #D7D7D7;
@@ -170,7 +165,6 @@
             margin-top: 5px; display: block;
         }
 
-        /* 🆕 ESTILOS DEL MAPA */
         #mapa-cliente-container {
             margin-top: 20px;
             background: var(--color-card);
@@ -186,6 +180,27 @@
             border-radius: 12px;
             overflow: hidden;
             border: 2px solid var(--color-primary);
+            position: relative;
+            z-index: 1;
+        }
+
+        .custom-marker-cliente,
+        .custom-marker-repartidor {
+            width: 40px !important;
+            height: 40px !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        .custom-marker-cliente > div,
+        .custom-marker-repartidor > div {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
         }
 
         .map-legend {
@@ -246,7 +261,6 @@
             opacity: 0.8;
         }
 
-        /* Estilos del Chat Mejorados */
         .chat-box {
              background: #222222; padding: 15px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.5); margin-top: 20px;
         }
@@ -288,7 +302,6 @@
         .rep-msg .chat-time { 
             color: rgba(255, 255, 255, 0.7); 
         }
-        /* Estilos para multimedia en chat */
         .mensaje img {
             max-width: 200px;
             max-height: 200px;
@@ -304,7 +317,6 @@
             display: block;
         }
 
-        /* Controles de multimedia */
         .media-controls {
             display: flex;
             gap: 5px;
@@ -331,7 +343,6 @@
             display: none;
         }
 
-        /* Indicador de grabación */
         .recording-indicator {
             display: none;
             align-items: center;
@@ -357,7 +368,6 @@
             50% { opacity: 0.3; }
         }
 
-        /* Vista previa de imagen */
         .image-preview {
             display: none;
             margin-top: 10px;
@@ -384,7 +394,6 @@
             cursor: pointer;
         }
 
-        /* Modal para ver imagen completa */
         #imageModal {
             position: fixed;
             top: 0;
@@ -418,7 +427,6 @@
             font-size: 1.2em;
         }
 
-        /* Indicador de carga */
         .upload-progress {
             display: none;
             margin-top: 10px;
@@ -445,7 +453,6 @@
             transition: width 0.3s;
         }
 
-        /* Indicador GPS Activo */
         .gps-indicator {
             position: fixed;
             bottom: 20px;
@@ -486,7 +493,6 @@
             50% { opacity: 0.3; }
         }
 
-        /* 🆕 Indicador GPS del Repartidor */
         .gps-indicator-repartidor {
             position: fixed;
             bottom: 20px;
@@ -509,221 +515,6 @@
             display: flex;
         }
 
-        /* ESTILOS DEL SISTEMA DE ACTUALIZACIONES */
-        #updateModal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.95);
-            z-index: 10000;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-
-        #updateModal.show {
-            display: flex;
-        }
-
-        .update-content {
-            background: linear-gradient(135deg, #FFC300 0%, #e6b200 100%);
-            padding: 40px 30px;
-            border-radius: 20px;
-            max-width: 400px;
-            width: 100%;
-            text-align: center;
-            box-shadow: 0 10px 40px rgba(255, 195, 0, 0.5);
-            animation: slideDown 0.4s ease-out;
-        }
-
-        @keyframes slideDown {
-            from {
-                transform: translateY(-50px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        .update-icon {
-            font-size: 80px;
-            margin-bottom: 20px;
-            animation: pulseUpdate 2s infinite;
-        }
-
-        @keyframes pulseUpdate {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-
-        .update-content h2 {
-            color: #111;
-            margin-bottom: 15px;
-            font-size: 1.8em;
-        }
-
-        .update-content p {
-            color: #333;
-            margin-bottom: 10px;
-            line-height: 1.6;
-        }
-
-        .version-info {
-            background: rgba(0, 0, 0, 0.1);
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-        }
-
-        .version-info p {
-            margin: 5px 0;
-            font-weight: bold;
-        }
-
-        .version-old {
-            color: #C0392B;
-        }
-
-        .version-new {
-            color: #27ae60;
-        }
-
-        .changelog {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin: 20px 0;
-            text-align: left;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-
-        .changelog h3 {
-            color: #111;
-            margin-bottom: 10px;
-            font-size: 1.1em;
-        }
-
-        .changelog ul {
-            margin: 0;
-            padding-left: 20px;
-        }
-
-        .changelog li {
-            color: #333;
-            margin: 5px 0;
-        }
-
-        .update-buttons {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        .update-buttons button {
-            flex: 1;
-            padding: 15px;
-            border: none;
-            border-radius: 10px;
-            font-weight: bold;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        .btn-update {
-            background: #27ae60;
-            color: white;
-        }
-
-        .btn-update:hover {
-            background: #229954;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
-        }
-
-        .btn-later {
-            background: #555;
-            color: white;
-        }
-
-        .btn-later:hover {
-            background: #666;
-        }
-
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 9999;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-        }
-
-        .loading-overlay.show {
-            display: flex;
-        }
-
-        .spinner {
-            width: 60px;
-            height: 60px;
-            border: 5px solid rgba(255, 195, 0, 0.3);
-            border-top: 5px solid #FFC300;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .loading-text {
-            color: #FFC300;
-            font-size: 1.2em;
-            font-weight: bold;
-        }
-
-        .version-badge {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background: #C0392B;
-            color: white;
-            padding: 8px 15px;
-            border-radius: 20px;
-            font-size: 0.9em;
-            font-weight: bold;
-            z-index: 1000;
-            cursor: pointer;
-            animation: shake 2s infinite;
-            display: none;
-        }
-
-        .version-badge.show {
-            display: block;
-        }
-
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-            20%, 40%, 60%, 80% { transform: translateX(5px); }
-        }
-        
-        /* Indicador de conexión persistente */
         .connection-status {
             position: fixed;
             top: 10px;
@@ -756,7 +547,6 @@
             animation: blink 1.5s infinite;
         }
 
-        /* 🆕 MODAL DE PERMISOS MULTIMEDIA */
         #permisosModal {
             position: fixed;
             top: 0;
@@ -885,25 +675,21 @@
 </head>
 <body>
 
-<!-- INDICADOR DE CONEXIÓN -->
 <div id="connectionStatus" class="connection-status">
     <div class="status-dot"></div>
     <span id="connectionText">🟢 Online</span>
 </div>
 
-<!-- INDICADOR GPS ACTIVO -->
 <div id="gpsIndicator" class="gps-indicator">
     <div class="gps-dot"></div>
     <span>📍 GPS Activo</span>
 </div>
 
-<!-- 🆕 INDICADOR GPS DEL REPARTIDOR -->
 <div id="gps-indicator-repartidor" class="gps-indicator-repartidor">
     <div class="gps-dot"></div>
     <span>🏍️ GPS Activo</span>
 </div>
 
-<!-- 🆕 MODAL DE PERMISOS MULTIMEDIA -->
 <div id="permisosModal">
     <div class="permisos-content">
         <h2>🔐 Permisos Necesarios</h2>
@@ -949,52 +735,7 @@
         </div>
     </div>
 </div>
-<!-- MODAL DE ACTUALIZACIÓN -->
-<div id="updateModal">
-    <div class="update-content">
-        <div class="update-icon">🚀</div>
-        <h2>¡Nueva Actualización Disponible!</h2>
-        <p>Hay una nueva versión de la aplicación con mejoras y correcciones.</p>
-        
-        <div class="version-info">
-            <p>Versión actual: <span class="version-old" id="currentVersion">1.0.0</span></p>
-            <p>Nueva versión: <span class="version-new" id="newVersion">1.0.0</span></p>
-        </div>
-        
-        <div class="changelog">
-            <h3>📋 Novedades:</h3>
-            <ul id="changelogList">
-                <li>Cargando...</li>
-            </ul>
-        </div>
-        
-        <div class="update-buttons">
-            <button class="btn-update" onclick="actualizarApp()">
-                🔄 Actualizar Ahora
-            </button>
-            <button class="btn-later" onclick="recordarMasTarde()">
-                ⏰ Más Tarde
-            </button>
-        </div>
-        
-        <p style="font-size: 0.85em; margin-top: 15px; color: #666;">
-            💡 Se recomienda actualizar para obtener las últimas mejoras
-        </p>
-    </div>
-</div>
 
-<!-- INDICADOR DE CARGA DE ACTUALIZACIÓN -->
-<div id="loadingOverlay" class="loading-overlay">
-    <div class="spinner"></div>
-    <p class="loading-text">Actualizando aplicación...</p>
-</div>
-
-<!-- BADGE DE NOTIFICACIÓN DE VERSIÓN -->
-<div id="versionBadge" class="version-badge" onclick="mostrarModalActualizacion()">
-    🔔 Nueva versión disponible
-</div>
-
-<!-- CONTENEDOR DE LOGIN -->
 <div id="loginContainer">
     <div id="manualLoginForm">
         <h3 style="text-align: center; color: var(--color-primary);">Bienvenido</h3>
@@ -1048,13 +789,12 @@
     </div>
 </div>
 
-<!-- CONTENEDOR DE LA APLICACIÓN -->
 <div id="appContainer">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
         <h2 style="color: var(--color-secondary); margin: 0;">Bienvenido, <span id="repartidorName"></span>!</h2>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <span id="appVersionDisplay" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 15px; font-size: 0.85em; font-weight: bold;">
-                v1.7.0
+                v1.7.2
             </span>
             <button id="verMapaBtn" style="padding: 8px 15px; background: #2196F3; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">
                 🗺️ Ver Mapa Cliente
@@ -1079,14 +819,12 @@
         <div class="chat-box">
             <div class="mensajes-area" id="chatBox">Esperando mensaje del Admin...</div>
             
-            <!-- Controles multimedia -->
             <div class="media-controls">
                 <button id="sendGalleryBtn" title="Seleccionar foto de galería">🖼️ Galería</button>
                 <button id="recordAudioBtn" title="Grabar audio">🎤 Grabar Audio</button>
                 <input type="file" id="galleryInput" accept="image/*" style="display: none;">
             </div>
 
-            <!-- Vista previa de audio -->
             <div class="audio-preview" id="audioPreview" style="display: none; margin-top: 10px; padding: 10px; background: #333; border-radius: 5px;">
                 <p style="color: #FFC300; margin: 0 0 5px 0;">🎤 Audio grabado:</p>
                 <audio id="previewAudio" controls style="width: 100%; max-width: 300px;"></audio>
@@ -1096,20 +834,17 @@
                 </div>
             </div>
             
-            <!-- Indicador de grabación -->
             <div class="recording-indicator" id="recordingIndicator">
                 <div class="recording-dot"></div>
                 <span id="recordingTimer">00:00</span>
                 <button id="stopRecordingBtn" style="background: var(--color-accent-danger); color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Detener</button>
             </div>
             
-            <!-- Vista previa de imagen -->
             <div class="image-preview" id="imagePreview">
                 <img id="previewImg" src="" alt="Preview">
                 <button id="cancelImageBtn">✕</button>
             </div>
             
-            <!-- Indicador de progreso de carga -->
             <div class="upload-progress" id="uploadProgress">
                 <p>Subiendo archivo...</p>
                 <div class="progress-bar">
@@ -1133,7 +868,6 @@
     <div id="asignadosSection" style="display:none;">
         <h3 style="color: var(--color-secondary);">🚚 Mis Pedidos Asignados</h3>
         
-        <!-- 🆕 MAPA DEL CLIENTE -->
         <div id="mapa-cliente-container" style="display: none;">
             <h4 style="color: var(--color-primary); margin-top: 20px;">🗺️ Ubicación del Cliente</h4>
             
@@ -1166,7 +900,6 @@
     </div>
 </div>
 
-<!-- MODAL DE CANCELACIÓN -->
 <div id="cancelModal">
     <div id="cancelModalContent">
         <h4>¿Por qué deseas cancelar este domicilio?</h4>
@@ -1180,7 +913,6 @@
     </div>
 </div>
 
-<!-- Modal para ver imagen completa -->
 <div id="imageModal">
     <button onclick="document.getElementById('imageModal').classList.remove('active');">✕ Cerrar</button>
     <img id="modalImage" src="" alt="Imagen completa">
@@ -1188,9 +920,7 @@
 
 <audio id="notificationSound" src="https://github.com/dt9650329-ops/Chat-administrador-/raw/f67a159f93aed6be1d6f7f02709384111cd84b7e/%E2%9C%A8Monedas%20Cayendo%20__%20Efectos%20De%20Sonidos(MP3_160K).mp3" preload="auto"></audio>
 
-<!-- Leaflet JS para Mapas -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script type="module">
 
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
@@ -1198,7 +928,6 @@
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-    // ⚙️ Configuración Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyAZX7Q5B29Xti4YtV9wXuiREVdkgcclv9U",
       authDomain: "domicilios-1cd74.firebaseapp.com",
@@ -1214,7 +943,6 @@
     const auth = getAuth(app);
     const storage = getStorage(app);
 
-    // 🆕 Exportar al scope global
     window.db = db;
     window.ref = ref;
     window.update = update;
@@ -1222,8 +950,7 @@
     window.onValue = onValue;
     window.off = off;
 
-    // VERSIÓN ACTUALIZADA CON DEBUGGING MEJORADO
-    const APP_VERSION = "1.7.0";
+    const APP_VERSION = "1.7.2";
     
     window.addEventListener('DOMContentLoaded', () => {
         const versionDisplay = document.getElementById('appVersionDisplay');
@@ -1232,19 +959,16 @@
         }
     });
 
-    // VARIABLES GLOBALES
     let repartidorUID = null;
     let repartidorNombre = "Repartidor";
     let timerInterval = null; 
     let currentPedidoIdToCancel = null; 
     let initialLoad = true;
     
-    // Variables globales para seguimiento
     window.currentRepartidorUID = null;
     window.currentRepartidorNombre = null;
     window.currentClienteID = null;
     
-    // Variables para grabación de audio
     let selectedImageFile = null;
     let selectedAudioFile = null;
     let mediaRecorder = null;
@@ -1252,7 +976,6 @@
     let recordingStartTime = 0;
     let recordingTimerInterval = null;
     
-    // Variables de tracking GPS
     let watchId = null;
     let lastLocationUpdate = 0;
     const LOCATION_UPDATE_INTERVAL = 2000;
@@ -1261,29 +984,24 @@
     let gpsErrorCount = 0;
     const MAX_GPS_ERRORS = 3;
 
-    // Variables para presencia persistente
     let heartbeatInterval = null;
     let sessionActive = false;
 
-    // Variables para Wake Lock
     let wakeLock = null;
     let isWakeLockSupported = 'wakeLock' in navigator;
 
-    // Variables para envío de ubicación
     let locationSendInterval = null;
     
-    // Variables para Background Geolocation
     let backgroundGeoInterval = null;
     let isBackgroundMode = false;
 
-    // Variables para permisos multimedia
     let permisosMultimediaOtorgados = false;
     let permisosCamaraOtorgado = false;
     let permisosMicrofonoOtorgado = false;
     let permisosUbicacionOtorgado = false;
 
     // ========================================
-    // 🆕 SISTEMA DE SEGUIMIENTO DEL CLIENTE
+    // 🔥 VARIABLES DEL MAPA (CORREGIDAS v1.7.2)
     // ========================================
     
     let mapaCliente = null;
@@ -1298,7 +1016,7 @@
     const REPARTIDOR_LOCATION_INTERVAL = 5000;
 
     // ========================================
-    // 🆕 FUNCIONES DE DEBUGGING MEJORADAS
+    // 🔥 FUNCIONES DE DEBUGGING MEJORADAS
     // ========================================
 
     function logDebugCliente(mensaje, datos = null) {
@@ -1314,7 +1032,7 @@
     }
 
     // ========================================
-    // 🆕 INICIALIZAR MAPA DEL CLIENTE (MEJORADO)
+    // 🔥 INICIALIZAR MAPA (CORREGIDO v1.7.2)
     // ========================================
 
     function inicializarMapaCliente() {
@@ -1324,113 +1042,168 @@
             logDebugMapa('Removiendo mapa existente');
             mapaCliente.remove();
             mapaCliente = null;
+            marcadorCliente = null;
+            marcadorRepartidor = null;
         }
 
-        // Coordenadas por defecto (Bogotá)
         const defaultCoords = [4.710989, -74.072092];
         
-        mapaCliente = L.map('mapa-cliente').setView(defaultCoords, 13);
+        try {
+            mapaCliente = L.map('mapa-cliente', {
+                center: defaultCoords,
+                zoom: 13,
+                zoomControl: true,
+                attributionControl: true
+            });
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(mapaCliente);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(mapaCliente);
 
-        setTimeout(() => {
-            if (mapaCliente) {
-                mapaCliente.invalidateSize();
-                logDebugMapa('Tamaño del mapa actualizado');
-            }
-        }, 100);
-        
-        logDebugMapa('✅ Mapa del cliente inicializado correctamente');
+            setTimeout(() => {
+                if (mapaCliente) {
+                    mapaCliente.invalidateSize();
+                    logDebugMapa('Tamaño del mapa actualizado');
+                }
+            }, 300);
+            
+            logDebugMapa('✅ Mapa del cliente inicializado correctamente');
+        } catch (error) {
+            console.error('❌ Error al inicializar mapa:', error);
+        }
     }
 
     // ========================================
-    // 🆕 AGREGAR MARCADORES (MEJORADO CON DEBUG)
+    // 🔥 AGREGAR MARCADOR DEL CLIENTE (CORREGIDO v1.7.2)
     // ========================================
 
     function agregarMarcadorClienteEnMapaRepartidor(coords) {
     logDebugCliente('Intentando agregar marcador del cliente', coords);
     
-    // 🔥 VALIDACIÓN: Verificar que coords tenga "lon" (no "lng")
-    if (!coords || !coords.lat || !coords.lon) {
+    // 🔥 VALIDAR QUE COORDS TENGA "lon" (NO "lng")
+    if (!coords || !coords.lat || !coords.lon) {  // ⚠️ Cambiar "lng" por "lon"
         console.error('❌ Coordenadas del cliente inválidas:', coords);
+        return;
+    }
+
+    const lat = parseFloat(coords.lat);
+    const lon = parseFloat(coords.lon);  // ⚠️ Cambiar "lng" por "lon"
+    
+    if (isNaN(lat) || isNaN(lon)) {
+        console.error('❌ Coordenadas del cliente son NaN:', coords);
+        return;
+    }
+
+    if (lat === 0 && lon === 0) {
+        console.warn('⚠️ Coordenadas en (0, 0) - ubicación inválida');
+        return;
+    }
+
+    if (!mapaCliente) {
+        console.error('❌ Mapa no inicializado');
+        inicializarMapaCliente();
+        setTimeout(() => agregarMarcadorClienteEnMapaRepartidor(coords), 500);
         return;
     }
     
     clienteCoordsRepartidorApp = coords;
     
-    if (marcadorCliente) {
-        logDebugCliente('Actualizando marcador existente');
-        // ✅ USAR "lon" en lugar de "lng"
-        marcadorCliente.setLatLng([coords.lat, coords.lon]);
-    } else {
-        logDebugCliente('Creando nuevo marcador del cliente');
-        
-        const iconCliente = L.divIcon({
-            className: 'custom-marker-cliente',
-            html: '<div style="background-color: #4CAF50; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.4);"></div>',
-            iconSize: [30, 30],
-            iconAnchor: [15, 15]
-        });
-
-        try {
-            // ✅ USAR "lon" en lugar de "lng"
-            marcadorCliente = L.marker([coords.lat, coords.lon], { icon: iconCliente })
-                .addTo(mapaCliente)
-                .bindPopup('<b>📍 Cliente</b>');
+    try {
+        if (marcadorCliente) {
+            logDebugCliente('Actualizando marcador existente');
+            marcadorCliente.setLatLng([lat, lon]);
+        } else {
+            logDebugCliente('Creando nuevo marcador del cliente');
             
-            // ✅ USAR "lon" en lugar de "lng"
-            mapaCliente.setView([coords.lat, coords.lon], 15);
+            const iconCliente = L.divIcon({
+                className: 'custom-marker-cliente',
+                html: '<div style="background-color: #4CAF50; width: 35px; height: 35px; border-radius: 50%; border: 4px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 18px;">📍</div>',
+                iconSize: [35, 35],
+                iconAnchor: [17, 17]
+            });
+
+            marcadorCliente = L.marker([lat, lon], { 
+                icon: iconCliente,
+                title: 'Cliente'
+            }).addTo(mapaCliente);
+            
+            marcadorCliente.bindPopup('<b>📍 Cliente</b><br>Ubicación actual');
+            
             logDebugCliente('✅ Marcador del cliente agregado al mapa');
-        } catch (error) {
-            console.error('❌ Error al agregar marcador del cliente al mapa:', error);
+            
+            // Centrar mapa en el cliente
+            mapaCliente.setView([lat, lon], 15);
         }
-    }
-    
-    if (repartidorCoords) {
-        calcularDistanciaYDireccion();
+        
+        // Actualizar información de distancia si ya tenemos ubicación del repartidor
+        if (repartidorCoords) {
+            calcularDistanciaYDireccion();
+        } else {
+            document.getElementById('distancia-cliente').textContent = '📏 Esperando tu ubicación GPS...';
+            document.getElementById('direccion-cliente').textContent = '🧭 Activando GPS del repartidor...';
+        }
+        
+    } catch (error) {
+        console.error('❌ Error al agregar marcador del cliente:', error);
     }
 }
+    // ========================================
+    // 🔥 AGREGAR MARCADOR DEL REPARTIDOR (CORREGIDO v1.7.2)
+    // ========================================
 
     function agregarMarcadorRepartidorEnMapa(coords) {
         logDebugRepartidor('Intentando agregar marcador del repartidor', coords);
         
-        if (!coords || !coords.lat || !coords.lng) {
+        if (!coords || !coords.lat || !coords.lon) {
             console.error('❌ Coordenadas del repartidor inválidas:', coords);
+            return;
+        }
+
+        if (isNaN(coords.lat) || isNaN(coords.lon)) {
+            console.error('❌ Coordenadas del repartidor son NaN:', coords);
+            return;
+        }
+
+        if (!mapaCliente) {
+            console.warn('⚠️ Mapa no inicializado, esperando...');
             return;
         }
         
         repartidorCoords = coords;
         
-        if (marcadorRepartidor) {
-            logDebugRepartidor('Actualizando marcador existente');
-            marcadorRepartidor.setLatLng([coords.lat, coords.lng]);
-        } else {
-            logDebugRepartidor('Creando nuevo marcador del repartidor');
-            
-            const iconRepartidor = L.divIcon({
-                className: 'custom-marker-repartidor',
-                html: '<div style="background-color: #2196F3; width: 30px; height: 30px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.4);"></div>',
-                iconSize: [30, 30],
-                iconAnchor: [15, 15]
-            });
+        try {
+            if (marcadorRepartidor) {
+                logDebugRepartidor('Actualizando marcador existente');
+                marcadorRepartidor.setLatLng([coords.lat, coords.lon]);
+            } else {
+                logDebugRepartidor('Creando nuevo marcador del repartidor');
+                
+                // 🔥 CORRECCIÓN: Usar marcador HTML personalizado más simple
+                const iconRepartidor = L.divIcon({
+                    className: 'custom-marker-repartidor',
+                    html: '<div style="background-color: #2196F3; width: 35px; height: 35px; border-radius: 50%; border: 4px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 18px;">🏍️</div>',
+                    iconSize: [35, 35],
+                    iconAnchor: [17, 17]
+                });
 
-            try {
-                marcadorRepartidor = L.marker([coords.lat, coords.lng], { icon: iconRepartidor })
-                    .addTo(mapaCliente)
-                    .bindPopup('<b>🏍️ Tú</b>');
+                marcadorRepartidor = L.marker([coords.lat, coords.lon], { 
+                    icon: iconRepartidor,
+                    title: 'Tú (Repartidor)'
+                }).addTo(mapaCliente);
+                
+                marcadorRepartidor.bindPopup('<b>🏍️ Tú</b><br>Tu ubicación actual');
                 
                 logDebugRepartidor('✅ Marcador del repartidor agregado al mapa');
-            } catch (error) {
-                console.error('❌ Error al agregar marcador del repartidor al mapa:', error);
             }
-        }
-        
-        // Calcular distancia si tenemos ambas ubicaciones
-        if (clienteCoordsRepartidorApp) {
-            calcularDistanciaYDireccion();
+            
+            // Actualizar información de distancia si ya tenemos ubicación del cliente
+            if (clienteCoordsRepartidorApp) {
+                calcularDistanciaYDireccion();
+            }
+            
+        } catch (error) {
+            console.error('❌ Error al agregar marcador del repartidor:', error);
         }
     }
 
@@ -1439,7 +1212,7 @@
     // ========================================
 
     function calcularDistancia(lat1, lon1, lat2, lon2) {
-        const R = 6371e3;
+        const R = 6371e3; // Radio de la Tierra en metros
         const φ1 = lat1 * Math.PI / 180;
         const φ2 = lat2 * Math.PI / 180;
         const Δφ = (lat2 - lat1) * Math.PI / 180;
@@ -1450,7 +1223,7 @@
                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
-        return R * c;
+        return R * c; // Distancia en metros
     }
 
     function calcularDireccion(lat1, lon1, lat2, lon2) {
@@ -1470,43 +1243,56 @@
     }
 
     function calcularDistanciaYDireccion() {
-    if (!clienteCoordsRepartidorApp || !repartidorCoords) {
-        logDebugMapa('⚠️ No se pueden calcular distancia/dirección: faltan coordenadas');
-        return;
+        if (!clienteCoordsRepartidorApp || !repartidorCoords) {
+            logDebugMapa('⚠️ No se pueden calcular distancia/dirección: faltan coordenadas');
+            return;
+        }
+        
+        try {
+            const distancia = calcularDistancia(
+                repartidorCoords.lat, repartidorCoords.lon,
+                clienteCoordsRepartidorApp.lat, clienteCoordsRepartidorApp.lon
+            );
+            
+            const direccion = calcularDireccion(
+                repartidorCoords.lat, repartidorCoords.lon,
+                clienteCoordsRepartidorApp.lat, clienteCoordsRepartidorApp.lon
+            );
+            
+            const distanciaKm = (distancia / 1000).toFixed(2);
+            const tiempoEstimado = Math.round(distancia / (30000 / 60)); // 30 km/h promedio
+            
+            document.getElementById('distancia-cliente').textContent = 
+                `📏 Distancia: ${distanciaKm} km (${tiempoEstimado} min aprox.)`;
+            document.getElementById('direccion-cliente').textContent = 
+                `🧭 Dirección: ${direccion}`;
+            
+            logDebugMapa(`📊 Distancia: ${distanciaKm} km, Dirección: ${direccion}`);
+            
+            // Ajustar zoom del mapa para mostrar ambos marcadores
+            if (mapaCliente && marcadorCliente && marcadorRepartidor) {
+                const bounds = L.latLngBounds([
+                    [clienteCoordsRepartidorApp.lat, clienteCoordsRepartidorApp.lon],
+                    [repartidorCoords.lat, repartidorCoords.lon]
+                ]);
+                mapaCliente.fitBounds(bounds, { padding: [50, 50] });
+            }
+            
+        } catch (error) {
+            console.error('❌ Error al calcular distancia/dirección:', error);
+        }
     }
-    
-    // ✅ USAR "lon" consistentemente
-    const distancia = calcularDistancia(
-        repartidorCoords.lat, repartidorCoords.lon,
-        clienteCoordsRepartidorApp.lat, clienteCoordsRepartidorApp.lon
-    );
-    
-    const direccion = calcularDireccion(
-        repartidorCoords.lat, repartidorCoords.lon,
-        clienteCoordsRepartidorApp.lat, clienteCoordsRepartidorApp.lon
-    );
-    
-    const distanciaKm = (distancia / 1000).toFixed(2);
-    const tiempoEstimado = Math.round(distancia / (30000 / 60));
-    
-    document.getElementById('distancia-cliente').textContent = 
-        `📏 Distancia: ${distanciaKm} km (${tiempoEstimado} min aprox.)`;
-    document.getElementById('direccion-cliente').textContent = 
-        `🧭 Dirección: ${direccion}`;
-    
-    logDebugMapa(`📊 Distancia: ${distanciaKm} km, Dirección: ${direccion}`);
-}
 
     // ========================================
-    // 🆕 INICIAR SEGUIMIENTO DEL CLIENTE (MEJORADO)
+    // 🔥 INICIAR SEGUIMIENTO DEL CLIENTE (CORREGIDO v1.7.2)
     // ========================================
 
     function iniciarSeguimientoCliente(clienteID) {
     console.log('');
     console.log('═══════════════════════════════════════════════════════════');
-    console.log('👁️ INICIANDO SEGUIMIENTO DEL CLIENTE');
+    console.log('👁️ INICIANDO SEGUIMIENTO DEL CLIENTE v1.7.3 CORREGIDO');
     console.log('═══════════════════════════════════════════════════════════');
-    logDebugCliente(`Cliente ID: ${clienteID}`);
+    logDebugCliente(`Cliente ID recibido: ${clienteID}`);
     
     if (!clienteID) {
         console.error('❌ ERROR CRÍTICO: clienteID es null o undefined');
@@ -1516,17 +1302,19 @@
     
     window.currentClienteID = clienteID;
     
+    // Detener listener anterior si existe
     if (clienteUbicacionListener) {
         try {
-            off(ref(db, `users/${clienteID}`), 'value', clienteUbicacionListener);
+            off(ref(db, `usuarios/${clienteID}`), 'value', clienteUbicacionListener);
             logDebugCliente('🛑 Listener anterior detenido');
         } catch (error) {
             console.warn('⚠️ Error al detener listener anterior:', error);
         }
     }
     
-    const clienteRef = ref(db, `users/${clienteID}`);
-    logDebugCliente(`Configurando listener en: users/${clienteID}`);
+    // 🔥 CORRECCIÓN #1: USAR "usuarios/" (NO "users/")
+    const clienteRef = ref(db, `usuarios/${clienteID}`);
+    logDebugCliente(`✅ Usando ruta correcta: usuarios/${clienteID}`);
     
     try {
         clienteUbicacionListener = onValue(clienteRef, (snapshot) => {
@@ -1534,6 +1322,7 @@
             
             if (!snapshot.exists()) {
                 console.warn('⚠️ Datos del cliente no disponibles en Firebase');
+                console.warn(`⚠️ Ruta intentada: usuarios/${clienteID}`);
                 document.getElementById('distancia-cliente').textContent = '📏 Cliente no encontrado en la base de datos';
                 return;
             }
@@ -1541,8 +1330,10 @@
             const clienteData = snapshot.val();
             logDebugCliente('📊 Datos completos del cliente:', clienteData);
             
+            // 🔥 VERIFICAR GPS ACTIVO
             if (!clienteData.gpsActivo) {
                 console.warn('⚠️ GPS del cliente no está activo');
+                console.warn('   gpsActivo:', clienteData.gpsActivo);
                 document.getElementById('distancia-cliente').textContent = '📏 GPS del cliente desactivado';
                 document.getElementById('direccion-cliente').textContent = '🧭 Esperando que el cliente active GPS...';
                 return;
@@ -1550,33 +1341,36 @@
             
             logDebugCliente('✅ GPS del cliente ACTIVO');
             
-            // 🔥 CORRECCIÓN: Usar "lon" en lugar de "lng"
+            // 🔥 CORRECCIÓN #2: BÚSQUEDA EN MÚLTIPLES CAMPOS CON "lon" (NO "lng")
             let clienteCoords = null;
             
+            // Opción 1: ubicacionActual (con "lon")
             if (clienteData.ubicacionActual && 
                 clienteData.ubicacionActual.lat && 
-                clienteData.ubicacionActual.lon) {
+                clienteData.ubicacionActual.lon) {  // ⚠️ Nota: "lon" no "lng"
                 
                 clienteCoords = {
-                    lat: clienteData.ubicacionActual.lat,
-                    lon: clienteData.ubicacionActual.lon  // ✅ USAR "lon"
+                    lat: parseFloat(clienteData.ubicacionActual.lat),
+                    lon: parseFloat(clienteData.ubicacionActual.lon)  // ⚠️ "lon"
                 };
                 logDebugCliente('✅ Ubicación encontrada en ubicacionActual:', clienteCoords);
             }
+            // Opción 2: ubicacion (con "lon")
             else if (clienteData.ubicacion && 
                      clienteData.ubicacion.lat && 
-                     clienteData.ubicacion.lon) {
+                     clienteData.ubicacion.lon) {  // ⚠️ "lon"
                 
                 clienteCoords = {
-                    lat: clienteData.ubicacion.lat,
-                    lon: clienteData.ubicacion.lon  // ✅ USAR "lon"
+                    lat: parseFloat(clienteData.ubicacion.lat),
+                    lon: parseFloat(clienteData.ubicacion.lon)  // ⚠️ "lon"
                 };
                 logDebugCliente('✅ Ubicación encontrada en ubicacion:', clienteCoords);
             }
-            else if (clienteData.lat && clienteData.lon) {
+            // Opción 3: campos directos
+            else if (clienteData.lat && clienteData.lon) {  // ⚠️ "lon"
                 clienteCoords = {
-                    lat: clienteData.lat,
-                    lon: clienteData.lon  // ✅ USAR "lon"
+                    lat: parseFloat(clienteData.lat),
+                    lon: parseFloat(clienteData.lon)  // ⚠️ "lon"
                 };
                 logDebugCliente('✅ Ubicación encontrada en campos directos:', clienteCoords);
             }
@@ -1584,6 +1378,10 @@
             if (!clienteCoords) {
                 console.error('❌ NO SE PUDO OBTENER UBICACIÓN DEL CLIENTE');
                 console.error('Estructura de datos recibida:', clienteData);
+                console.error('Campos buscados:');
+                console.error('  - ubicacionActual.lat/lon:', clienteData.ubicacionActual);
+                console.error('  - ubicacion.lat/lon:', clienteData.ubicacion);
+                console.error('  - lat/lon directos:', clienteData.lat, clienteData.lon);
                 document.getElementById('distancia-cliente').textContent = '📏 No se pudo obtener ubicación del cliente';
                 document.getElementById('direccion-cliente').textContent = '🧭 Verifica que el cliente tenga GPS activo';
                 return;
@@ -1591,12 +1389,29 @@
             
             logDebugCliente('🎯 Coordenadas finales del cliente:', clienteCoords);
             
+            // 🔥 VALIDACIÓN ROBUSTA
             if (isNaN(clienteCoords.lat) || isNaN(clienteCoords.lon)) {
                 console.error('❌ Coordenadas inválidas (NaN):', clienteCoords);
                 return;
             }
             
-            logDebugCliente('📍 Llamando a agregarMarcadorClienteEnMapaRepartidor...');
+            if (clienteCoords.lat === 0 && clienteCoords.lon === 0) {
+                console.warn('⚠️ Coordenadas en (0, 0) - ubicación inválida');
+                document.getElementById('distancia-cliente').textContent = '📏 Ubicación del cliente inválida';
+                return;
+            }
+            
+            // Validar rango de coordenadas de Colombia
+            if (clienteCoords.lat < -4.5 || clienteCoords.lat > 13.5 || 
+                clienteCoords.lon < -79.5 || clienteCoords.lon > -66.5) {
+                console.warn('⚠️ Coordenadas fuera del rango de Colombia:', clienteCoords);
+                // No bloqueamos, pero alertamos
+            }
+            
+            logDebugCliente('✅ Coordenadas validadas correctamente');
+            logDebugCliente('📍 Agregando marcador del cliente al mapa...');
+            
+            // 🔥 IMPORTANTE: La función espera { lat, lon } no { lat, lng }
             agregarMarcadorClienteEnMapaRepartidor(clienteCoords);
             
         }, (error) => {
@@ -1605,15 +1420,13 @@
         });
         
         logDebugCliente('✅ Listener de ubicación del cliente activado');
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('');
     } catch (error) {
         console.error('❌ Error al configurar listener:', error);
         alert(`❌ Error al iniciar seguimiento:\n\n${error.message}`);
     }
-    
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('');
 }
-
     // ========================================
     // ENVIAR UBICACIÓN DEL REPARTIDOR A FIREBASE
     // ========================================
@@ -1645,16 +1458,16 @@
                 lastRepartidorLocationUpdate = now;
                 
                 const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
+                const lon = position.coords.longitude;
                 const accuracy = position.coords.accuracy;
                 
-                logDebugRepartidor(`📍 Ubicación: ${lat.toFixed(6)}, ${lng.toFixed(6)} (±${Math.round(accuracy)}m)`);
+                logDebugRepartidor(`📍 Ubicación: ${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracy)}m)`);
                 
                 // Actualizar marcador en el mapa
-                agregarMarcadorRepartidorEnMapa({ lat, lng });
+                agregarMarcadorRepartidorEnMapa({ lat, lon });
                 
                 // Enviar a Firebase
-                enviarUbicacionRepartidorAFirebase(lat, lng, accuracy);
+                enviarUbicacionRepartidorAFirebase(lat, lon, accuracy);
             },
             (error) => {
                 console.error('❌ Error GPS Repartidor:', error.message);
@@ -1669,7 +1482,7 @@
         logDebugRepartidor('✅ Sistema de ubicación iniciado (cada 5s)');
     }
 
-    async function enviarUbicacionRepartidorAFirebase(lat, lng, accuracy) {
+    async function enviarUbicacionRepartidorAFirebase(lat, lon, accuracy) {
         if (!window.currentRepartidorUID || !db) {
             console.warn('⚠️ No se puede enviar ubicación: sistema no inicializado');
             return;
@@ -1677,16 +1490,16 @@
         
         try {
             const timestamp = Date.now();
-            const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+            const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
             
             await update(ref(db, `repartidores_info/${window.currentRepartidorUID}`), {
                 ubicacion: {
                     lat: parseFloat(lat.toFixed(6)),
-                    lon: parseFloat(lng.toFixed(6))
+                    lon: parseFloat(lon.toFixed(6))
                 },
                 ubicacionActual: {
                     lat: parseFloat(lat.toFixed(6)),
-                    lon: parseFloat(lng.toFixed(6)),
+                    lon: parseFloat(lon.toFixed(6)),
                     accuracy: Math.round(accuracy),
                     timestamp: timestamp,
                     googleMapsUrl: googleMapsUrl
@@ -1695,7 +1508,7 @@
                 gpsActivo: true
             });
             
-            logDebugRepartidor(`✅ Ubicación → Firebase: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+            logDebugRepartidor(`✅ Ubicación → Firebase: ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
             
         } catch (error) {
             console.error('❌ Error al enviar ubicación:', error);
@@ -1727,10 +1540,9 @@
     window.detenerSeguimiento = function() {
         logDebugMapa('🛑 Deteniendo seguimiento...');
         
-        // Detener listener del cliente
         if (clienteUbicacionListener && window.currentClienteID) {
             try {
-                off(ref(db, `users/${window.currentClienteID}`), 'value', clienteUbicacionListener);
+                off(ref(db, `usuarios/${window.currentClienteID}`), 'value', clienteUbicacionListener);
                 clienteUbicacionListener = null;
                 logDebugCliente('✅ Listener del cliente detenido');
             } catch (error) {
@@ -1738,10 +1550,8 @@
             }
         }
         
-        // Detener GPS del repartidor
         detenerEnvioUbicacionRepartidor();
         
-        // Limpiar mapa
         if (mapaCliente) {
             if (marcadorCliente) {
                 mapaCliente.removeLayer(marcadorCliente);
@@ -1753,7 +1563,6 @@
             }
         }
         
-        // Ocultar contenedor del mapa
         document.getElementById('mapa-cliente-container').style.display = 'none';
         
         clienteCoordsRepartidorApp = null;
@@ -1762,7 +1571,6 @@
         
         logDebugMapa('✅ Seguimiento detenido completamente');
     }
-
     // ========================================
     // SISTEMA DE PERMISOS MULTIMEDIA
     // ========================================
@@ -1775,7 +1583,7 @@
         
         let todosOtorgados = true;
         
-        // 1️⃣ Solicitar permiso de UBICACIÓN (GPS)
+        // Permiso de UBICACIÓN
         try {
             const position = await new Promise((resolve, reject) => {
                 navigator.geolocation.getCurrentPosition(
@@ -1807,7 +1615,7 @@
                   '4. Selecciona "Permitir TODO EL TIEMPO"');
         }
         
-        // 2️⃣ Solicitar permiso de CÁMARA
+        // Permiso de CÁMARA
         try {
             const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
             videoStream.getTracks().forEach(track => track.stop());
@@ -1819,7 +1627,7 @@
             console.warn('⚠️ Permiso de CÁMARA denegado:', error);
         }
         
-        // 3️⃣ Solicitar permiso de MICRÓFONO
+        // Permiso de MICRÓFONO
         try {
             const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             audioStream.getTracks().forEach(track => track.stop());
@@ -1833,7 +1641,6 @@
         
         permisosMultimediaOtorgados = todosOtorgados;
         
-        // Mostrar resumen
         const resumen = `
 📊 RESUMEN DE PERMISOS:
 
@@ -1848,7 +1655,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         
         alert(resumen);
         
-        // Iniciar GPS si fue otorgado
         if (permisosUbicacionOtorgado) {
             await iniciarTrackingGPSAutomatico();
         }
@@ -2274,7 +2080,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                                 ubicacionRepartidor: {
                                     lat: parseFloat(lat.toFixed(6)),
                                     lon: parseFloat(lon.toFixed(6)),
-                                    accuracy: Math.round(accuracy ),
+                                    accuracy: Math.round(accuracy),
                                     speed: Math.round(speed * 3.6),
                                     heading: Math.round(heading),
                                     timestamp: timestamp,
@@ -2440,7 +2246,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             console.log('✅ Pedido guardado en historial');
             
             if (pedidoData.clienteIdAsignado) {
-                const clienteRef = ref(db, `users/${pedidoData.clienteIdAsignado}`);
+                const clienteRef = ref(db, `usuarios/${pedidoData.clienteIdAsignado}`);
                 await update(clienteRef, {
                     pedidoActivoId: null,
                     tienePedidoAsignado: false,
@@ -2464,7 +2270,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     }
 
     // ========================================
-    // 🔥 AVANZAR ESTADO PEDIDO (MEJORADO CON DEBUG)
+    // 🔥 AVANZAR ESTADO PEDIDO (CORREGIDO)
     // ========================================
     
     window.avanzarEstadoPedido = async function(pedidoId, estadoActual) {
@@ -2482,7 +2288,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     console.log('🔍 ACEPTANDO PEDIDO - BÚSQUEDA DE CLIENTE ID');
                     console.log('═══════════════════════════════════════════════════════════');
                     
-                    // Obtener datos completos del pedido
                     const pedidoSnapshot = await get(pedidoRef);
                     const pedidoData = pedidoSnapshot.val();
                     
@@ -2498,8 +2303,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     console.log('   clientId:', pedidoData?.clientId);
                     console.log('');
                     
-                    // Buscar clienteID en TODOS los campos posibles
-                    const clienteID = pedidoData?.clienteIdAsignado || 
+                    const clienteID = pedidoData?.clienteIdAsignado ||
                                      pedidoData?.clienteID || 
                                      pedidoData?.usuarioId ||
                                      pedidoData?.userId ||
@@ -2561,25 +2365,19 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         timestamp: Date.now()
                     };
                     
-                    // Iniciar seguimiento del cliente si existe clienteID
                     if (clienteID) {
                         console.log('🗺️ Iniciando mapa y seguimiento del cliente...');
                         
-                        // Mostrar contenedor del mapa
                         document.getElementById('mapa-cliente-container').style.display = 'block';
                         
-                        // Inicializar mapa si no existe
                         if (!mapaCliente) {
                             inicializarMapaCliente();
                         }
                         
-                        // Iniciar GPS del repartidor
                         iniciarEnvioUbicacionRepartidor();
                         
-                        // Iniciar seguimiento del cliente
                         iniciarSeguimientoCliente(clienteID);
                         
-                        // Cambiar texto del botón
                         document.getElementById('verMapaBtn').textContent = '🗺️ Ocultar Mapa';
                         
                         console.log('✅ Sistemas de seguimiento iniciados');
@@ -2659,7 +2457,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             await set(ref(db, `pedidos_historial/${currentPedidoIdToCancel}`), pedidoCancelado);
             
             if (pedidoData.clienteIdAsignado) {
-                const clienteRef = ref(db, `users/${pedidoData.clienteIdAsignado}`);
+                const clienteRef = ref(db, `usuarios/${pedidoData.clienteIdAsignado}`);
                 await update(clienteRef, {
                     pedidoActivoId: null,
                     tienePedidoAsignado: false,
@@ -2682,7 +2480,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         
         document.getElementById('cancelModal').style.display = 'none';
     }
-
     // ========================================
     // LISTENER DE PEDIDOS
     // ========================================
@@ -3088,8 +2885,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         document.getElementById('imagePreview').classList.remove('active');
         document.getElementById('galleryInput').value = '';
     });
-
-    // GRABACIÓN DE AUDIO
 
     async function iniciarGrabacionAudio() {
         if (!permisosMicrofonoOtorgado) {
@@ -3519,116 +3314,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     });
 
     // ========================================
-    // SISTEMA DE ACTUALIZACIONES
-    // ========================================
-    
-    function compararVersiones(v1, v2) {
-        const partes1 = v1.split('.').map(Number);
-        const partes2 = v2.split('.').map(Number);
-        
-        for (let i = 0; i < 3; i++) {
-            if (partes1[i] > partes2[i]) return 1;
-            if (partes1[i] < partes2[i]) return -1;
-        }
-        return 0;
-    }
-
-    async function verificarActualizacion() {
-        try {
-            const versionRef = ref(db, 'app_config/version_actual');
-            const snapshot = await get(versionRef);
-            
-            if (!snapshot.exists()) {
-                return;
-            }
-            
-            const configVersion = snapshot.val();
-            const versionServidor = configVersion.numero || "1.0.0";
-            const changelog = configVersion.changelog || ["Mejoras generales"];
-            const obligatoria = configVersion.obligatoria || false;
-            
-            if (compararVersiones(versionServidor, APP_VERSION) > 0) {
-                const recordarHasta = localStorage.getItem('recordar_actualizacion_hasta');
-                const ahora = Date.now();
-                
-                if (obligatoria || !recordarHasta || ahora > parseInt(recordarHasta)) {
-                    mostrarActualizacion(versionServidor, changelog, obligatoria);
-                } else {
-                    document.getElementById('versionBadge').classList.add('show');
-                }
-            }
-            
-        } catch (error) {
-            console.error('❌ Error al verificar actualización:', error);
-        }
-    }
-
-    function mostrarActualizacion(nuevaVersion, changelog, obligatoria) {
-        document.getElementById('currentVersion').textContent = APP_VERSION;
-        document.getElementById('newVersion').textContent = nuevaVersion;
-        
-        const changelogList = document.getElementById('changelogList');
-        changelogList.innerHTML = '';
-        
-        changelog.forEach(item => {
-            const li = document.createElement('li');
-            li.textContent = item;
-            changelogList.appendChild(li);
-        });
-        
-        if (obligatoria) {
-            document.querySelector('.btn-later').style.display = 'none';
-        } else {
-            document.querySelector('.btn-later').style.display = 'block';
-        }
-        
-        document.getElementById('updateModal').classList.add('show');
-        document.getElementById('versionBadge').classList.add('show');
-    }
-
-    window.mostrarModalActualizacion = function() {
-        document.getElementById('updateModal').classList.add('show');
-    }
-
-    window.actualizarApp = function() {
-        document.getElementById('loadingOverlay').classList.add('show');
-        
-        setTimeout(() => {
-            if ('caches' in window) {
-                caches.keys().then(names => {
-                    names.forEach(name => {
-                        caches.delete(name);
-                    });
-                });
-            }
-            
-            localStorage.removeItem('recordar_actualizacion_hasta');
-            window.location.reload(true);
-        }, 2000);
-    }
-
-    window.recordarMasTarde = function() {
-        const seisHoras = 6 * 60 * 60 * 1000;
-        const recordarHasta = Date.now() + seisHoras;
-        
-        localStorage.setItem('recordar_actualizacion_hasta', recordarHasta.toString());
-        
-        document.getElementById('updateModal').classList.remove('show');
-        document.getElementById('versionBadge').classList.add('show');
-    }
-
-    onValue(ref(db, 'app_config/version_actual'), (snapshot) => {
-        if (snapshot.exists()) {
-            const configVersion = snapshot.val();
-            const versionServidor = configVersion.numero;
-            
-            if (compararVersiones(versionServidor, APP_VERSION) > 0) {
-                document.getElementById('versionBadge').classList.add('show');
-            }
-        }
-    });
-
-    // ========================================
     // EVENTOS DE VISIBILIDAD Y CONECTIVIDAD
     // ========================================
 
@@ -3732,26 +3417,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     }, 30000);
 
     // ========================================
-    // INICIALIZACIÓN FINAL
-    // ========================================
-
-    window.addEventListener('load', () => {
-        console.log('🚀 Servi Aliados - Panel Repartidor v' + APP_VERSION);
-        console.log('🔍 Características:');
-        console.log('   ✅ GPS CORREGIDO: Formato lon (NO lng)');
-        console.log('   ✅ 🔥 BOTÓN COMPLETAR PEDIDO CORREGIDO');
-        console.log('   ✅ 🗺️ MAPA DEL CLIENTE MEJORADO');
-        console.log('   ✅ 📍 DEBUGGING COMPLETO ACTIVADO');
-        console.log('   ✅ Sistema de seguimiento cliente ↔ repartidor');
-        
-        setTimeout(verificarActualizacion, 2000);
-        updateQuickLoginUI();
-    });
-
-    setInterval(verificarActualizacion, 30 * 60 * 1000);
-    
-    // ========================================
-    // 🆕 BOTÓN VER MAPA CLIENTE
+    // BOTÓN VER MAPA CLIENTE
     // ========================================
     
     document.getElementById('verMapaBtn').addEventListener('click', () => {
@@ -3783,6 +3449,36 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             document.getElementById('verMapaBtn').textContent = '🗺️ Ver Mapa Cliente';
         }
     });
+
+    // ========================================
+    // INICIALIZACIÓN FINAL
+    // ========================================
+
+    window.addEventListener('load', () => {
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('🚀 SERVI ALIADOS - PANEL REPARTIDOR v1.7.2 MAPA CORREGIDO');
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('');
+        console.log('🔥 CORRECCIONES APLICADAS:');
+        console.log('  ✅ CORRECCIÓN #1: Buscar en "usuarios/" (NO en "users/")');
+        console.log('  ✅ CORRECCIÓN #2: Usar "lon" (NO "lng")');
+        console.log('  ✅ CORRECCIÓN #3: Validación robusta de coordenadas');
+        console.log('  ✅ CORRECCIÓN #4: Marcadores Leaflet simplificados y funcionales');
+        console.log('');
+        console.log('📋 CARACTERÍSTICAS ACTIVAS:');
+        console.log('  ✅ Sistema de seguimiento cliente ↔ repartidor');
+        console.log('  ✅ Mapa del cliente con ubicación en tiempo real');
+        console.log('  ✅ GPS del repartidor enviando ubicación cada 5s');
+        console.log('  ✅ Marcadores visibles en el mapa');
+        console.log('  ✅ Debugging completo activado');
+        console.log('');
+        console.log('═══════════════════════════════════════════════════════════');
+        console.log('');
+        
+        updateQuickLoginUI();
+    });
+
 </script>
 </body>
 </html>
