@@ -1,3211 +1,6422 @@
 <!DOCTYPE html>
+
 <html lang="es">
+
 <head>
+
     <meta charset="UTF-8">
+
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <meta name="mobile-web-app-capable" content="yes">
+
     <meta name="apple-mobile-web-app-capable" content="yes">
+
     <meta http-equiv="Permissions-Policy" content="camera=*, microphone=*, geolocation=*">
+
     <meta http-equiv="Feature-Policy" content="camera *; microphone *; geolocation *">
+
     
+
     <meta name="theme-color" content="#FFC300">
+
     <meta name="mobile-web-app-status-bar-style" content="black-translucent">
+
     <link rel="manifest" href="manifest.json">
+
     
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
     
+
     <script>
+
         if ('serviceWorker' in navigator) {
+
             navigator.serviceWorker.register('/service-worker.js')
+
                 .then(reg => console.log('✅ Service Worker registrado'))
+
                 .catch(err => console.error('❌ Error SW:', err));
+
         }
+
     </script>
+
     
+
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+
     <script>
+
         eruda.init();
+
         console.log('✅ Eruda inicializado correctamente');
+
     </script>
+
     
+
     <title>Panel Repartidor - v1.8.0 OPTIMIZADO</title>
+
     <style>
+
         :root {
+
             --color-primary: #FFC300;
+
             --color-secondary: #D7D7D7;
+
             --color-background: #111111;
+
             --color-accent-danger: #C0392B;
+
             --color-waiting: #E67E22;
+
             --color-delivery: #2980B9;
+
             --color-card: #222222;
+
         }
+
+
 
         body { 
+
             margin: 0; 
+
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+
             background: var(--color-background);
+
             color: var(--color-secondary);
+
         }
+
         
+
         #loginContainer {
+
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+
             background: var(--color-background);
+
             z-index: 2000; display: flex; 
+
             justify-content: center; align-items: center; flex-direction: column;
+
         }
+
         #loginContainer > div {
+
             background: #222222;
+
             padding: 30px; border-radius: 10px; 
+
             box-shadow: 0 0 20px rgba(255,195,0,0.3);
+
             width: 90%; max-width: 350px;
+
         }
+
         #loginContainer input {
+
             background: #333;
+
             color: white;
+
             border: 1px solid #444;
+
             width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; box-sizing: border-box;
+
         }
+
         
+
         #loginContainer button {
+
             width: 100%; padding: 12px; margin-top: 5px; margin-bottom: 10px; border-radius: 4px; box-sizing: border-box;
+
             background: var(--color-primary);
+
             color: var(--color-background);
+
             border: none; font-weight: bold; cursor: pointer;
+
             transition: background-color 0.2s;
+
         }
+
         #loginContainer button:hover {
+
             background: #e6b200;
+
         }
+
         #loginContainer button:disabled {
+
             opacity: 0.6;
+
             cursor: not-allowed;
+
         }
+
         
+
         #registrationForm h3, #registrationForm p {
+
             color: var(--color-primary);
+
             text-align: center;
+
         }
+
         #registrationForm label {
+
             font-size: 0.9em; display: block; margin-top: 10px; margin-bottom: 5px;
+
             color: var(--color-secondary);
+
         }
+
         
+
         #quickLoginArea {
+
             margin-top: 15px; 
+
             border-top: 1px solid #444; 
+
             padding-top: 10px; 
+
             text-align: center;
+
         }
+
+
 
         #appContainer { display: none; max-width: 900px; margin: 20px auto; padding: 20px; }
+
         
+
         h2, h3 { color: var(--color-secondary); }
 
+
+
         .nav-buttons {
+
             display: grid;
+
             grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); 
+
             gap: 10px;
+
             margin: 20px 0;
+
         }
+
         .nav-buttons button {
+
             padding: 10px 5px; 
+
             border: none; 
+
             color: var(--color-background);
+
             border-radius: 5px; 
+
             font-weight: bold;
+
             position: relative;
+
             cursor: pointer;
+
             transition: opacity 0.2s;
+
         }
+
         .nav-buttons button:hover {
+
             opacity: 0.9;
+
         }
+
         .notification-badge {
+
             position: absolute;
+
             top: -5px;
+
             right: -5px;
+
             background-color: var(--color-accent-danger);
+
             color: white;
+
             border-radius: 50%;
+
             padding: 4px 8px;
+
             font-size: 0.7em;
+
             line-height: 1;
+
             display: none; 
+
         }
+
+
 
         .pedidos-list {
+
             background: #222222;
+
             padding: 15px; border-radius: 10px; 
+
             box-shadow: 0 0 10px rgba(0,0,0,0.5); 
+
             margin-top: 20px;
+
         }
+
         .pedido-item {
+
             padding: 10px; border-bottom: 1px solid #333; margin-bottom: 10px;
+
             background: #333333; 
+
             border-left: 5px solid var(--color-accent-danger);
+
             color: var(--color-secondary);
+
             position: relative; 
+
             border-radius: 4px;
+
         }
+
         .pedido-item.asignado { border-left: 5px solid var(--color-primary); background: #444444; }
+
         .pedido-item.esperando { border-left: 5px solid var(--color-waiting); }
+
         .pedido-item.en-camino { border-left: 5px solid var(--color-delivery); }
 
+
+
         .pedido-item strong { color: var(--color-primary); }
+
         .pedido-item button { 
+
             border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; margin-top: 5px; 
+
             font-weight: bold;
+
             transition: opacity 0.2s;
+
         }
+
         .pedido-item button:hover {
+
             opacity: 0.8;
+
         }
+
         .pedido-item .timer {
+
             font-size: 1.2em; font-weight: bold; color: var(--color-primary);
+
             margin-top: 5px; display: block;
+
         }
+
+
 
         #mapa-cliente-container {
+
             margin-top: 20px;
+
             background: var(--color-card);
+
             padding: 15px;
+
             border-radius: 10px;
+
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
+
         }
+
+
 
         #mapa-cliente {
+
             width: 100%;
+
             height: 400px;
+
             margin: 15px 0;
+
             border-radius: 12px;
+
             overflow: hidden;
+
             border: 2px solid var(--color-primary);
+
             position: relative;
+
             z-index: 1;
+
         }
+
+
 
         .custom-marker-cliente,
+
         .custom-marker-repartidor {
+
             width: 40px !important;
+
             height: 40px !important;
+
             margin: 0 !important;
+
             padding: 0 !important;
+
         }
+
+
 
         .custom-marker-cliente > div,
+
         .custom-marker-repartidor > div {
+
             width: 100%;
+
             height: 100%;
+
             border-radius: 50%;
+
             display: flex;
+
             align-items: center;
+
             justify-content: center;
+
             font-size: 20px;
+
         }
+
+
 
         .map-legend {
+
             display: flex;
+
             justify-content: space-around;
+
             margin: 10px 0;
+
             padding: 10px;
+
             background: #2a2a2a;
+
             border-radius: 8px;
+
         }
+
+
 
         .map-legend > div {
+
             display: flex;
+
             align-items: center;
+
             gap: 8px;
+
             font-size: 12px;
+
         }
+
+
 
         .map-info-box {
+
             background: var(--color-card);
+
             border: 1px solid #555;
+
             border-radius: 8px;
+
             padding: 10px;
+
             margin: 10px 0;
+
         }
+
+
 
         .map-info-box strong {
+
             color: var(--color-primary);
+
             display: block;
+
             margin-bottom: 5px;
+
         }
+
+
 
         .map-info-box p {
+
             margin: 5px 0;
+
             font-size: 0.9em;
+
         }
+
+
 
         #cancelModal {
+
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 3000;
+
             display: none; justify-content: center; align-items: center;
+
         }
+
         #cancelModalContent {
+
             background: #222222; 
+
             color: var(--color-secondary);
+
             padding: 20px; border-radius: 8px; width: 90%; max-width: 300px; text-align: center;
+
         }
+
         #cancelModalContent button {
+
             background: var(--color-accent-danger); 
+
             margin-top: 10px; margin-bottom: 5px;
+
             color: white;
+
             padding: 10px;
+
             border: none;
+
             border-radius: 5px;
+
             cursor: pointer;
+
             transition: opacity 0.2s;
+
         }
+
         #cancelModalContent button:hover {
+
             opacity: 0.8;
+
         }
+
+
 
         .chat-box {
+
              background: #222222; padding: 15px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.5); margin-top: 20px;
+
         }
+
         .mensajes-area { 
+
             max-height: 400px; 
+
             overflow-y: auto; 
+
             padding: 10px; 
+
             border: 1px solid #444; 
+
             border-radius: 5px; 
+
             background: #1a1a1a;
+
         }
+
         .mensaje { 
+
             padding: 8px 12px; 
+
             border-radius: 12px; 
+
             margin: 5px 0; 
+
             max-width: 80%; 
+
             word-wrap: break-word;
+
             clear: both;
+
         }
+
         .admin-msg { 
+
             background-color: var(--color-primary);
+
             color: var(--color-background); 
+
             float: left;
+
             margin-right: auto; 
+
         }
+
         .rep-msg { 
+
             background-color: #555555;
+
             color: white; 
+
             float: right;
+
             margin-left: auto; 
+
         }
+
         .chat-time { 
+
             font-size: 10px; 
+
             margin-top: 3px; 
+
             display: block; 
+
             text-align: right; 
+
             color: rgba(0, 0, 0, 0.7); 
+
         }
+
         .rep-msg .chat-time { 
+
             color: rgba(255, 255, 255, 0.7); 
+
         }
+
         .mensaje img {
+
             max-width: 200px;
+
             max-height: 200px;
+
             border-radius: 8px;
+
             margin-top: 5px;
+
             display: block;
+
             cursor: pointer;
+
         }
+
         .mensaje audio {
+
             width: 100%;
+
             max-width: 250px;
+
             margin-top: 5px;
+
             display: block;
+
         }
+
+
 
         .media-controls {
+
             display: flex;
+
             gap: 5px;
+
             margin-top: 10px;
+
             flex-wrap: wrap;
+
         }
+
         .media-controls button {
+
             background: #444;
+
             color: white;
+
             border: none;
+
             padding: 8px 12px;
+
             border-radius: 5px;
+
             cursor: pointer;
+
             font-size: 0.9em;
+
             transition: background 0.2s;
+
         }
+
         .media-controls button:hover {
+
             background: #555;
+
         }
+
         .media-controls button.active {
+
             background: var(--color-accent-danger);
+
         }
+
         .media-controls input[type="file"] {
+
             display: none;
+
         }
+
+
 
         .recording-indicator {
+
             display: none;
+
             align-items: center;
+
             gap: 10px;
+
             padding: 10px;
+
             background: var(--color-accent-danger);
+
             color: white;
+
             border-radius: 5px;
+
             margin-top: 10px;
+
         }
+
         .recording-indicator.active {
+
             display: flex;
+
         }
+
         .recording-dot {
+
             width: 12px;
+
             height: 12px;
+
             background: white;
+
             border-radius: 50%;
+
             animation: pulse 1.5s infinite;
+
         }
+
         @keyframes pulse {
+
             0%, 100% { opacity: 1; }
+
             50% { opacity: 0.3; }
+
         }
+
+
 
         .image-preview {
+
             display: none;
+
             margin-top: 10px;
+
             position: relative;
+
         }
+
         .image-preview.active {
+
             display: block;
+
         }
+
         .image-preview img {
+
             max-width: 100%;
+
             max-height: 150px;
+
             border-radius: 5px;
+
         }
+
         .image-preview button {
+
             position: absolute;
+
             top: 5px;
+
             right: 5px;
+
             background: var(--color-accent-danger);
+
             color: white;
+
             border: none;
+
             border-radius: 50%;
+
             width: 25px;
+
             height: 25px;
+
             cursor: pointer;
+
         }
+
+
 
         #imageModal {
+
             position: fixed;
+
             top: 0;
+
             left: 0;
+
             width: 100%;
+
             height: 100%;
+
             background: rgba(0,0,0,0.9);
+
             z-index: 4000;
+
             display: none;
+
             justify-content: center;
+
             align-items: center;
+
         }
+
         #imageModal.active {
+
             display: flex;
+
         }
+
         #imageModal img {
+
             max-width: 90%;
+
             max-height: 90%;
+
             border-radius: 10px;
+
         }
+
         #imageModal button {
+
             position: absolute;
+
             top: 20px;
+
             right: 20px;
+
             background: var(--color-accent-danger);
+
             color: white;
+
             border: none;
+
             padding: 10px 15px;
+
             border-radius: 5px;
+
             cursor: pointer;
+
             font-size: 1.2em;
+
         }
+
+
 
         .upload-progress {
+
             display: none;
+
             margin-top: 10px;
+
             padding: 10px;
+
             background: #333;
+
             border-radius: 5px;
+
             text-align: center;
+
         }
+
         .upload-progress.active {
+
             display: block;
+
         }
+
         .progress-bar {
+
             width: 100%;
+
             height: 20px;
+
             background: #444;
+
             border-radius: 10px;
+
             overflow: hidden;
+
             margin-top: 5px;
+
         }
+
         .progress-fill {
+
             height: 100%;
+
             background: var(--color-primary);
+
             width: 0%;
+
             transition: width 0.3s;
+
         }
+
+
 
         .gps-indicator {
+
             position: fixed;
+
             bottom: 20px;
+
             right: 20px;
+
             background: #27ae60;
+
             color: white;
+
             padding: 10px 15px;
+
             border-radius: 25px;
+
             font-size: 0.9em;
+
             font-weight: bold;
+
             z-index: 1000;
+
             display: none;
+
             align-items: center;
+
             gap: 8px;
+
             box-shadow: 0 4px 15px rgba(39, 174, 96, 0.5);
+
             animation: pulse-gps 2s infinite;
+
         }
+
+
 
         .gps-indicator.active {
+
             display: flex;
+
         }
+
+
 
         @keyframes pulse-gps {
+
             0%, 100% { transform: scale(1); }
+
             50% { transform: scale(1.05); }
+
         }
+
+
 
         .gps-dot {
+
             width: 10px;
+
             height: 10px;
+
             background: white;
+
             border-radius: 50%;
+
             animation: blink 1s infinite;
+
         }
+
+
 
         @keyframes blink {
+
             0%, 100% { opacity: 1; }
+
             50% { opacity: 0.3; }
+
         }
+
+
 
         .gps-indicator-repartidor {
+
             position: fixed;
+
             bottom: 20px;
+
             left: 20px;
+
             background: #2196F3;
+
             color: white;
+
             padding: 10px 15px;
+
             border-radius: 25px;
+
             font-size: 0.85em;
+
             font-weight: bold;
+
             z-index: 1000;
+
             display: none;
+
             align-items: center;
+
             gap: 8px;
+
             box-shadow: 0 4px 15px rgba(33, 150, 243, 0.5);
+
             animation: pulse-gps 2s infinite;
+
         }
+
+
 
         .gps-indicator-repartidor.active {
+
             display: flex;
+
         }
+
+
 
         .connection-status {
+
             position: fixed;
+
             top: 10px;
+
             left: 10px;
+
             background: #27ae60;
+
             color: white;
+
             padding: 8px 15px;
+
             border-radius: 20px;
+
             font-size: 0.85em;
+
             font-weight: bold;
+
             z-index: 1000;
+
             display: none;
+
             align-items: center;
+
             gap: 8px;
+
         }
+
+
 
         .connection-status.active {
+
             display: flex;
+
         }
+
+
 
         .connection-status.offline {
+
             background: #C0392B;
+
         }
+
+
 
         .status-dot {
+
             width: 8px;
+
             height: 8px;
+
             background: white;
+
             border-radius: 50%;
+
             animation: blink 1.5s infinite;
+
         }
+
+
 
         #permisosModal {
+
             position: fixed;
+
             top: 0;
+
             left: 0;
+
             width: 100%;
+
             height: 100%;
+
             background: rgba(0, 0, 0, 0.95);
+
             z-index: 15000;
+
             display: none;
+
             justify-content: center;
+
             align-items: center;
+
             padding: 20px;
+
             box-sizing: border-box;
+
         }
+
+
 
         #permisosModal.show {
+
             display: flex;
+
         }
+
+
 
         .permisos-content {
+
             background: #222;
+
             padding: 30px;
+
             border-radius: 15px;
+
             max-width: 450px;
+
             width: 100%;
+
             text-align: center;
+
             box-shadow: 0 10px 40px rgba(255, 195, 0, 0.3);
+
         }
+
+
 
         .permisos-content h2 {
+
             color: var(--color-primary);
+
             margin-bottom: 20px;
+
         }
+
+
 
         .permisos-content p {
+
             color: var(--color-secondary);
+
             margin-bottom: 20px;
+
             line-height: 1.6;
+
         }
+
+
 
         .permisos-list {
+
             text-align: left;
+
             margin: 20px 0;
+
             padding: 15px;
+
             background: #333;
+
             border-radius: 10px;
+
         }
+
+
 
         .permiso-item {
+
             display: flex;
+
             align-items: center;
+
             gap: 15px;
+
             margin: 15px 0;
+
             padding: 10px;
+
             background: #444;
+
             border-radius: 8px;
+
         }
+
+
 
         .permiso-icon {
+
             font-size: 32px;
+
             width: 50px;
+
             text-align: center;
+
         }
+
+
 
         .permiso-info {
+
             flex: 1;
+
         }
+
+
 
         .permiso-info strong {
+
             color: var(--color-primary);
+
             display: block;
+
             margin-bottom: 5px;
+
         }
+
+
 
         .permiso-info small {
+
             color: #999;
+
             font-size: 0.85em;
+
         }
+
+
 
         .permisos-warning {
+
             background: rgba(230, 126, 34, 0.2);
+
             border: 1px solid #E67E22;
+
             color: #E67E22;
+
             padding: 15px;
+
             border-radius: 8px;
+
             margin: 20px 0;
+
             font-size: 0.9em;
+
         }
+
+
 
         .permisos-buttons {
+
             display: flex;
+
             gap: 10px;
+
             margin-top: 25px;
+
         }
+
+
 
         .permisos-buttons button {
+
             flex: 1;
+
             padding: 15px;
+
             border: none;
+
             border-radius: 10px;
+
             font-weight: bold;
+
             font-size: 1em;
+
             cursor: pointer;
+
             transition: all 0.3s;
+
         }
+
+
 
         .btn-permitir {
+
             background: var(--color-primary);
+
             color: var(--color-background);
+
         }
+
+
 
         .btn-permitir:hover {
+
             background: #e6b200;
+
             transform: translateY(-2px);
+
         }
+
+
 
         .btn-omitir {
+
             background: #555;
+
             color: white;
+
         }
+
+
 
         .btn-omitir:hover {
+
             background: #666;
+
         }
+
     </style>
+
 </head>
+
 <body>
 
+
+
 <div id="connectionStatus" class="connection-status">
+
     <div class="status-dot"></div>
+
     <span id="connectionText">🟢 Online</span>
+
 </div>
+
+
 
 <div id="gpsIndicator" class="gps-indicator">
+
     <div class="gps-dot"></div>
+
     <span>📍 GPS Activo (15s)</span>
+
 </div>
+
+
 
 <div id="gps-indicator-repartidor" class="gps-indicator-repartidor">
+
     <div class="gps-dot"></div>
+
     <span>🏍️ GPS Activo (15s)</span>
+
 </div>
+
+
 
 <div id="permisosModal">
+
     <div class="permisos-content">
+
         <h2>🔐 Permisos Necesarios</h2>
+
         <p>Para usar todas las funciones necesitamos acceso a:</p>
+
         
+
         <div class="permisos-list">
+
             <div class="permiso-item">
+
                 <div class="permiso-icon">📍</div>
+
                 <div class="permiso-info">
+
                     <strong>Ubicación GPS</strong>
+
                     <small>Tracking cada 15 segundos (optimizado)</small>
+
                 </div>
+
             </div>
+
             
+
             <div class="permiso-item">
+
                 <div class="permiso-icon">📷</div>
+
                 <div class="permiso-info">
+
                     <strong>Cámara/Galería</strong>
+
                     <small>Para enviar fotos en el chat</small>
+
                 </div>
+
             </div>
+
             
+
             <div class="permiso-item">
+
                 <div class="permiso-icon">🎤</div>
+
                 <div class="permiso-info">
+
                     <strong>Micrófono</strong>
+
                     <small>Para grabar y enviar audios</small>
+
                 </div>
+
             </div>
+
         </div>
+
         
+
         <div class="permisos-warning">
+
             ⚠️ <strong>Importante:</strong> El GPS se activará automáticamente y enviará tu ubicación cada 15 segundos para optimizar costos de Firebase.
+
         </div>
+
         
+
         <div class="permisos-buttons">
+
             <button class="btn-permitir" onclick="solicitarTodosLosPermisos()">
+
                 ✅ Permitir Todo
+
             </button>
+
             <button class="btn-omitir" onclick="omitirPermisos()">
+
                 ⏭️ Continuar sin permisos
+
             </button>
+
         </div>
+
     </div>
+
 </div>
+
+
 
 <div id="loginContainer">
+
     <div id="manualLoginForm">
+
         <h3 style="text-align: center; color: var(--color-primary);">Bienvenido</h3>
+
         <p style="text-align: center; font-size: 0.9em; margin-bottom: 20px;">
+
             Inicia sesión o regístrate con tu correo y contraseña:
+
         </p>
+
         
+
         <label style="font-size: 0.8em; display: block; margin-bottom: 5px; color: var(--color-secondary);">Correo Electrónico:</label>
+
         <input type="email" id="loginEmail" placeholder="tu.correo@ejemplo.com">
+
         
+
         <label style="font-size: 0.8em; display: block; margin-bottom: 5px; color: var(--color-secondary);">Contraseña:</label>
+
         <input type="password" id="loginPassword" placeholder="Contraseña (Mín. 6 caracteres)">
+
         
+
         <button id="registerBtn">
+
             Registrarse (Crear Cuenta)
+
         </button>
+
         <button id="loginBtn" style="background: var(--color-primary); color: var(--color-background);">
+
             Iniciar Sesión
+
         </button>
+
         
+
         <p id="loginError" style="color: var(--color-accent-danger); margin-top: 10px; text-align: center;"></p>
+
         
+
         <div id="quickLoginArea" style="display: none;">
+
             <p id="quickLoginMessage" style="margin-bottom: 5px; font-size: 0.9em; color: var(--color-primary);"></p>
+
             <button id="quickLoginBtn" style="background: var(--color-primary); color: var(--color-background); border: none;">Entrar Rápido (Un Clic)</button>
+
         </div>
+
     </div>
+
     <div id="registrationForm" style="display:none;">
+
         <h3 style="color: var(--color-primary);">Completa tu Registro</h3>
+
         <p style="font-size: 0.9em; margin-bottom: 15px;">
+
             Falta información esencial para solicitar domicilios.
+
         </p>
+
         
+
         <label>Nombre completo: *</label>
+
         <input type="text" id="regName" placeholder="Tu Nombre Completo">
+
         
+
         <label>Correo Electrónico:</label>
+
         <input type="email" id="regEmailDisplay" placeholder="Email (no editable)" disabled style="color: #999;">
+
         
+
         <label>Teléfono principal: *</label>
+
         <input type="text" id="regPhone" placeholder="Tu Número de Teléfono (Único)">
 
+
+
         <label>Teléfono secundario (opcional):</label>
+
         <input type="text" id="regSecondaryPhone" placeholder="Otro Número de Contacto">
+
         
+
         <label>Dirección de residencia: *</label>
+
         <input type="text" id="regAddress" placeholder="Dirección de tu Residencia">
+
         
+
         <button id="completeRegBtn" style="background: var(--color-primary); color: var(--color-background); margin-top: 20px;">Guardar y Continuar</button>
+
         <button id="regLogoutBtn" style="background: #555555; color: white;">Cerrar Sesión</button>
+
     </div>
+
 </div>
+
+
 
 <div id="appContainer">
+
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+
         <h2 style="color: var(--color-secondary); margin: 0;">Bienvenido, <span id="repartidorName"></span>!</h2>
+
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+
             <span id="appVersionDisplay" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 15px; font-size: 0.85em; font-weight: bold;">
+
                 v1.8.0
+
             </span>
+
             <button id="verMapaBtn" style="padding: 8px 15px; background: #2196F3; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">
+
                 🗺️ Ver Mapa Cliente
+
             </button>
+
             <button id="logoutBtn" style="padding: 8px 15px; background: var(--color-accent-danger); color: white; border: none; border-radius: 5px; font-weight: bold;">
+
                 Cerrar Sesión
+
             </button>
+
         </div>
+
     </div>
+
+
 
     <div class="nav-buttons">
+
         <button id="showChatBtn" style="background: var(--color-primary);">💬 Chat</button>
+
         <button id="showPendientesBtn" style="background: var(--color-accent-danger);">
+
             📦 Pendientes <span id="pendientesBadge" class="notification-badge">!</span>
+
         </button>
+
         <button id="showAsignadosBtn" style="background: var(--color-primary);">🚚 Asignados (<span id="asignadosCount">0</span>)</button>
+
         <button id="showHistorialBtn" style="background: var(--color-secondary); color: var(--color-background);">📜 Historial</button>
+
     </div>
+
     
+
     <div id="chatSection">
+
         <h3 style="color: var(--color-secondary);">💬 Chat con Administrador</h3>
+
         <div class="chat-box">
+
             <div class="mensajes-area" id="chatBox">Esperando mensaje del Admin...</div>
+
             
+
             <div class="media-controls">
+
                 <button id="sendGalleryBtn" title="Seleccionar foto de galería">🖼️ Galería</button>
+
                 <button id="recordAudioBtn" title="Grabar audio">🎤 Grabar Audio</button>
+
                 <input type="file" id="galleryInput" accept="image/*" style="display: none;">
+
             </div>
+
+
 
             <div class="audio-preview" id="audioPreview" style="display: none; margin-top: 10px; padding: 10px; background: #333; border-radius: 5px;">
+
                 <p style="color: #FFC300; margin: 0 0 5px 0;">🎤 Audio grabado:</p>
+
                 <audio id="previewAudio" controls style="width: 100%; max-width: 300px;"></audio>
+
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
+
                     <button id="sendAudioFileBtn" style="background: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; flex: 1;">✅ Enviar Audio</button>
+
                     <button id="cancelAudioBtn" style="background: var(--color-accent-danger); color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer;">✕ Cancelar</button>
+
                 </div>
+
             </div>
+
             
+
             <div class="recording-indicator" id="recordingIndicator">
+
                 <div class="recording-dot"></div>
+
                 <span id="recordingTimer">00:00</span>
+
                 <button id="stopRecordingBtn" style="background: var(--color-accent-danger); color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Detener</button>
+
             </div>
+
             
+
             <div class="image-preview" id="imagePreview">
+
                 <img id="previewImg" src="" alt="Preview">
+
                 <button id="cancelImageBtn">✕</button>
+
             </div>
+
             
+
             <div class="upload-progress" id="uploadProgress">
+
                 <p>Subiendo archivo...</p>
+
                 <div class="progress-bar">
+
                     <div class="progress-fill" id="progressFill"></div>
+
                 </div>
+
                 <p id="progressText">0%</p>
+
             </div>
+
             
+
             <div style="display: flex; gap: 10px; margin-top: 10px;">
+
                 <input type="text" id="mensajeInput" placeholder="Escribe un mensaje..." style="flex-grow: 1; background: #333; color: white; border: 1px solid #555; padding: 10px; border-radius: 5px;">
+
                 <button id="enviarBtn" style="background: var(--color-primary); color: var(--color-background); border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">Enviar</button>
+
             </div>
+
         </div>
+
     </div>
+
+
 
     <div id="pendientesSection" style="display:none;">
+
         <h3 style="color: var(--color-secondary);">📦 Nuevos Pedidos (Pendientes)</h3>
+
         <div class="pedidos-list" id="pedidosList">Cargando pedidos pendientes...</div>
+
     </div>
+
     
+
     <div id="asignadosSection" style="display:none;">
+
         <h3 style="color: var(--color-secondary);">🚚 Mis Pedidos Asignados</h3>
+
         
+
         <div id="mapa-cliente-container" style="display: none;">
+
             <h4 style="color: var(--color-primary); margin-top: 20px;">🗺️ Ubicación del Cliente</h4>
+
             
+
             <div id="mapa-cliente"></div>
+
             
+
             <div class="map-legend">
+
                 <div>
+
                     <div style="width: 20px; height: 20px; border-radius: 50%; background-color: #4CAF50;"></div>
+
                     <span>📍 Cliente</span>
+
                 </div>
+
                 <div>
+
                     <div style="width: 20px; height: 20px; border-radius: 50%; background-color: #2196F3;"></div>
+
                     <span>🏍️ Tú</span>
+
                 </div>
+
             </div>
+
             
+
             <div class="map-info-box">
+
                 <strong>📊 Información de Navegación</strong>
+
                 <p id="distancia-cliente">📏 Calculando distancia...</p>
+
                 <p id="direccion-cliente">🧭 Calculando dirección...</p>
+
             </div>
+
         </div>
+
         
+
         <div class="pedidos-list" id="pedidosAsignadosList">No tienes pedidos asignados actualmente.</div>
+
     </div>
+
+
 
     <div id="historialSection" style="display:none;">
+
         <h3 style="color: var(--color-secondary);">📜 Historial de Domicilios Completados/Cancelados</h3>
+
         <div class="pedidos-list" id="pedidosHistorialList">Cargando historial...</div>
+
     </div>
+
 </div>
+
+
 
 <div id="cancelModal">
+
     <div id="cancelModalContent">
+
         <h4>¿Por qué deseas cancelar este domicilio?</h4>
+
         <div id="motivosContainer">
+
             <button onclick="window.ejecutarCancelacionConMotivo('Envío/Domicilio mal tomado')" style="background: var(--color-accent-danger); width: 100%;">Envío/Domicilio mal tomado</button>
+
             <button onclick="window.ejecutarCancelacionConMotivo('Me varé (Problemas con el vehículo)')" style="background: var(--color-accent-danger); width: 100%;">Me varé (Problemas con el vehículo)</button>
+
             <button onclick="window.ejecutarCancelacionConMotivo('Fin de turno/No puedo cubrirlo')" style="background: var(--color-accent-danger); width: 100%;">Fin de turno/No puedo cubrirlo</button>
+
             <button onclick="window.ejecutarCancelacionConMotivo('Corrección de datos / Contacto fallido')" style="background: var(--color-accent-danger); width: 100%;">Corrección de datos / Contacto fallido</button>
+
         </div>
+
         <button onclick="document.getElementById('cancelModal').style.display='none';" style="background: #555555; width: 100%; margin-top: 15px; color: white;">Cerrar</button>
+
     </div>
+
 </div>
 
+
+
 <div id="imageModal">
+
     <button onclick="document.getElementById('imageModal').classList.remove('active');">✕ Cerrar</button>
+
     <img id="modalImage" src="" alt="Imagen completa">
+
 </div>
+
+
 
 <audio id="notificationSound" src="https://github.com/dt9650329-ops/Chat-administrador-/raw/f67a159f93aed6be1d6f7f02709384111cd84b7e/%E2%9C%A8Monedas%20Cayendo%20__%20Efectos%20De%20Sonidos(MP3_160K).mp3" preload="auto"></audio>
 
+
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script type="module">
 
+
+
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
     import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
     import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
+
+
     const firebaseConfig = {
+
       apiKey: "AIzaSyAZX7Q5B29Xti4YtV9wXuiREVdkgcclv9U",
+
       authDomain: "domicilios-1cd74.firebaseapp.com",
+
       databaseURL: "https://domicilios-1cd74-default-rtdb.firebaseio.com",
+
       projectId: "domicilios-1cd74",
+
       storageBucket: "domicilios-1cd74.firebasestorage.app",
+
       messagingSenderId: "771819437001",
+
       appId: "1:771819437001:web:b9c8f5e4d3a2c1b0a1b2c3"
+
     };
 
+
+
     const app = initializeApp(firebaseConfig);
+
     const db = getDatabase(app);
+
     const auth = getAuth(app);
+
     const storage = getStorage(app);
 
+
+
     window.db = db;
+
     window.ref = ref;
+
     window.update = update;
+
     window.get = get;
+
     window.onValue = onValue;
+
     window.off = off;
 
+
+
     const APP_VERSION = "1.8.0";
+
     
+
     window.addEventListener('DOMContentLoaded', () => {
+
         const versionDisplay = document.getElementById('appVersionDisplay');
+
         if (versionDisplay) {
+
             versionDisplay.textContent = `v${APP_VERSION}`;
+
         }
+
     });
 
+
+
     let repartidorUID = null;
+
     let repartidorNombre = "Repartidor";
+
     let timerInterval = null; 
+
     let currentPedidoIdToCancel = null; 
+
     let initialLoad = true;
+
     
+
     window.currentRepartidorUID = null;
+
     window.currentRepartidorNombre = null;
+
     window.currentClienteID = null;
+
     
+
     let selectedImageFile = null;
+
     let selectedAudioFile = null;
+
     let mediaRecorder = null;
+
     let audioChunks = [];
+
     let isRecording = false;
+
     
+
     let watchId = null;
+
     let lastLocationUpdate = 0;
+
     const LOCATION_UPDATE_INTERVAL = 15000; // 🔥 15 SEGUNDOS (optimizado)
+
     let isTrackingEnabled = false;
+
     let pedidosActivos = {};
+
     let gpsErrorCount = 0;
+
     const MAX_GPS_ERRORS = 3;
 
+
+
     let heartbeatInterval = null;
+
     let sessionActive = false;
 
+
+
     let wakeLock = null;
+
     let isWakeLockSupported = 'wakeLock' in navigator;
 
+
+
     let locationSendInterval = null;
+
     
+
     let backgroundGeoInterval = null;
+
     let isBackgroundMode = false;
 
+
+
     let permisosMultimediaOtorgados = false;
+
     let permisosCamaraOtorgado = false;
+
     let permisosMicrofonoOtorgado = false;
+
     let permisosUbicacionOtorgado = false;
 
+
+
     // 🔥 VARIABLES DEL MAPA (OPTIMIZADAS)
+
     let mapaCliente = null;
+
     let marcadorCliente = null;
+
     let marcadorRepartidor = null;
+
     let clienteUbicacionListener = null;
+
     let repartidorCoords = null;
+
     let clienteCoordsRepartidorApp = null;
+
     let repartidorLocationWatchId = null;
+
     let isRepartidorLocationActive = false;
+
     let lastRepartidorLocationUpdate = 0;
+
     const REPARTIDOR_LOCATION_INTERVAL = 15000; // 🔥 15 SEGUNDOS
 
+
+
     // 🆕 VARIABLE PARA GUARDAR EL PEDIDO ACTIVO Y PERSISTIR UBICACIÓN
+
     let activePedidoData = null;
 
+
+
     // ========================================
+
     // 🆕 FUNCIONES PARA PERSISTIR UBICACIÓN DEL CLIENTE
+
     // ========================================
+
+
 
     function guardarUbicacionClienteEnStorage(clienteID, coords) {
+
         try {
+
             const data = {
+
                 clienteID: clienteID,
+
                 coords: coords,
+
                 timestamp: Date.now()
+
             };
+
             localStorage.setItem('cliente_ubicacion_activa', JSON.stringify(data));
+
             console.log('💾 Ubicación del cliente guardada en localStorage:', data);
+
         } catch (error) {
+
             console.error('❌ Error al guardar ubicación en localStorage:', error);
+
         }
+
     }
+
+
 
     function cargarUbicacionClienteDeStorage() {
+
         try {
+
             const data = localStorage.getItem('cliente_ubicacion_activa');
+
             if (data) {
+
                 const parsed = JSON.parse(data);
+
                 console.log('📂 Ubicación del cliente cargada desde localStorage:', parsed);
+
                 return parsed;
+
             }
+
         } catch (error) {
+
             console.error('❌ Error al cargar ubicación desde localStorage:', error);
+
         }
+
         return null;
+
     }
+
+
 
     function limpiarUbicacionClienteDeStorage() {
+
         try {
+
             localStorage.removeItem('cliente_ubicacion_activa');
+
             console.log('🗑️ Ubicación del cliente eliminada de localStorage');
+
         } catch (error) {
+
             console.error('❌ Error al limpiar ubicación de localStorage:', error);
+
         }
+
     }
 
+
+
     // ========================================
+
     // FUNCIONES DE DEBUGGING MEJORADAS
+
     // ========================================
+
+
 
     function logDebugCliente(mensaje, datos = null) {
+
         console.log(`🔍 [CLIENTE] ${mensaje}`, datos || '');
+
     }
+
+
 
     function logDebugRepartidor(mensaje, datos = null) {
+
         console.log(`🏍️ [REPARTIDOR] ${mensaje}`, datos || '');
+
     }
+
+
 
     function logDebugMapa(mensaje, datos = null) {
+
         console.log(`🗺️ [MAPA] ${mensaje}`, datos || '');
+
     }
 
+
+
     // ========================================
+
     // INICIALIZAR MAPA
+
     // ========================================
+
+
 
     function inicializarMapaCliente() {
+
         logDebugMapa('Inicializando mapa del cliente...');
+
         
+
         if (mapaCliente) {
+
             logDebugMapa('Removiendo mapa existente');
+
             mapaCliente.remove();
+
             mapaCliente = null;
+
             marcadorCliente = null;
+
             marcadorRepartidor = null;
+
         }
+
+
 
         const defaultCoords = [4.710989, -74.072092];
+
         
+
         try {
+
             mapaCliente = L.map('mapa-cliente', {
+
                 center: defaultCoords,
+
                 zoom: 13,
+
                 zoomControl: true,
+
                 attributionControl: true
+
             });
+
+
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+
                 attribution: '© OpenStreetMap contributors',
+
                 maxZoom: 19
+
             }).addTo(mapaCliente);
 
+
+
             setTimeout(() => {
+
                 if (mapaCliente) {
+
                     mapaCliente.invalidateSize();
+
                     logDebugMapa('Tamaño del mapa actualizado');
+
                 }
+
             }, 300);
+
             
+
             logDebugMapa('✅ Mapa del cliente inicializado correctamente');
+
         } catch (error) {
+
             console.error('❌ Error al inicializar mapa:', error);
+
         }
+
     }
 
+
+
     // ========================================
+
     // 🔥 AGREGAR MARCADOR DEL CLIENTE (CORREGIDO CON "lon")
+
     // ========================================
+
+
 
     function agregarMarcadorClienteEnMapaRepartidor(coords) {
+
         logDebugCliente('Intentando agregar marcador del cliente', coords);
+
         
+
         // 🔥 VALIDAR QUE COORDS TENGA "lon" (NO "lng")
+
         if (!coords || !coords.lat || !coords.lon) {
+
             console.error('❌ Coordenadas del cliente inválidas:', coords);
+
             return;
+
         }
 
+
+
         const lat = parseFloat(coords.lat);
+
         const lon = parseFloat(coords.lon);
+
         
+
         if (isNaN(lat) || isNaN(lon)) {
+
             console.error('❌ Coordenadas del cliente son NaN:', coords);
+
             return;
+
         }
+
+
 
         if (lat === 0 && lon === 0) {
+
             console.warn('⚠️ Coordenadas en (0, 0) - ubicación inválida');
+
             return;
+
         }
 
+
+
         if (!mapaCliente) {
+
             console.error('❌ Mapa no inicializado');
+
             inicializarMapaCliente();
+
             setTimeout(() => agregarMarcadorClienteEnMapaRepartidor(coords), 500);
+
             return;
+
         }
+
         
+
         clienteCoordsRepartidorApp = coords;
+
         
+
         // 🆕 GUARDAR EN LOCALSTORAGE
+
         if (window.currentClienteID) {
+
             guardarUbicacionClienteEnStorage(window.currentClienteID, coords);
+
         }
+
         
+
         try {
+
             if (marcadorCliente) {
+
                 logDebugCliente('Actualizando marcador existente');
+
                 marcadorCliente.setLatLng([lat, lon]);
+
             } else {
+
                 logDebugCliente('Creando nuevo marcador del cliente');
+
                 
+
                 const iconCliente = L.divIcon({
+
                     className: 'custom-marker-cliente',
+
                     html: '<div style="background-color: #4CAF50; width: 35px; height: 35px; border-radius: 50%; border: 4px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 18px;">📍</div>',
+
                     iconSize: [35, 35],
+
                     iconAnchor: [17, 17]
+
                 });
+
+
 
                 marcadorCliente = L.marker([lat, lon], { 
+
                     icon: iconCliente,
+
                     title: 'Cliente'
+
                 }).addTo(mapaCliente);
+
                 
+
                 marcadorCliente.bindPopup('<b>📍 Cliente</b><br>Ubicación actual');
+
                 
+
                 logDebugCliente('✅ Marcador del cliente agregado al mapa');
+
                 
+
                 // Centrar mapa en el cliente
+
                 mapaCliente.setView([lat, lon], 15);
+
             }
+
             
+
             // Actualizar información de distancia si ya tenemos ubicación del repartidor
+
             if (repartidorCoords) {
+
                 calcularDistanciaYDireccion();
+
             } else {
+
                 document.getElementById('distancia-cliente').textContent = '📏 Esperando tu ubicación GPS...';
+
                 document.getElementById('direccion-cliente').textContent = '🧭 Activando GPS del repartidor...';
+
             }
+
             
+
         } catch (error) {
+
             console.error('❌ Error al agregar marcador del cliente:', error);
+
         }
+
     }
 
+
+
     // ========================================
+
     // AGREGAR MARCADOR DEL REPARTIDOR
+
     // ========================================
+
+
 
     function agregarMarcadorRepartidorEnMapa(coords) {
+
         logDebugRepartidor('Intentando agregar marcador del repartidor', coords);
+
         
+
         if (!coords || !coords.lat || !coords.lon) {
+
             console.error('❌ Coordenadas del repartidor inválidas:', coords);
+
             return;
+
         }
+
+
 
         const lat = parseFloat(coords.lat);
+
         const lon = parseFloat(coords.lon);
+
         
+
         if (isNaN(lat) || isNaN(lon)) {
+
             console.error('❌ Coordenadas del repartidor son NaN:', coords);
+
             return;
+
         }
+
+
 
         if (!mapaCliente) {
+
             console.warn('⚠️ Mapa no inicializado, esperando...');
+
             return;
+
         }
+
         
+
         repartidorCoords = coords;
+
         
+
         try {
+
             if (marcadorRepartidor) {
+
                 logDebugRepartidor('Actualizando marcador existente');
+
                 marcadorRepartidor.setLatLng([lat, lon]);
+
             } else {
+
                 logDebugRepartidor('Creando nuevo marcador del repartidor');
+
                 
+
                 const iconRepartidor = L.divIcon({
+
                     className: 'custom-marker-repartidor',
+
                     html: '<div style="background-color: #2196F3; width: 35px; height: 35px; border-radius: 50%; border: 4px solid white; box-shadow: 0 2px 10px rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; font-size: 18px;">🏍️</div>',
+
                     iconSize: [35, 35],
+
                     iconAnchor: [17, 17]
+
                 });
+
+
 
                 marcadorRepartidor = L.marker([lat, lon], { 
+
                     icon: iconRepartidor,
+
                     title: 'Tú (Repartidor)'
+
                 }).addTo(mapaCliente);
+
                 
+
                 marcadorRepartidor.bindPopup('<b>🏍️ Tú</b><br>Tu ubicación actual');
+
                 
+
                 logDebugRepartidor('✅ Marcador del repartidor agregado al mapa');
+
             }
+
             
+
             // Actualizar información de distancia si ya tenemos ubicación del cliente
+
             if (clienteCoordsRepartidorApp) {
+
                 calcularDistanciaYDireccion();
+
             }
+
             
+
         } catch (error) {
+
             console.error('❌ Error al agregar marcador del repartidor:', error);
+
         }
+
     }
 
+
+
     // ========================================
+
     // CALCULAR DISTANCIA Y DIRECCIÓN
+
     // ========================================
+
+
 
     function calcularDistancia(lat1, lon1, lat2, lon2) {
+
         const R = 6371e3; // Radio de la Tierra en metros
+
         const φ1 = lat1 * Math.PI / 180;
+
         const φ2 = lat2 * Math.PI / 180;
+
         const Δφ = (lat2 - lat1) * Math.PI / 180;
+
         const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+
 
         const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+
                 Math.cos(φ1) * Math.cos(φ2) *
+
                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
+
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 
+
+
         return R * c; // Distancia en metros
+
     }
+
+
 
     function calcularDireccion(lat1, lon1, lat2, lon2) {
+
         const φ1 = lat1 * Math.PI / 180;
+
         const φ2 = lat2 * Math.PI / 180;
+
         const Δλ = (lon2 - lon1) * Math.PI / 180;
 
+
+
         const y = Math.sin(Δλ) * Math.cos(φ2);
+
         const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+
         const θ = Math.atan2(y, x);
+
         const bearing = (θ * 180 / Math.PI + 360) % 360;
 
+
+
         const directions = ['Norte ⬆️', 'Noreste ↗️', 'Este ➡️', 'Sureste ↘️', 'Sur ⬇️', 'Suroeste ↙️', 'Oeste ⬅️', 'Noroeste ↖️'];
+
         const index = Math.round(bearing / 45) % 8;
+
         
+
         return directions[index];
+
     }
+
+
 
     function calcularDistanciaYDireccion() {
+
         if (!clienteCoordsRepartidorApp || !repartidorCoords) {
+
             logDebugMapa('⚠️ No se pueden calcular distancia/dirección: faltan coordenadas');
+
             return;
+
         }
+
         
+
         try {
+
             const distancia = calcularDistancia(
+
                 repartidorCoords.lat, repartidorCoords.lon,
+
                 clienteCoordsRepartidorApp.lat, clienteCoordsRepartidorApp.lon
+
             );
+
             
+
             const direccion = calcularDireccion(
+
                 repartidorCoords.lat, repartidorCoords.lon,
+
                 clienteCoordsRepartidorApp.lat, clienteCoordsRepartidorApp.lon
+
             );
+
             
+
             const distanciaKm = (distancia / 1000).toFixed(2);
+
             const tiempoEstimado = Math.round(distancia / (30000 / 60)); // 30 km/h promedio
+
             
+
             document.getElementById('distancia-cliente').textContent = 
+
                 `📏 Distancia: ${distanciaKm} km (${tiempoEstimado} min aprox.)`;
+
             document.getElementById('direccion-cliente').textContent = 
+
                 `🧭 Dirección: ${direccion}`;
+
             
+
             logDebugMapa(`📊 Distancia: ${distanciaKm} km, Dirección: ${direccion}`);
+
             
+
             // Ajustar zoom del mapa para mostrar ambos marcadores
+
             if (mapaCliente && marcadorCliente && marcadorRepartidor) {
+
                 const bounds = L.latLngBounds([
+
                     [clienteCoordsRepartidorApp.lat, clienteCoordsRepartidorApp.lon],
+
                     [repartidorCoords.lat, repartidorCoords.lon]
+
                 ]);
+
                 mapaCliente.fitBounds(bounds, { padding: [50, 50] });
+
             }
+
             
+
         } catch (error) {
+
             console.error('❌ Error al calcular distancia/dirección:', error);
+
         }
+
     }
 
+
+
     // ========================================
+
     // 🔥 INICIAR SEGUIMIENTO DEL CLIENTE (CORREGIDO CON "lon" Y PERSISTENCIA)
+
     // ========================================
+
+
 
     function iniciarSeguimientoCliente(clienteID) {
+
         console.log('');
+
         console.log('═══════════════════════════════════════════════════════════');
+
         console.log('👁️ INICIANDO SEGUIMIENTO DEL CLIENTE v1.8.0');
+
         console.log('═══════════════════════════════════════════════════════════');
+
         logDebugCliente(`Cliente ID recibido: ${clienteID}`);
+
         
+
         if (!clienteID) {
+
             console.error('❌ ERROR CRÍTICO: clienteID es null o undefined');
+
             alert('⚠️ Error: No se pudo obtener el ID del cliente. El mapa no mostrará su ubicación.');
+
             return;
+
         }
+
         
+
         window.currentClienteID = clienteID;
+
         
+
         // 🆕 INTENTAR CARGAR UBICACIÓN GUARDADA PRIMERO
+
         const ubicacionGuardada = cargarUbicacionClienteDeStorage();
+
         if (ubicacionGuardada && ubicacionGuardada.clienteID === clienteID) {
+
             console.log('📂 Restaurando ubicación del cliente desde localStorage');
+
             agregarMarcadorClienteEnMapaRepartidor(ubicacionGuardada.coords);
+
         }
+
         
+
         // Detener listener anterior si existe
+
         if (clienteUbicacionListener) {
+
             try {
+
                 off(ref(db, `usuarios/${clienteID}`), 'value', clienteUbicacionListener);
+
                 logDebugCliente('🛑 Listener anterior detenido');
+
             } catch (error) {
+
                 console.warn('⚠️ Error al detener listener anterior:', error);
+
             }
+
         }
+
         
+
         // 🔥 USAR "usuarios/" (NO "users/")
+
         const clienteRef = ref(db, `usuarios/${clienteID}`);
+
         logDebugCliente(`✅ Usando ruta correcta: usuarios/${clienteID}`);
+
         
+
         try {
+
             clienteUbicacionListener = onValue(clienteRef, (snapshot) => {
+
                 logDebugCliente('📡 Snapshot recibido del cliente');
+
                 
+
                 if (!snapshot.exists()) {
+
                     console.warn('⚠️ Datos del cliente no disponibles en Firebase');
+
                     console.warn(`⚠️ Ruta intentada: usuarios/${clienteID}`);
+
                     document.getElementById('distancia-cliente').textContent = '📏 Cliente no encontrado en la base de datos';
+
                     return;
+
                 }
+
                 
+
                 const clienteData = snapshot.val();
+
                 logDebugCliente('📊 Datos completos del cliente:', clienteData);
+
                 
+
                 if (!clienteData.gpsActivo) {
+
                     console.warn('⚠️ GPS del cliente no está activo');
+
                     console.warn('   gpsActivo:', clienteData.gpsActivo);
+
                     document.getElementById('distancia-cliente').textContent = '📏 GPS del cliente desactivado';
+
                     document.getElementById('direccion-cliente').textContent = '🧭 Esperando que el cliente active GPS...';
+
                     return;
+
                 }
+
                 
+
                 logDebugCliente('✅ GPS del cliente ACTIVO');
+
                 
+
                 // 🔥 BUSCAR CON "lon" (NO "lng")
+
                 let clienteCoords = null;
+
                 
+
                 // Opción 1: ubicacionActual (con "lon")
+
                 if (clienteData.ubicacionActual && 
+
                     clienteData.ubicacionActual.lat && 
+
                     clienteData.ubicacionActual.lon) {
+
                     
+
                     clienteCoords = {
+
                         lat: parseFloat(clienteData.ubicacionActual.lat),
+
                         lon: parseFloat(clienteData.ubicacionActual.lon)
+
                     };
+
                     logDebugCliente('✅ Ubicación encontrada en ubicacionActual:', clienteCoords);
+
                 }
+
                 // Opción 2: ubicacion (con "lon")
+
                 else if (clienteData.ubicacion && 
+
                          clienteData.ubicacion.lat && 
+
                          clienteData.ubicacion.lon) {
+
                     
+
                     clienteCoords = {
+
                         lat: parseFloat(clienteData.ubicacion.lat),
+
                         lon: parseFloat(clienteData.ubicacion.lon)
+
                     };
+
                     logDebugCliente('✅ Ubicación encontrada en ubicacion:', clienteCoords);
+
                 }
+
                 // Opción 3: campos directos
+
                 else if (clienteData.lat && clienteData.lon) {
+
                     clienteCoords = {
+
                         lat: parseFloat(clienteData.lat),
+
                         lon: parseFloat(clienteData.lon)
+
                     };
+
                     logDebugCliente('✅ Ubicación encontrada en campos directos:', clienteCoords);
+
                 }
+
                 
+
                 if (!clienteCoords) {
+
                     console.error('❌ NO SE PUDO OBTENER UBICACIÓN DEL CLIENTE');
+
                     console.error('Estructura de datos recibida:', clienteData);
+
                     console.error('Campos buscados:');
+
                     console.error('  - ubicacionActual.lat/lon:', clienteData.ubicacionActual);
+
                     console.error('  - ubicacion.lat/lon:', clienteData.ubicacion);
+
                     console.error('  - lat/lon directos:', clienteData.lat, clienteData.lon);
+
                     document.getElementById('distancia-cliente').textContent = '📏 No se pudo obtener ubicación del cliente';
+
                     document.getElementById('direccion-cliente').textContent = '🧭 Verifica que el cliente tenga GPS activo';
+
                     return;
+
                 }
+
                 
+
                 logDebugCliente('🎯 Coordenadas finales del cliente:', clienteCoords);
+
                 
+
                 // VALIDACIÓN
+
                 if (isNaN(clienteCoords.lat) || isNaN(clienteCoords.lon)) {
+
                     console.error('❌ Coordenadas inválidas (NaN):', clienteCoords);
+
                     return;
+
                 }
+
                 
+
                 if (clienteCoords.lat === 0 && clienteCoords.lon === 0) {
+
                     console.warn('⚠️ Coordenadas en (0, 0) - ubicación inválida');
+
                     document.getElementById('distancia-cliente').textContent = '📏 Ubicación del cliente inválida';
+
                     return;
+
                 }
+
                 
+
                 // Validar rango de coordenadas de Colombia
+
                 if (clienteCoords.lat < -4.5 || clienteCoords.lat > 13.5 || 
+
                     clienteCoords.lon < -79.5 || clienteCoords.lon > -66.5) {
+
                     console.warn('⚠️ Coordenadas fuera del rango de Colombia:', clienteCoords);
+
                 }
+
                 
+
                 logDebugCliente('✅ Coordenadas validadas correctamente');
+
                 logDebugCliente('📍 Agregando marcador del cliente al mapa...');
+
                 
+
                 agregarMarcadorClienteEnMapaRepartidor(clienteCoords);
+
                 
+
             }, (error) => {
+
                 console.error('❌ Error en listener del cliente:', error);
+
                 alert(`❌ Error al obtener ubicación del cliente:\n\n${error.message}`);
+
             });
+
             
+
             logDebugCliente('✅ Listener de ubicación del cliente activado');
+
             console.log('═══════════════════════════════════════════════════════════');
+
             console.log('');
+
         } catch (error) {
+
             console.error('❌ Error al configurar listener:', error);
+
             alert(`❌ Error al iniciar seguimiento:\n\n${error.message}`);
+
         }
+
     }
 
+
+
     // ========================================
+
     // 🔥 ENVÍO DE UBICACIÓN DEL REPARTIDOR (OPTIMIZADO A 15 SEGUNDOS)
+
     // ========================================
+
+
 
     function iniciarEnvioUbicacionRepartidor() {
+
         if (isRepartidorLocationActive) {
+
             logDebugRepartidor('⚠️ Sistema de ubicación ya está activo');
+
             return;
+
         }
+
         
+
         if (!navigator.geolocation) {
+
             console.error('❌ Geolocalización no soportada');
+
             return;
+
         }
+
         
+
         logDebugRepartidor('Iniciando envío automático de ubicación (cada 15s)...');
+
         isRepartidorLocationActive = true;
+
         
+
         document.getElementById('gps-indicator-repartidor').classList.add('active');
+
         
+
         repartidorLocationWatchId = navigator.geolocation.watchPosition(
+
             (position) => {
+
                 const now = Date.now();
+
                 
+
                 // 🔥 OPTIMIZACIÓN: Solo enviar cada 15 segundos
+
                 if (now - lastRepartidorLocationUpdate < REPARTIDOR_LOCATION_INTERVAL) {
+
                     return;
+
                 }
+
                 
+
                 lastRepartidorLocationUpdate = now;
+
                 
+
                 const lat = position.coords.latitude;
+
                 const lon = position.coords.longitude;
+
                 const accuracy = position.coords.accuracy;
+
                 
+
                 logDebugRepartidor(`📍 Ubicación: ${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracy)}m) [15s]`);
+
                 
+
                 // Actualizar marcador en el mapa
+
                 agregarMarcadorRepartidorEnMapa({ lat, lon });
+
                 
+
                 // Enviar a Firebase
+
                 enviarUbicacionRepartidorAFirebase(lat, lon, accuracy);
+
             },
+
             (error) => {
+
                 console.error('❌ Error GPS Repartidor:', error.message);
+
             },
+
             {
+
                 enableHighAccuracy: true,
+
                 timeout: 10000,
+
                 maximumAge: 0
+
             }
+
         );
+
         
+
         logDebugRepartidor('✅ Sistema de ubicación iniciado (cada 15s - optimizado)');
+
     }
+
+
 
     async function enviarUbicacionRepartidorAFirebase(lat, lon, accuracy) {
+
         if (!window.currentRepartidorUID || !db) {
+
             console.warn('⚠️ No se puede enviar ubicación: sistema no inicializado');
+
             return;
+
         }
+
         
+
         try {
+
             const timestamp = Date.now();
+
             const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+
             
+
             await update(ref(db, `repartidores_info/${window.currentRepartidorUID}`), {
+
                 ubicacion: {
+
                     lat: parseFloat(lat.toFixed(6)),
+
                     lon: parseFloat(lon.toFixed(6))
+
                 },
+
                 ubicacionActual: {
+
                     lat: parseFloat(lat.toFixed(6)),
+
                     lon: parseFloat(lon.toFixed(6)),
+
                     accuracy: Math.round(accuracy),
+
                     timestamp: timestamp,
+
                     googleMapsUrl: googleMapsUrl
+
                 },
+
                 lastSeen: timestamp,
+
                 gpsActivo: true
+
             });
+
             
+
             logDebugRepartidor(`✅ Ubicación → Firebase: ${lat.toFixed(6)}, ${lon.toFixed(6)} [15s]`);
+
             
+
         } catch (error) {
+
             console.error('❌ Error al enviar ubicación:', error);
+
         }
+
     }
+
+
 
     function detenerEnvioUbicacionRepartidor() {
+
         if (repartidorLocationWatchId !== null) {
+
             navigator.geolocation.clearWatch(repartidorLocationWatchId);
+
             repartidorLocationWatchId = null;
+
         }
+
         
+
         isRepartidorLocationActive = false;
+
         logDebugRepartidor('🛑 Envío de ubicación detenido');
+
         
+
         document.getElementById('gps-indicator-repartidor').classList.remove('active');
+
         
+
         if (window.currentRepartidorUID && db) {
+
             update(ref(db, `repartidores_info/${window.currentRepartidorUID}`), {
+
                 gpsActivo: false
+
             }).catch(err => console.error('Error al actualizar estado GPS:', err));
+
         }
+
     }
 
+
+
     // ========================================
+
     // DETENER SEGUIMIENTO
+
     // ========================================
+
+
 
     window.detenerSeguimiento = function() {
+
         logDebugMapa('🛑 Deteniendo seguimiento...');
+
         
+
         if (clienteUbicacionListener && window.currentClienteID) {
+
             try {
+
                 off(ref(db, `usuarios/${window.currentClienteID}`), 'value', clienteUbicacionListener);
+
                 clienteUbicacionListener = null;
+
                 logDebugCliente('✅ Listener del cliente detenido');
+
             } catch (error) {
+
                 console.warn('⚠️ Error al detener listener:', error);
+
             }
+
         }
+
         
+
         detenerEnvioUbicacionRepartidor();
+
         
+
         if (mapaCliente) {
+
             if (marcadorCliente) {
+
                 mapaCliente.removeLayer(marcadorCliente);
+
                 marcadorCliente = null;
+
             }
+
             if (marcadorRepartidor) {
+
                 mapaCliente.removeLayer(marcadorRepartidor);
+
                 marcadorRepartidor = null;
+
             }
+
         }
+
         
+
         document.getElementById('mapa-cliente-container').style.display = 'none';
+
         
+
         // 🆕 LIMPIAR LOCALSTORAGE
+
         limpiarUbicacionClienteDeStorage();
+
         
+
         clienteCoordsRepartidorApp = null;
+
         repartidorCoords = null;
+
         window.currentClienteID = null;
+
         
+
         logDebugMapa('✅ Seguimiento detenido completamente');
+
     }
 
+
+
     // ========================================
+
     // SISTEMA DE PERMISOS MULTIMEDIA
+
     // ========================================
+
     
+
     window.solicitarTodosLosPermisos = async function() {
+
         console.log('🔐 Solicitando todos los permisos...');
+
         
+
         const modal = document.getElementById('permisosModal');
+
         modal.classList.remove('show');
+
         
+
         let todosOtorgados = true;
+
         
+
         // Permiso de UBICACIÓN
+
         try {
+
             const position = await new Promise((resolve, reject) => {
+
                 navigator.geolocation.getCurrentPosition(
+
                     resolve,
+
                     reject,
+
                     {
+
                         enableHighAccuracy: true,
+
                         timeout: 15000,
+
                         maximumAge: 0
+
                     }
+
                 );
+
             });
+
             
+
             permisosUbicacionOtorgado = true;
+
             console.log('✅ Permiso de UBICACIÓN concedido');
+
             console.log(`📍 Ubicación: ${position.coords.latitude}, ${position.coords.longitude}`);
+
             
+
         } catch (error) {
+
             todosOtorgados = false;
+
             permisosUbicacionOtorgado = false;
+
             console.error('❌ Permiso de UBICACIÓN denegado:', error);
+
             
+
             alert('⚠️ IMPORTANTE: Permiso de ubicación denegado.\n\n' +
+
                   'Sin este permiso NO podrás recibir pedidos.\n\n' +
+
                   'Para activarlo:\n' +
+
                   '1. Ve a Configuración de Android\n' +
+
                   '2. Aplicaciones → Servi Aliados\n' +
+
                   '3. Permisos → Ubicación\n' +
+
                   '4. Selecciona "Permitir TODO EL TIEMPO"');
+
         }
+
         
+
         // Permiso de CÁMARA
+
         try {
+
             const videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+
             videoStream.getTracks().forEach(track => track.stop());
+
             permisosCamaraOtorgado = true;
+
             console.log('✅ Permiso de CÁMARA concedido');
+
             
+
         } catch (error) {
+
             permisosCamaraOtorgado = false;
+
             console.warn('⚠️ Permiso de CÁMARA denegado:', error);
+
         }
+
         
+
         // Permiso de MICRÓFONO
+
         try {
+
             const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
             audioStream.getTracks().forEach(track => track.stop());
+
             permisosMicrofonoOtorgado = true;
+
             console.log('✅ Permiso de MICRÓFONO concedido');
+
             
+
         } catch (error) {
+
             permisosMicrofonoOtorgado = false;
+
             console.warn('⚠️ Permiso de MICRÓFONO denegado:', error);
+
         }
+
         
+
         permisosMultimediaOtorgados = todosOtorgados;
+
         
+
         const resumen = `
+
 📊 RESUMEN DE PERMISOS:
 
+
+
 ${permisosUbicacionOtorgado ? '✅' : '❌'} Ubicación GPS (optimizada cada 15s)
+
 ${permisosCamaraOtorgado ? '✅' : '❌'} Cámara/Fotos
+
 ${permisosMicrofonoOtorgado ? '✅' : '❌'} Micrófono/Audio
 
+
+
 ${!permisosUbicacionOtorgado ? '\n⚠️ Sin GPS no podrás recibir pedidos' : ''}
+
 ${!permisosCamaraOtorgado ? '\n⚠️ Sin cámara no podrás enviar fotos' : ''}
+
 ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios' : ''}
+
         `.trim();
+
         
+
         alert(resumen);
+
         
+
         if (permisosUbicacionOtorgado) {
+
             await iniciarTrackingGPSAutomatico();
+
         }
-    }
-    
-    window.omitirPermisos = function() {
-        console.log('⏭️ Permisos omitidos por el usuario');
-        
-        const modal = document.getElementById('permisosModal');
-        modal.classList.remove('show');
-        
-        alert('⚠️ Has omitido los permisos.\n\n' +
-              'Funcionalidad limitada:\n' +
-              '- NO recibirás pedidos (sin GPS)\n' +
-              '- NO podrás enviar fotos (sin cámara)\n' +
-              '- NO podrás enviar audios (sin micrófono)\n\n' +
-              'Puedes activarlos después desde Configuración.');
-    }
-    
-    function mostrarModalPermisos() {
-        const modal = document.getElementById('permisosModal');
-        modal.classList.add('show');
+
     }
 
-    // ========================================
-    // SISTEMA DE HEARTBEAT SIMPLIFICADO
-    // ========================================
     
+
+    window.omitirPermisos = function() {
+
+        console.log('⏭️ Permisos omitidos por el usuario');
+
+        
+
+        const modal = document.getElementById('permisosModal');
+
+        modal.classList.remove('show');
+
+        
+
+        alert('⚠️ Has omitido los permisos.\n\n' +
+
+              'Funcionalidad limitada:\n' +
+
+              '- NO recibirás pedidos (sin GPS)\n' +
+
+              '- NO podrás enviar fotos (sin cámara)\n' +
+
+              '- NO podrás enviar audios (sin micrófono)\n\n' +
+
+              'Puedes activarlos después desde Configuración.');
+
+    }
+
+    
+
+    function mostrarModalPermisos() {
+
+        const modal = document.getElementById('permisosModal');
+
+        modal.classList.add('show');
+
+    }
+
+
+
+    // ========================================
+
+    // SISTEMA DE HEARTBEAT SIMPLIFICADO
+
+    // ========================================
+
+    
+
     async function iniciarHeartbeatPrincipal() {
+
         if (heartbeatInterval) {
+
             clearInterval(heartbeatInterval);
+
         }
+
+
 
         sessionActive = true;
+
         await marcarComoOnline();
 
+
+
         heartbeatInterval = setInterval(async () => {
+
             if (sessionActive && repartidorUID) {
+
                 await marcarComoOnline();
+
             }
+
         }, 8000);
 
+
+
         console.log('✅ Heartbeat principal iniciado (cada 8s)');
+
     }
+
+
 
     function actualizarIndicadorConexion(online) {
+
         const indicator = document.getElementById('connectionStatus');
+
         const text = document.getElementById('connectionText');
+
         
+
         if (online) {
+
             indicator.classList.remove('offline');
+
             indicator.classList.add('active');
+
             text.textContent = '🟢 Online';
+
         } else {
+
             indicator.classList.add('offline');
+
             indicator.classList.add('active');
+
             text.textContent = '🔴 Reconectando...';
+
         }
+
     }
+
+
 
     async function marcarComoOnline() {
+
         if (!repartidorUID || !db) {
+
             return;
+
         }
 
+
+
         try {
+
             const timestamp = Date.now();
+
             const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+
             
+
             await update(userStatusRef, {
+
                 online: true,
+
                 lastSeen: timestamp,
+
                 ultimaConexion: timestamp,
+
                 appVersion: APP_VERSION,
+
                 navegadorActivo: !document.hidden,
+
                 gpsActivo: isTrackingEnabled,
+
                 backgroundMode: isBackgroundMode,
+
                 permisosMultimedia: {
+
                     camara: permisosCamaraOtorgado,
+
                     microfono: permisosMicrofonoOtorgado,
+
                     ubicacion: permisosUbicacionOtorgado
+
                 }
+
             });
+
             
+
             console.log('💚 Online:', new Date(timestamp).toLocaleTimeString());
+
             actualizarIndicadorConexion(true);
+
             
+
         } catch (error) {
+
             console.error('❌ Error al marcar como online:', error);
+
             actualizarIndicadorConexion(false);
+
         }
+
     }
+
+
 
     function detenerHeartbeat() {
+
         if (heartbeatInterval) {
+
             clearInterval(heartbeatInterval);
+
             heartbeatInterval = null;
+
         }
+
         sessionActive = false;
+
         console.log('🛑 Heartbeat detenido');
+
     }
+
+
 
     async function marcarComoOffline() {
+
         if (!repartidorUID || !db) {
+
             return;
+
         }
 
+
+
         try {
+
             const timestamp = Date.now();
+
             const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+
             
+
             await update(userStatusRef, {
+
                 online: false,
+
                 lastSeen: timestamp,
+
                 trackingActivo: false,
+
                 sesionCerradaManualmente: true
+
             });
+
             
+
             console.log('🔴 Offline marcado correctamente');
+
             
+
         } catch (error) {
+
             console.error('❌ Error al marcar como offline:', error);
+
         }
+
     }
+
+
 
     async function configurarPresenciaInicial() {
+
         if (!repartidorUID || !db) {
+
             console.warn('⚠️ No se puede configurar presencia sin UID');
+
             return;
+
         }
+
+
 
         try {
+
             await marcarComoOnline();
+
             await iniciarHeartbeatPrincipal();
+
             
+
             iniciarEnvioUbicacionDirecto();
+
             
+
             console.log('✅ Sistema de presencia persistente configurado');
+
             actualizarIndicadorConexion(true);
+
             
+
         } catch (error) {
+
             console.error('❌ Error al configurar presencia:', error);
+
         }
+
     }
+
     
+
     // ========================================
+
     // 🔥 SISTEMA GPS OPTIMIZADO (15 SEGUNDOS)
+
     // ========================================
+
     
+
     function iniciarBackgroundGeolocation() {
+
         if (backgroundGeoInterval) {
+
             clearInterval(backgroundGeoInterval);
+
         }
+
+
 
         // 🔥 OPTIMIZACIÓN: De 3s a 15s
+
         backgroundGeoInterval = setInterval(async () => {
+
             if (!repartidorUID) return;
+
             
+
             try {
+
                 const position = await new Promise((resolve, reject) => {
+
                     navigator.geolocation.getCurrentPosition(
+
                         resolve,
+
                         reject,
+
                         {
+
                             enableHighAccuracy: true,
+
                             timeout: 8000,
+
                             maximumAge: 0
+
                         }
+
                     );
+
                 });
+
+
 
                 const lat = position.coords.latitude;
+
                 const lon = position.coords.longitude;
+
                 const accuracy = position.coords.accuracy;
+
                 const speed = position.coords.speed || 0;
+
                 const heading = position.coords.heading || 0;
+
                 const timestamp = Date.now();
+
                 const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
 
+
+
                 const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+
                 await update(userStatusRef, {
+
                     ubicacion: {
+
                         lat: parseFloat(lat.toFixed(6)),
+
                         lon: parseFloat(lon.toFixed(6))
+
                     },
+
                     ubicacionActual: {
+
                         lat: parseFloat(lat.toFixed(6)),
+
                         lon: parseFloat(lon.toFixed(6)),
+
                         accuracy: Math.round(accuracy),
+
                         speed: Math.round(speed * 3.6),
+
                         heading: Math.round(heading),
+
                         timestamp: timestamp
+
                     },
+
                     ubicacionUrl: googleMapsUrl,
+
                     trackingActivo: true,
+
                     lastSeen: timestamp,
+
                     online: true,
+
                     backgroundMode: isBackgroundMode
+
                 });
+
+
 
                 console.log(`📍 BG GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)} [${isBackgroundMode ? 'BACKGROUND' : 'FOREGROUND'}] [15s]`);
 
+
+
             } catch (error) {
+
                 console.warn('⚠️ Error en background GPS:', error.message);
+
             }
+
         }, 15000); // 🔥 15 SEGUNDOS (optimizado)
+
+
 
         console.log('✅ Background Geolocation iniciado (cada 15s - optimizado)');
+
     }
+
+
 
     function detenerBackgroundGeolocation() {
+
         if (backgroundGeoInterval) {
+
             clearInterval(backgroundGeoInterval);
+
             backgroundGeoInterval = null;
+
             console.log('🛑 Background Geolocation detenido');
+
         }
+
     }
+
+
 
     function iniciarEnvioUbicacionDirecto() {
+
         if (locationSendInterval) {
+
             clearInterval(locationSendInterval);
+
         }
+
+
 
         // 🔥 OPTIMIZACIÓN: De 5s a 15s
+
         locationSendInterval = setInterval(async () => {
+
             if (isTrackingEnabled && repartidorUID && lastLocationUpdate > 0) {
+
                 try {
+
                     const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+
                     await update(userStatusRef, {
+
                         trackingActivo: true,
+
                         lastSeen: Date.now(),
+
                         online: true
+
                     });
+
                 } catch (error) {
+
                     console.warn('⚠️ Error en envío directo de ubicación:', error);
+
                 }
+
             }
+
         }, 15000); // 🔥 15 SEGUNDOS (optimizado)
 
+
+
         console.log('✅ Envío directo de ubicación iniciado (cada 15s - optimizado)');
+
     }
+
+
 
     async function iniciarTrackingGPSAutomatico() {
+
         console.log('🚀 Iniciando GPS automático al login (optimizado)...');
+
         
+
         if (!permisosUbicacionOtorgado) {
+
             console.warn('⚠️ No se puede iniciar GPS sin permisos de ubicación');
+
             return;
+
         }
+
         
+
         const esAPK = window.matchMedia('(display-mode: standalone)').matches || 
+
                       window.navigator.standalone ||
+
                       document.referrer.includes('android-app://');
+
         
+
         if (esAPK) {
+
             console.log('📱 Detectado APK Android - Verificando permisos nativos...');
+
         }
+
         
+
         await solicitarWakeLock();
+
         await iniciarTrackingGPS();
+
         iniciarBackgroundGeolocation();
+
         
+
         document.getElementById('gpsIndicator').classList.add('active');
+
     }
+
+
 
     function iniciarTrackingGPS() {
+
         if (!navigator.geolocation) {
+
             console.error('❌ Geolocalización no soportada');
+
             return;
+
         }
+
         
+
         if (isTrackingEnabled) {
+
             console.log('⚠️ GPS ya está activo');
+
             return;
+
         }
+
         
+
         console.log('📍 Iniciando tracking GPS optimizado (15s)...');
+
         isTrackingEnabled = true;
+
         gpsErrorCount = 0;
+
         
+
         const esAPK = window.matchMedia('(display-mode: standalone)').matches || 
+
                       window.navigator.standalone ||
+
                       document.referrer.includes('android-app://');
+
         
+
         const geoOptions = {
+
             enableHighAccuracy: true,
+
             timeout: esAPK ? 15000 : 10000,
+
             maximumAge: 0
+
         };
+
         
+
         console.log(`📱 Modo: ${esAPK ? 'APK Android' : 'Web'}`);
+
         
+
         watchId = navigator.geolocation.watchPosition(
+
             (position) => {
+
                 const now = Date.now();
+
                 
+
                 // 🔥 OPTIMIZACIÓN: Solo actualizar cada 15 segundos
+
                 if (now - lastLocationUpdate < LOCATION_UPDATE_INTERVAL) {
+
                     return;
+
                 }
+
                 
+
                 lastLocationUpdate = now;
+
                 gpsErrorCount = 0;
+
                 
+
                 const lat = position.coords.latitude;
+
                 const lon = position.coords.longitude;
+
                 const accuracy = position.coords.accuracy;
+
                 const speed = position.coords.speed || 0;
+
                 const heading = position.coords.heading || 0;
+
                 
+
                 console.log(`📍 GPS OK [${esAPK ? 'APK' : 'Web'}]: ${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracy)}m) [15s]`);
+
                 
+
                 enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading);
+
                 enviarUbicacionDirecta(lat, lon, accuracy, speed, heading);
+
             },
+
             (error) => {
+
                 gpsErrorCount++;
+
                 console.error(`❌ Error GPS [${esAPK ? 'APK' : 'Web'}] (${gpsErrorCount}/${MAX_GPS_ERRORS}):`, error.message);
+
                 
+
                 switch(error.code) {
+
                     case error.PERMISSION_DENIED:
+
                         console.error('⚠️ Permiso GPS denegado');
+
                         if (esAPK) {
+
                             alert('⚠️ Permiso de ubicación denegado.\n\nPara que funcione en APK:\n\n1. Configuración → Aplicaciones\n2. Servi Aliados → Permisos\n3. Ubicación → "Permitir TODO EL TIEMPO"');
+
                         }
+
                         detenerTrackingGPS();
+
                         break;
+
                     case error.POSITION_UNAVAILABLE:
+
                         console.warn('📡 Señal GPS débil, reintentando...');
+
                         break;
+
                     case error.TIMEOUT:
+
                         console.warn('⏱️ Timeout GPS, reintentando...');
+
                         break;
+
                 }
+
             },
+
             geoOptions
+
         );
+
         
+
         console.log('✅ GPS iniciado - Actualización cada 15 segundos (optimizado)');
+
     }
+
+
 
     function detenerTrackingGPS() {
+
         if (!isTrackingEnabled) {
+
             return;
+
         }
+
         
+
         if (watchId !== null) {
+
             navigator.geolocation.clearWatch(watchId);
+
             watchId = null;
+
         }
+
         
+
         if (locationSendInterval) {
+
             clearInterval(locationSendInterval);
+
             locationSendInterval = null;
+
         }
+
         
+
         detenerBackgroundGeolocation();
+
         
+
         isTrackingEnabled = false;
+
         console.log('🛑 GPS detenido');
+
         
+
         document.getElementById('gpsIndicator').classList.remove('active');
+
         
+
         if (repartidorUID) {
+
             update(ref(db, `repartidores_info/${repartidorUID}`), {
+
                 trackingActivo: false,
+
                 ultimaUbicacionTimestamp: Date.now()
+
             });
+
         }
+
     }
+
+
 
     async function enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading) {
+
         if (!repartidorUID) return;
 
+
+
         try {
+
             const timestamp = Date.now();
+
             const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+
             
+
             await update(ref(db, `repartidores_info/${repartidorUID}`), {
+
                 ubicacion: {
+
                     lat: parseFloat(lat.toFixed(6)),
+
                     lon: parseFloat(lon.toFixed(6))
+
                 },
+
                 ubicacionActual: {
+
                     lat: parseFloat(lat.toFixed(6)),
+
                     lon: parseFloat(lon.toFixed(6)),
+
                     accuracy: Math.round(accuracy),
+
                     speed: Math.round(speed * 3.6),
+
                     heading: Math.round(heading),
+
                     timestamp: timestamp
+
                 },
+
                 ubicacionUrl: googleMapsUrl,
+
                 trackingActivo: true,
+
                 lastSeen: timestamp,
+
                 online: true
+
             });
+
             
+
             console.log(`📍 Ubicación Firebase SDK: ${lat.toFixed(6)}, ${lon.toFixed(6)} [15s]`);
+
             
+
         } catch (error) {
+
             console.error('❌ Error al enviar ubicación Firebase SDK:', error);
+
         }
+
     }
 
+
+
     async function enviarUbicacionDirecta(lat, lon, accuracy, speed, heading) {
+
         if (!repartidorUID) return;
 
+
+
         try {
+
             const timestamp = Date.now();
+
             const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+
             
+
             const pedidosSnapshot = await get(ref(db, 'pedidos_pendientes'));
+
             const pedidosData = pedidosSnapshot.val();
+
             
+
             if (pedidosData) {
+
                 const promesas = [];
+
                 
+
                 Object.keys(pedidosData).forEach(pedidoId => {
+
                     const pedido = pedidosData[pedidoId];
+
                     
+
                     if (pedido.repartidorUID === repartidorUID && pedido.estado !== 'Pendiente') {
+
                         const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
+
                         
+
                         promesas.push(
+
                             update(pedidoRef, {
+
                                 ubicacionRepartidor: {
+
                                     lat: parseFloat(lat.toFixed(6)),
+
                                     lon: parseFloat(lon.toFixed(6)),
+
                                     accuracy: Math.round(accuracy),
+
                                     speed: Math.round(speed * 3.6),
+
                                     heading: Math.round(heading),
+
                                     timestamp: timestamp,
+
                                     googleMapsUrl: googleMapsUrl
+
                                 }
+
                             })
+
                         );
+
                     }
+
                 });
+
                 
+
                 await Promise.all(promesas);
+
             }
+
+
 
             console.log(`✅ Ubicación enviada [${new Date(timestamp).toLocaleTimeString()}] [15s]`);
 
+
+
         } catch (error) {
+
             console.error('❌ Error al enviar ubicación:', error);
+
         }
+
     }
 
+
+
     // ========================================
+
     // WAKE LOCK API
+
     // ========================================
+
     
+
     async function solicitarWakeLock() {
+
         if (!isWakeLockSupported) {
+
             console.warn('⚠️ Wake Lock no soportado en este navegador');
+
             return false;
+
         }
+
+
 
         try {
+
             wakeLock = await navigator.wakeLock.request('screen');
+
             console.log('✅ Wake Lock activado - App permanecerá activa');
+
             
+
             wakeLock.addEventListener('release', () => {
+
                 console.log('⚠️ Wake Lock liberado');
+
             });
+
             
+
             return true;
+
         } catch (error) {
+
             console.error('❌ Error al solicitar Wake Lock:', error);
+
             return false;
+
         }
+
     }
+
+
 
     async function liberarWakeLock() {
+
         if (wakeLock !== null) {
+
             try {
+
                 await wakeLock.release();
+
                 wakeLock = null;
+
                 console.log('🛑 Wake Lock liberado');
+
             } catch (error) {
+
                 console.error('❌ Error al liberar Wake Lock:', error);
+
             }
+
         }
+
     }
 
-    // ========================================
-    // MANEJO DE VISIBILIDAD DE PÁGINA
-    // ========================================
-    
-    document.addEventListener('visibilitychange', async () => {
-        if (document.hidden) {
-            console.log('📱 App en segundo plano');
-            isBackgroundMode = true;
-            
-            if (repartidorUID) {
-                await update(ref(db, `repartidores_info/${repartidorUID}`), {
-                    navegadorActivo: false,
-                    backgroundMode: true
-                });
-            }
-        } else {
-            console.log('📱 App en primer plano');
-            isBackgroundMode = false;
-            
-            if (repartidorUID) {
-                await update(ref(db, `repartidores_info/${repartidorUID}`), {
-                    navegadorActivo: true,
-                    backgroundMode: false
-                });
-            }
-            
-            if (isWakeLockSupported && wakeLock === null) {
-                await solicitarWakeLock();
-            }
-        }
-    });
+
 
     // ========================================
-    // MANEJO DE CIERRE DE APP/NAVEGADOR
+
+    // MANEJO DE VISIBILIDAD DE PÁGINA
+
     // ========================================
+
     
-    window.addEventListener('beforeunload', async (event) => {
-        console.log('⚠️ Cerrando aplicación...');
-        
-        detenerTrackingGPS();
-        detenerEnvioUbicacionRepartidor();
-        detenerBackgroundGeolocation();
-        detenerHeartbeat();
-        await liberarWakeLock();
-        
-        if (repartidorUID) {
-            try {
-                await marcarComoOffline();
-            } catch (error) {
-                console.error('❌ Error al marcar offline:', error);
+
+    document.addEventListener('visibilitychange', async () => {
+
+        if (document.hidden) {
+
+            console.log('📱 App en segundo plano');
+
+            isBackgroundMode = true;
+
+            
+
+            if (repartidorUID) {
+
+                await update(ref(db, `repartidores_info/${repartidorUID}`), {
+
+                    navegadorActivo: false,
+
+                    backgroundMode: true
+
+                });
+
             }
+
+        } else {
+
+            console.log('📱 App en primer plano');
+
+            isBackgroundMode = false;
+
+            
+
+            if (repartidorUID) {
+
+                await update(ref(db, `repartidores_info/${repartidorUID}`), {
+
+                    navegadorActivo: true,
+
+                    backgroundMode: false
+
+                });
+
+            }
+
+            
+
+            if (isWakeLockSupported && wakeLock === null) {
+
+                await solicitarWakeLock();
+
+            }
+
         }
+
     });
+
+
+
+    // ========================================
+
+    // MANEJO DE CIERRE DE APP/NAVEGADOR
+
+    // ========================================
+
+    
+
+    window.addEventListener('beforeunload', async (event) => {
+
+        console.log('⚠️ Cerrando aplicación...');
+
+        
+
+        detenerTrackingGPS();
+
+        detenerEnvioUbicacionRepartidor();
+
+        detenerBackgroundGeolocation();
+
+        detenerHeartbeat();
+
+        await liberarWakeLock();
+
+        
+
+        if (repartidorUID) {
+
+            try {
+
+                await marcarComoOffline();
+
+            } catch (error) {
+
+                console.error('❌ Error al marcar offline:', error);
+
+            }
+
+        }
+
+    });
+
+
 
     window.addEventListener('pagehide', async () => {
+
         console.log('📴 Página oculta');
+
         if (repartidorUID) {
+
             try {
+
                 await marcarComoOffline();
+
             } catch (error) {
+
                 console.error('❌ Error al marcar offline:', error);
+
             }
+
         }
+
     });
 
+
+
     // ========================================
+
     // SISTEMA DE MULTIMEDIA (FOTOS/AUDIOS)
+
     // ========================================
+
     
+
     document.getElementById('sendGalleryBtn').addEventListener('click', () => {
+
         if (!permisosCamaraOtorgado) {
+
             alert('⚠️ No tienes permiso de cámara/galería.\n\nActiva el permiso en Configuración para enviar fotos.');
+
             return;
+
         }
+
         document.getElementById('galleryInput').click();
+
     });
+
+
 
     document.getElementById('galleryInput').addEventListener('change', (e) => {
+
         const file = e.target.files[0];
+
         if (file) {
+
             if (file.size > 5 * 1024 * 1024) {
+
                 alert('⚠️ La imagen es muy grande (máx. 5MB)');
+
                 return;
+
             }
+
             
+
             selectedImageFile = file;
+
             const reader = new FileReader();
+
             reader.onload = (event) => {
+
                 document.getElementById('previewImg').src = event.target.result;
+
                 document.getElementById('imagePreview').classList.add('active');
+
             };
+
             reader.readAsDataURL(file);
+
         }
+
     });
+
+
 
     document.getElementById('cancelImageBtn').addEventListener('click', () => {
+
         selectedImageFile = null;
+
         document.getElementById('imagePreview').classList.remove('active');
+
         document.getElementById('galleryInput').value = '';
+
     });
+
+
 
     document.getElementById('recordAudioBtn').addEventListener('click', async () => {
+
         if (!permisosMicrofonoOtorgado) {
+
             alert('⚠️ No tienes permiso de micrófono.\n\nActiva el permiso en Configuración para grabar audios.');
+
             return;
+
         }
+
         
+
         if (isRecording) {
+
             console.warn('⚠️ Ya hay una grabación en progreso');
+
             return;
+
         }
+
         
+
         try {
+
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
             
+
             mediaRecorder = new MediaRecorder(stream, {
+
                 mimeType: 'audio/webm;codecs=opus'
+
             });
+
             
+
             audioChunks = [];
+
             
+
             mediaRecorder.ondataavailable = (event) => {
+
                 if (event.data.size > 0) {
+
                     audioChunks.push(event.data);
+
                 }
+
             };
+
             
+
             mediaRecorder.onstop = async () => {
+
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+
                 selectedAudioFile = new File([audioBlob], `audio_${Date.now()}.webm`, { type: 'audio/webm' });
+
                 
+
                 const audioUrl = URL.createObjectURL(audioBlob);
+
                 document.getElementById('previewAudio').src = audioUrl;
+
                 document.getElementById('audioPreview').style.display = 'block';
+
                 
+
                 stream.getTracks().forEach(track => track.stop());
+
                 
+
                 isRecording = false;
+
                 document.getElementById('recordingIndicator').classList.remove('active');
+
             };
+
             
+
             mediaRecorder.start();
+
             isRecording = true;
+
             
+
             document.getElementById('recordingIndicator').classList.add('active');
+
             
+
             let seconds = 0;
+
             const timerElement = document.getElementById('recordingTimer');
+
             const recordingTimer = setInterval(() => {
+
                 seconds++;
+
                 const mins = Math.floor(seconds / 60);
+
                 const secs = seconds % 60;
+
                 timerElement.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
                 
+
                 if (seconds >= 120) {
+
                     mediaRecorder.stop();
+
                     clearInterval(recordingTimer);
+
                 }
+
             }, 1000);
+
             
+
             document.getElementById('stopRecordingBtn').onclick = () => {
+
                 if (mediaRecorder && isRecording) {
+
                     mediaRecorder.stop();
+
                     clearInterval(recordingTimer);
+
                 }
+
             };
+
             
+
             console.log('🎤 Grabación iniciada');
+
             
+
         } catch (error) {
+
             console.error('❌ Error al grabar audio:', error);
+
             alert('❌ No se pudo acceder al micrófono.\n\nVerifica los permisos.');
+
             isRecording = false;
+
         }
+
     });
+
+
 
     document.getElementById('sendAudioFileBtn').addEventListener('click', async () => {
+
         if (!selectedAudioFile) {
+
             alert('⚠️ No hay audio para enviar');
+
             return;
+
         }
+
         
+
         try {
+
             document.getElementById('uploadProgress').classList.add('active');
+
             
+
             const audioRef = storageRef(storage, `chat_audios/${repartidorUID}_${Date.now()}.webm`);
+
             const uploadTask = uploadBytesResumable(audioRef, selectedAudioFile);
+
             
+
             uploadTask.on('state_changed',
+
                 (snapshot) => {
+
                     const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+
                     document.getElementById('progressFill').style.width = progress + '%';
+
                     document.getElementById('progressText').textContent = Math.round(progress) + '%';
+
                 },
+
                 (error) => {
+
                     console.error('❌ Error al subir audio:', error);
+
                     alert('❌ Error al enviar audio');
+
                     document.getElementById('uploadProgress').classList.remove('active');
+
                 },
+
                 async () => {
+
                     const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+
                     
+
                     const messageRef = push(ref(db, `chats/${repartidorUID}`));
+
                     await set(messageRef, {
+
                         tipo: 'audio',
+
                         audioUrl: downloadURL,
+
                         remitente: 'repartidor',
+
                         timestamp: Date.now(),
+
                         repartidorNombre: repartidorNombre
+
                     });
+
                     
+
                     document.getElementById('uploadProgress').classList.remove('active');
+
                     document.getElementById('audioPreview').style.display = 'none';
+
                     selectedAudioFile = null;
+
                     
+
                     console.log('✅ Audio enviado correctamente');
+
                 }
+
             );
+
             
+
         } catch (error) {
+
             console.error('❌ Error al enviar audio:', error);
+
             alert('❌ Error al enviar audio');
+
             document.getElementById('uploadProgress').classList.remove('active');
+
         }
+
     });
+
+
 
     document.getElementById('cancelAudioBtn').addEventListener('click', () => {
+
         selectedAudioFile = null;
+
         document.getElementById('audioPreview').style.display = 'none';
+
     });
+
+
 
     document.getElementById('enviarBtn').addEventListener('click', async () => {
+
         if (selectedImageFile) {
+
             await enviarImagen();
+
         } else {
+
             const mensaje = document.getElementById('mensajeInput').value.trim();
+
             if (mensaje) {
+
                 await enviarMensajeTexto(mensaje);
+
                 document.getElementById('mensajeInput').value = '';
+
             }
+
         }
+
     });
+
+
 
     document.getElementById('mensajeInput').addEventListener('keypress', async (e) => {
+
         if (e.key === 'Enter' && !selectedImageFile) {
+
             const mensaje = e.target.value.trim();
+
             if (mensaje) {
+
                 await enviarMensajeTexto(mensaje);
+
                 e.target.value = '';
+
             }
+
         }
+
     });
+
+
 
     async function enviarImagen() {
+
         if (!selectedImageFile) return;
+
         
+
         try {
+
             document.getElementById('uploadProgress').classList.add('active');
+
             
+
             const imageRef = storageRef(storage, `chat_images/${repartidorUID}_${Date.now()}.jpg`);
+
             const uploadTask = uploadBytesResumable(imageRef, selectedImageFile);
+
             
+
             uploadTask.on('state_changed',
+
                 (snapshot) => {
+
                     const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+
                     document.getElementById('progressFill').style.width = progress + '%';
+
                     document.getElementById('progressText').textContent = Math.round(progress) + '%';
+
                 },
+
                 (error) => {
+
                     console.error('❌ Error al subir imagen:', error);
+
                     alert('❌ Error al enviar imagen');
+
                     document.getElementById('uploadProgress').classList.remove('active');
+
                 },
+
                 async () => {
+
                     const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+
                     
+
                     const messageRef = push(ref(db, `chats/${repartidorUID}`));
+
                     await set(messageRef, {
+
                         tipo: 'imagen',
+
                         imagenUrl: downloadURL,
+
                         remitente: 'repartidor',
+
                         timestamp: Date.now(),
+
                         repartidorNombre: repartidorNombre
+
                     });
+
                     
+
                     document.getElementById('uploadProgress').classList.remove('active');
+
                     document.getElementById('imagePreview').classList.remove('active');
+
                     document.getElementById('galleryInput').value = '';
+
                     selectedImageFile = null;
+
                     
+
                     console.log('✅ Imagen enviada correctamente');
+
                 }
+
             );
+
             
+
         } catch (error) {
+
             console.error('❌ Error al enviar imagen:', error);
+
             alert('❌ Error al enviar imagen');
+
             document.getElementById('uploadProgress').classList.remove('active');
+
         }
+
     }
+
+
 
     async function enviarMensajeTexto(mensaje) {
+
         try {
+
             const messageRef = push(ref(db, `chats/${repartidorUID}`));
+
             await set(messageRef, {
+
                 mensaje: mensaje,
+
                 remitente: 'repartidor',
+
                 timestamp: Date.now(),
+
                 repartidorNombre: repartidorNombre
+
             });
+
             
+
             console.log('✅ Mensaje enviado:', mensaje);
+
             
+
         } catch (error) {
+
             console.error('❌ Error al enviar mensaje:', error);
+
             alert('❌ Error al enviar mensaje');
+
         }
+
     }
 
+
+
     // ========================================
+
     // CHAT
+
     // ========================================
+
     
+
     function escucharChat() {
+
         if (!repartidorUID) return;
+
         
+
         const chatRef = ref(db, `chats/${repartidorUID}`);
+
         onValue(chatRef, (snapshot) => {
+
             const data = snapshot.val();
+
             const chatBox = document.getElementById('chatBox');
+
             chatBox.innerHTML = '';
+
             
+
             if (!data) {
+
                 chatBox.innerHTML = '<p style="color: #999;">No hay mensajes aún...</p>';
+
                 return;
+
             }
+
             
+
             Object.keys(data).forEach(key => {
+
                 const msg = data[key];
+
                 const msgDiv = document.createElement('div');
+
                 
+
                 if (msg.tipo === 'imagen') {
+
                     msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
+
                     msgDiv.innerHTML = `
+
                         <img src="${msg.imagenUrl}" onclick="mostrarImagenCompleta('${msg.imagenUrl}')">
+
                         <span class="chat-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+
                     `;
+
                 } else if (msg.tipo === 'audio') {
+
                     msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
+
                     msgDiv.innerHTML = `
+
                         <audio src="${msg.audioUrl}" controls></audio>
+
                         <span class="chat-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+
                     `;
+
                 } else {
+
                     msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
+
                     msgDiv.innerHTML = `
-                        ${msg.mensaje}
+
+                        ${msg.mensaje || msg.texto || 'Sin mensaje'}
+
                         <span class="chat-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+
                     `;
+
                 }
+
                 
+
                 chatBox.appendChild(msgDiv);
+
             });
+
             
+
             chatBox.scrollTop = chatBox.scrollHeight;
+
         });
+
     }
+
+
 
     window.mostrarImagenCompleta = function(url) {
+
         document.getElementById('modalImage').src = url;
+
         document.getElementById('imageModal').classList.add('active');
+
     }
 
+
+
     // ========================================
+
     // PEDIDOS
+
     // ========================================
+
     
+
     function escucharPedidos() {
+
         if (!repartidorUID) return;
+
         
+
         const pedidosRef = ref(db, 'pedidos_pendientes');
+
         
+
         onValue(pedidosRef, (snapshot) => {
+
             const data = snapshot.val();
+
             const listaPendientes = document.getElementById('pedidosList');
+
             const listaAsignados = document.getElementById('pedidosAsignadosList');
+
             
+
             let contadorPendientes = 0;
+
             let contadorAsignados = 0;
+
             
+
             listaPendientes.innerHTML = '';
+
             listaAsignados.innerHTML = '';
+
             
+
             if (!data) {
+
                 listaPendientes.innerHTML = '<p style="color: #999;">No hay pedidos pendientes.</p>';
+
                 listaAsignados.innerHTML = '<p style="color: #999;">No tienes pedidos asignados.</p>';
+
                 document.getElementById('pendientesBadge').style.display = 'none';
+
                 document.getElementById('asignadosCount').textContent = '0';
+
                 return;
+
             }
+
             
+
             Object.keys(data).forEach(pedidoId => {
+
                 const pedido = data[pedidoId];
+
                 
+
                 if (pedido.estado === 'Pendiente') {
+
                     contadorPendientes++;
+
                     mostrarPedidoPendiente(pedido, pedidoId, listaPendientes);
+
                     
+
                     if (!initialLoad && !pedidosActivos[pedidoId]) {
+
                         reproducirNotificacion();
+
                     }
+
                     pedidosActivos[pedidoId] = true;
+
                     
+
                 } else if (pedido.repartidorUID === repartidorUID && 
+
                           (pedido.estado === 'Aceptado' || pedido.estado === 'Esperando' || pedido.estado === 'En Camino')) {
+
                     contadorAsignados++;
+
                     mostrarPedidoAsignado(pedido, pedidoId, listaAsignados);
+
                     
+
                     // 🆕 GUARDAR DATOS DEL PEDIDO ACTIVO PARA PERSISTENCIA
+
                     if (!activePedidoData || activePedidoData.pedidoId !== pedidoId) {
+
                         activePedidoData = {
+
                             pedidoId: pedidoId,
+
                             clienteUID: pedido.clienteUID,
+
                             estado: pedido.estado
+
                         };
+
                     }
+
                 }
+
             });
+
             
+
             if (contadorPendientes === 0) {
+
                 listaPendientes.innerHTML = '<p style="color: #999;">No hay pedidos pendientes.</p>';
+
                 document.getElementById('pendientesBadge').style.display = 'none';
+
             } else {
+
                 document.getElementById('pendientesBadge').style.display = 'inline-block';
+
                 document.getElementById('pendientesBadge').textContent = contadorPendientes;
+
             }
+
             
+
             if (contadorAsignados === 0) {
+
                 listaAsignados.innerHTML = '<p style="color: #999;">No tienes pedidos asignados.</p>';
+
                 activePedidoData = null; // 🆕 LIMPIAR DATOS DEL PEDIDO ACTIVO
+
             }
+
             
+
             document.getElementById('asignadosCount').textContent = contadorAsignados;
+
             
+
             initialLoad = false;
+
         });
+
     }
+
+
 
     function mostrarPedidoPendiente(pedido, pedidoId, container) {
+
         const div = document.createElement('div');
+
         div.className = 'pedido-item';
+
         
+
         div.innerHTML = `
+
             <strong>Pedido #${pedidoId.slice(-6)}</strong><br>
+
             📦 ${pedido.producto || 'N/A'}<br>
+
             💵 ${pedido.precio || 'N/A'}<br>
+
             📍 ${pedido.direccion || 'N/A'}<br>
+
             👤 ${pedido.nombre || 'N/A'}<br>
+
             📞 ${pedido.telefono || 'N/A'}<br>
+
             📝 ${pedido.detalles || 'Sin detalles'}<br>
+
             <button onclick="window.aceptarPedido('${pedidoId}')" 
+
                     style="background: var(--color-primary); color: var(--color-background); margin-top: 10px;">
+
                 ✅ Aceptar Pedido
+
             </button>
+
         `;
+
         
+
         container.appendChild(div);
+
     }
+
+
 
     function mostrarPedidoAsignado(pedido, pedidoId, container) {
+
         const div = document.createElement('div');
+
         div.className = 'pedido-item asignado';
+
         
+
         if (pedido.estado === 'Esperando') {
+
             div.classList.add('esperando');
+
         } else if (pedido.estado === 'En Camino') {
+
             div.classList.add('en-camino');
+
         }
+
         
+
         let estadoBotones = '';
+
         
+
         if (pedido.estado === 'Aceptado') {
+
             estadoBotones = `
+
                 <button onclick="window.cambiarEstadoPedido('${pedidoId}', 'Esperando')" 
+
                         style="background: var(--color-waiting); color: white;">
+
                     ⏳ Marcar como Esperando
+
                 </button>
+
             `;
+
         } else if (pedido.estado === 'Esperando') {
+
             estadoBotones = `
+
                 <button onclick="window.cambiarEstadoPedido('${pedidoId}', 'En Camino')" 
+
                         style="background: var(--color-delivery); color: white;">
+
                     🚚 Marcar En Camino
+
                 </button>
+
             `;
+
         } else if (pedido.estado === 'En Camino') {
+
             estadoBotones = `
+
                 <button onclick="window.completarPedido('${pedidoId}')" 
+
                         style="background: #27ae60; color: white;">
+
                     ✅ Completar Pedido
+
                 </button>
+
             `;
+
         }
+
         
+
         const tiempoTranscurrido = pedido.tiempoAceptado ? calcularTiempoTranscurrido(pedido.tiempoAceptado) : '00:00';
+
         
+
         div.innerHTML = `
+
             <strong>🚚 Pedido #${pedidoId.slice(-6)}</strong><br>
+
             🏷️ Estado: <strong style="color: var(--color-primary);">${pedido.estado}</strong><br>
+
             ${pedido.estado !== 'Aceptado' ? `<span class="timer">⏱️ ${tiempoTranscurrido}</span>` : ''}
+
             <hr style="border-color: #444; margin: 10px 0;">
+
             📦 ${pedido.producto || 'N/A'}<br>
+
             💵 ${pedido.precio || 'N/A'}<br>
+
             📍 ${pedido.direccion || 'N/A'}<br>
+
             👤 ${pedido.nombre || 'N/A'}<br>
+
             📞 ${pedido.telefono || 'N/A'}<br>
+
             📝 ${pedido.detalles || 'Sin detalles'}<br>
+
             ${estadoBotones}
+
             <button onclick="window.iniciarCancelacion('${pedidoId}')" 
+
                     style="background: var(--color-accent-danger); color: white;">
+
                 ❌ Cancelar Domicilio
+
             </button>
+
         `;
+
         
+
         container.appendChild(div);
+
     }
+
+
 
     function calcularTiempoTranscurrido(timestamp) {
+
         const ahora = Date.now();
+
         const diferencia = ahora - timestamp;
+
         const minutos = Math.floor(diferencia / 60000);
+
         const segundos = Math.floor((diferencia % 60000) / 1000);
+
         return `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
+
     }
+
+
 
     window.aceptarPedido = async function(pedidoId) {
+
         try {
+
             const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
+
             const snapshot = await get(pedidoRef);
+
             
+
             if (!snapshot.exists()) {
+
                 alert('❌ El pedido ya no existe');
+
                 return;
+
             }
+
             
+
             const pedido = snapshot.val();
+
             
+
             await update(pedidoRef, {
+
                 estado: 'Aceptado',
+
                 repartidorUID: repartidorUID,
+
                 repartidorNombre: repartidorNombre,
+
                 tiempoAceptado: Date.now()
+
             });
+
             
+
             console.log('✅ Pedido aceptado:', pedidoId);
+
             alert('✅ Pedido aceptado correctamente');
+
             
+
             // 🆕 INICIAR SEGUIMIENTO DEL CLIENTE INMEDIATAMENTE
+
             if (pedido.clienteUID) {
+
                 setTimeout(() => {
+
                     document.getElementById('showAsignadosBtn').click();
+
                     iniciarSeguimientoCliente(pedido.clienteUID);
+
                     document.getElementById('mapa-cliente-container').style.display = 'block';
+
                 }, 500);
+
             }
+
             
+
         } catch (error) {
+
             console.error('❌ Error al aceptar pedido:', error);
+
             alert('❌ Error al aceptar el pedido');
+
         }
+
     }
+
+
 
     window.cambiarEstadoPedido = async function(pedidoId, nuevoEstado) {
+
         try {
+
             const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
+
             
+
             await update(pedidoRef, {
+
                 estado: nuevoEstado,
+
                 [`tiempo${nuevoEstado.replace(' ', '')}`]: Date.now()
+
             });
+
             
+
             console.log(`✅ Estado cambiado a: ${nuevoEstado}`);
+
             
+
         } catch (error) {
+
             console.error('❌ Error al cambiar estado:', error);
+
             alert('❌ Error al cambiar el estado del pedido');
+
         }
+
     }
+
+
 
     window.completarPedido = async function(pedidoId) {
+
         const confirmacion = confirm('¿Confirmar que el pedido ha sido completado?');
+
         if (!confirmacion) return;
+
         
+
         try {
+
             const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
+
             const snapshot = await get(pedidoRef);
+
             
+
             if (!snapshot.exists()) {
+
                 alert('❌ El pedido no existe');
+
                 return;
+
             }
+
             
+
             const pedido = snapshot.val();
+
             
+
             await set(ref(db, `pedidos_historial/${pedidoId}`), {
+
                 ...pedido,
+
                 estado: 'Completado',
+
                 tiempoCompletado: Date.now()
+
             });
+
             
+
             await remove(pedidoRef);
+
             
+
             window.detenerSeguimiento(); // 🆕 DETENER SEGUIMIENTO AL COMPLETAR
+
             
+
             console.log('✅ Pedido completado:', pedidoId);
+
             alert('✅ Pedido completado y movido al historial');
+
             
+
         } catch (error) {
+
             console.error('❌ Error al completar pedido:', error);
+
             alert('❌ Error al completar el pedido');
+
         }
+
     }
+
+
 
     window.iniciarCancelacion = function(pedidoId) {
+
         currentPedidoIdToCancel = pedidoId;
+
         document.getElementById('cancelModal').style.display = 'flex';
+
     }
+
+
 
     window.ejecutarCancelacionConMotivo = async function(motivo) {
+
         if (!currentPedidoIdToCancel) return;
+
         
+
         try {
+
             const pedidoRef = ref(db, `pedidos_pendientes/${currentPedidoIdToCancel}`);
+
             const snapshot = await get(pedidoRef);
+
             
+
             if (!snapshot.exists()) {
+
                 alert('❌ El pedido no existe');
+
                 document.getElementById('cancelModal').style.display = 'none';
+
                 return;
+
             }
+
             
+
             const pedido = snapshot.val();
+
             
+
             await set(ref(db, `pedidos_historial/${currentPedidoIdToCancel}`), {
+
                 ...pedido,
+
                 estado: 'Cancelado',
+
                 motivoCancelacion: motivo,
+
                 canceladoPor: 'Repartidor',
+
                 tiempoCancelado: Date.now()
+
             });
+
             
+
             await remove(pedidoRef);
+
             
+
             window.detenerSeguimiento(); // 🆕 DETENER SEGUIMIENTO AL CANCELAR
+
             
+
             document.getElementById('cancelModal').style.display = 'none';
+
             currentPedidoIdToCancel = null;
+
             
+
             console.log('✅ Pedido cancelado con motivo:', motivo);
+
             alert(`✅ Pedido cancelado\n\nMotivo: ${motivo}`);
+
             
+
         } catch (error) {
+
             console.error('❌ Error al cancelar pedido:', error);
+
             alert('❌ Error al cancelar el pedido');
+
         }
+
     }
+
+
 
     function escucharHistorial() {
+
         if (!repartidorUID) return;
+
         
+
         const historialRef = ref(db, 'pedidos_historial');
+
         
+
         onValue(historialRef, (snapshot) => {
+
             const data = snapshot.val();
+
             const listaHistorial = document.getElementById('pedidosHistorialList');
+
             
+
             listaHistorial.innerHTML = '';
+
             
+
             if (!data) {
+
                 listaHistorial.innerHTML = '<p style="color: #999;">No hay pedidos en el historial.</p>';
+
                 return;
+
             }
+
             
+
             const pedidosArray = Object.entries(data)
+
                 .filter(([_, pedido]) => pedido.repartidorUID === repartidorUID)
+
                 .sort((a, b) => (b[1].tiempoCompletado || b[1].tiempoCancelado || 0) - (a[1].tiempoCompletado || a[1].tiempoCancelado || 0));
+
             
+
             if (pedidosArray.length === 0) {
+
                 listaHistorial.innerHTML = '<p style="color: #999;">No tienes pedidos en el historial.</p>';
+
                 return;
+
             }
+
             
+
             pedidosArray.forEach(([pedidoId, pedido]) => {
+
                 const div = document.createElement('div');
+
                 div.className = 'pedido-item';
+
                 div.style.borderLeft = pedido.estado === 'Completado' ? '5px solid #27ae60' : '5px solid #C0392B';
+
                 
+
                 const fecha = pedido.tiempoCompletado || pedido.tiempoCancelado;
+
                 const fechaTexto = fecha ? new Date(fecha).toLocaleString() : 'N/A';
+
                 
+
                 div.innerHTML = `
+
                     <strong>${pedido.estado === 'Completado' ? '✅' : '❌'} Pedido #${pedidoId.slice(-6)}</strong><br>
+
                     🏷️ Estado: <strong>${pedido.estado}</strong><br>
+
                     ${pedido.motivoCancelacion ? `📝 Motivo: ${pedido.motivoCancelacion}<br>` : ''}
+
                     📅 Fecha: ${fechaTexto}<br>
+
                     <hr style="border-color: #444; margin: 10px 0;">
+
                     📦 ${pedido.producto || 'N/A'}<br>
+
                     💵 ${pedido.precio || 'N/A'}<br>
+
                     📍 ${pedido.direccion || 'N/A'}<br>
+
                     👤 ${pedido.nombre || 'N/A'}
+
                 `;
+
                 
+
                 listaHistorial.appendChild(div);
+
             });
+
         });
+
     }
+
+
 
     function reproducirNotificacion() {
+
         const audio = document.getElementById('notificationSound');
+
         audio.play().catch(err => console.warn('No se pudo reproducir notificación:', err));
+
     }
 
+
+
     // ========================================
+
     // NAVEGACIÓN
+
     // ========================================
+
     
+
     document.getElementById('showChatBtn').addEventListener('click', () => {
+
         document.getElementById('chatSection').style.display = 'block';
+
         document.getElementById('pendientesSection').style.display = 'none';
+
         document.getElementById('asignadosSection').style.display = 'none';
+
         document.getElementById('historialSection').style.display = 'none';
+
         window.detenerSeguimiento(); // 🆕 DETENER AL CAMBIAR DE SECCIÓN
+
     });
+
+
 
     document.getElementById('showPendientesBtn').addEventListener('click', () => {
+
         document.getElementById('chatSection').style.display = 'none';
+
         document.getElementById('pendientesSection').style.display = 'block';
+
         document.getElementById('asignadosSection').style.display = 'none';
+
         document.getElementById('historialSection').style.display = 'none';
+
         window.detenerSeguimiento(); // 🆕 DETENER AL CAMBIAR DE SECCIÓN
+
     });
+
+
 
     document.getElementById('showAsignadosBtn').addEventListener('click', () => {
+
         document.getElementById('chatSection').style.display = 'none';
+
         document.getElementById('pendientesSection').style.display = 'none';
+
         document.getElementById('asignadosSection').style.display = 'block';
+
         document.getElementById('historialSection').style.display = 'none';
+
         
+
         // 🆕 RESTAURAR SEGUIMIENTO SI HAY PEDIDO ACTIVO
+
         if (activePedidoData && activePedidoData.clienteUID) {
+
             setTimeout(() => {
+
                 iniciarSeguimientoCliente(activePedidoData.clienteUID);
+
                 document.getElementById('mapa-cliente-container').style.display = 'block';
+
             }, 300);
+
         }
+
     });
+
+
 
     document.getElementById('showHistorialBtn').addEventListener('click', () => {
+
         document.getElementById('chatSection').style.display = 'none';
+
         document.getElementById('pendientesSection').style.display = 'none';
+
         document.getElementById('asignadosSection').style.display = 'none';
+
         document.getElementById('historialSection').style.display = 'block';
+
         window.detenerSeguimiento(); // 🆕 DETENER AL CAMBIAR DE SECCIÓN
+
     });
+
+
 
     document.getElementById('verMapaBtn').addEventListener('click', () => {
+
         document.getElementById('showAsignadosBtn').click();
+
         
+
         setTimeout(() => {
+
             const mapaContainer = document.getElementById('mapa-cliente-container');
+
             if (mapaContainer.style.display === 'none') {
+
                 mapaContainer.style.display = 'block';
+
                 inicializarMapaCliente();
+
                 
+
                 // 🆕 RESTAURAR SEGUIMIENTO
+
                 if (activePedidoData && activePedidoData.clienteUID) {
+
                     iniciarSeguimientoCliente(activePedidoData.clienteUID);
+
                 }
+
             }
+
         }, 100);
+
     });
 
+
+
     // ========================================
+
     // AUTENTICACIÓN
+
     // ========================================
+
     
+
     document.getElementById('registerBtn').addEventListener('click', async () => {
+
         const email = document.getElementById('loginEmail').value.trim();
+
         const password = document.getElementById('loginPassword').value;
+
         
+
         if (!email || !password) {
+
             document.getElementById('loginError').textContent = 'Por favor completa todos los campos';
+
             return;
+
         }
+
         
+
         if (password.length < 6) {
+
             document.getElementById('loginError').textContent = 'La contraseña debe tener al menos 6 caracteres';
+
             return;
+
         }
+
         
+
         try {
+
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
             const uid = userCredential.user.uid;
+
             
+
             localStorage.setItem('lastRepartidorEmail', email);
+
             localStorage.setItem('lastRepartidorPassword', password);
+
             
+
             console.log('✅ Usuario registrado:', uid);
+
             
+
         } catch (error) {
+
             console.error('❌ Error al registrar:', error);
+
             
+
             if (error.code === 'auth/email-already-in-use') {
+
                 document.getElementById('loginError').textContent = 'Este correo ya está registrado. Usa "Iniciar Sesión".';
+
             } else if (error.code === 'auth/invalid-email') {
+
                 document.getElementById('loginError').textContent = 'Correo electrónico inválido';
+
             } else if (error.code === 'auth/weak-password') {
+
                 document.getElementById('loginError').textContent = 'La contraseña es muy débil';
+
             } else {
+
                 document.getElementById('loginError').textContent = 'Error: ' + error.message;
+
             }
+
         }
+
     });
+
+
 
     document.getElementById('loginBtn').addEventListener('click', async () => {
+
         const email = document.getElementById('loginEmail').value.trim();
+
         const password = document.getElementById('loginPassword').value;
+
         
+
         if (!email || !password) {
+
             document.getElementById('loginError').textContent = 'Por favor completa todos los campos';
+
             return;
+
         }
+
         
+
         try {
+
             await signInWithEmailAndPassword(auth, email, password);
+
             
+
             localStorage.setItem('lastRepartidorEmail', email);
+
             localStorage.setItem('lastRepartidorPassword', password);
+
             
+
             console.log('✅ Inicio de sesión exitoso');
+
             
+
         } catch (error) {
+
             console.error('❌ Error al iniciar sesión:', error);
+
             
+
             if (error.code === 'auth/user-not-found') {
+
                 document.getElementById('loginError').textContent = 'Usuario no encontrado. Regístrate primero.';
+
             } else if (error.code === 'auth/wrong-password') {
+
                 document.getElementById('loginError').textContent = 'Contraseña incorrecta';
+
             } else if (error.code === 'auth/invalid-email') {
+
                 document.getElementById('loginError').textContent = 'Correo electrónico inválido';
+
             } else {
+
                 document.getElementById('loginError').textContent = 'Error: ' + error.message;
+
             }
+
         }
+
     });
+
+
 
     document.getElementById('completeRegBtn').addEventListener('click', async () => {
+
         const nombre = document.getElementById('regName').value.trim();
+
         const telefono = document.getElementById('regPhone').value.trim();
+
         const telefonoSecundario = document.getElementById('regSecondaryPhone').value.trim();
+
         const direccion = document.getElementById('regAddress').value.trim();
+
         
+
         if (!nombre || !telefono || !direccion) {
+
             alert('❌ Por favor completa todos los campos obligatorios (*)');
+
             return;
+
         }
+
         
+
         try {
+
             await set(ref(db, `repartidores_info/${repartidorUID}`), {
+
                 nombre: nombre,
+
                 telefono: telefono,
+
                 telefonoSecundario: telefonoSecundario || '',
+
                 direccion: direccion,
+
                 email: auth.currentUser.email,
+
                 uid: repartidorUID,
+
                 fechaRegistro: Date.now(),
+
                 online: false,
+
                 trackingActivo: false,
+
                 appVersion: APP_VERSION
+
             });
+
             
+
             repartidorNombre = nombre;
+
             window.currentRepartidorNombre = nombre;
+
             
+
             document.getElementById('loginContainer').style.display = 'none';
+
             document.getElementById('appContainer').style.display = 'block';
+
             document.getElementById('repartidorName').textContent = nombre;
+
             
+
             await configurarPresenciaInicial();
+
             
+
             escucharChat();
+
             escucharPedidos();
+
             escucharHistorial();
+
             
+
             mostrarModalPermisos();
+
             
+
             console.log('✅ Registro completado');
+
             
+
         } catch (error) {
+
             console.error('❌ Error al completar registro:', error);
+
             alert('❌ Error al guardar información: ' + error.message);
+
         }
+
     });
+
+
 
     document.getElementById('regLogoutBtn').addEventListener('click', async () => {
+
         try {
+
             await signOut(auth);
+
             console.log('✅ Sesión cerrada');
+
         } catch (error) {
+
             console.error('❌ Error al cerrar sesión:', error);
+
         }
+
     });
+
+
 
     document.getElementById('logoutBtn').addEventListener('click', async () => {
+
         const confirmacion = confirm('¿Seguro que deseas cerrar sesión?');
+
         if (!confirmacion) return;
+
         
+
         try {
+
             await marcarComoOffline();
+
             detenerTrackingGPS();
+
             detenerEnvioUbicacionRepartidor();
+
             detenerBackgroundGeolocation();
+
             detenerHeartbeat();
+
             await liberarWakeLock();
+
             
+
             await signOut(auth);
+
             
+
             console.log('✅ Sesión cerrada correctamente');
+
             
+
         } catch (error) {
+
             console.error('❌ Error al cerrar sesión:', error);
+
         }
+
     });
+
+
 
     const lastEmail = localStorage.getItem('lastRepartidorEmail');
+
     const lastPassword = localStorage.getItem('lastRepartidorPassword');
+
     
+
     if (lastEmail && lastPassword) {
+
         document.getElementById('quickLoginArea').style.display = 'block';
+
         document.getElementById('quickLoginMessage').textContent = `Última sesión: ${lastEmail}`;
+
         
+
         document.getElementById('quickLoginBtn').addEventListener('click', async () => {
+
             try {
+
                 await signInWithEmailAndPassword(auth, lastEmail, lastPassword);
+
                 console.log('✅ Inicio de sesión rápido exitoso');
+
             } catch (error) {
+
                 console.error('❌ Error en inicio rápido:', error);
+
                 alert('❌ Error al iniciar sesión rápida. Ingresa manualmente.');
+
             }
+
         });
+
     }
 
+
+
     onAuthStateChanged(auth, async (user) => {
+
         if (user) {
+
             repartidorUID = user.uid;
+
             window.currentRepartidorUID = user.uid;
+
             
+
             console.log('👤 Usuario autenticado:', user.uid);
+
             
+
             const repRef = ref(db, `repartidores_info/${user.uid}`);
+
             const snapshot = await get(repRef);
+
             
+
             if (snapshot.exists()) {
+
                 const data = snapshot.val();
+
                 repartidorNombre = data.nombre || 'Repartidor';
+
                 window.currentRepartidorNombre = repartidorNombre;
+
                 
+
                 document.getElementById('loginContainer').style.display = 'none';
+
                 document.getElementById('appContainer').style.display = 'block';
+
                 document.getElementById('repartidorName').textContent = repartidorNombre;
+
                 
+
                 await configurarPresenciaInicial();
+
                 
+
                 escucharChat();
+
                 escucharPedidos();
+
                 escucharHistorial();
+
                 
+
                 mostrarModalPermisos();
+
                 
+
                 console.log('✅ App iniciada correctamente');
+
                 
+
             } else {
+
                 document.getElementById('manualLoginForm').style.display = 'none';
+
                 document.getElementById('registrationForm').style.display = 'block';
+
                 document.getElementById('regEmailDisplay').value = user.email;
+
             }
+
             
+
         } else {
+
             repartidorUID = null;
+
             window.currentRepartidorUID = null;
+
             window.currentRepartidorNombre = null;
+
             
+
             detenerTrackingGPS();
+
             detenerEnvioUbicacionRepartidor();
+
             detenerBackgroundGeolocation();
+
             detenerHeartbeat();
+
             await liberarWakeLock();
+
             
+
             document.getElementById('loginContainer').style.display = 'flex';
+
             document.getElementById('appContainer').style.display = 'none';
+
             document.getElementById('manualLoginForm').style.display = 'block';
+
             document.getElementById('registrationForm').style.display = 'none';
+
             
+
             console.log('👤 Usuario no autenticado');
+
         }
+
     });
 
+
+
 </script>
+
 </body>
+
 </html>
+
