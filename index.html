@@ -2136,18 +2136,39 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             Object.keys(data).forEach(key => {
                 const msg = data[key];
                 const msgDiv = document.createElement('div');
-                if (msg.tipo === 'imagen') {
-                    msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
-                    msgDiv.innerHTML = `
-                        <img src="${msg.imagenUrl}" onclick="mostrarImagenCompleta('${msg.imagenUrl}')">
-                        <span class="chat-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
-                    `;
-                } else if (msg.tipo === 'audio') {
-                    msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
-                    msgDiv.innerHTML = `
-                        <audio src="${msg.audioUrl}" controls></audio>
-                        <span class="chat-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
-                    `;
+           if (msg.tipo === 'imagen' || msg.imagenUrl || msg.imageUrl || msg.urlImagen) {
+    msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
+    const imageUrl = msg.imagenUrl || msg.imageUrl || msg.urlImagen || msg.url;
+    msgDiv.innerHTML = `
+        <img src="${imageUrl}" onclick="mostrarImagenCompleta('${imageUrl}')" style="max-width: 200px; border-radius: 8px; cursor: pointer;">
+        <span class="chat-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+    `;
+} else if (msg.tipo === 'audio' || msg.audioUrl || msg.urlAudio) {
+    msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
+    const audioUrl = msg.audioUrl || msg.urlAudio || msg.url;
+    const audioId = `audio_${key}`;
+    msgDiv.innerHTML = `
+        <div class="audio-message-whatsapp" style="display: flex; align-items: center; gap: 10px; padding: 8px; background: rgba(255,255,255,0.1); border-radius: 20px; max-width: 280px;">
+            <button class="play-audio-btn" onclick="toggleAudio('${audioId}')" style="background: var(--color-primary); border: none; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px;">
+                ▶️
+            </button>
+            <div style="flex: 1;">
+                <div class="audio-wave" style="height: 30px; display: flex; align-items: center; gap: 2px;">
+                    <span style="width: 3px; height: 15px; background: var(--color-primary); border-radius: 2px;"></span>
+                    <span style="width: 3px; height: 22px; background: var(--color-primary); border-radius: 2px;"></span>
+                    <span style="width: 3px; height: 18px; background: var(--color-primary); border-radius: 2px;"></span>
+                    <span style="width: 3px; height: 25px; background: var(--color-primary); border-radius: 2px;"></span>
+                    <span style="width: 3px; height: 20px; background: var(--color-primary); border-radius: 2px;"></span>
+                    <span style="width: 3px; height: 15px; background: var(--color-primary); border-radius: 2px;"></span>
+                    <span style="width: 3px; height: 28px; background: var(--color-primary); border-radius: 2px;"></span>
+                    <span style="width: 3px; height: 17px; background: var(--color-primary); border-radius: 2px;"></span>
+                </div>
+                <span class="audio-duration" style="font-size: 11px; color: #999;">0:00</span>
+            </div>
+            <audio id="${audioId}" src="${audioUrl}" style="display: none;"></audio>
+        </div>
+        <span class="chat-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+    `;
                 } else {
                     msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
                     msgDiv.innerHTML = `
@@ -2164,6 +2185,50 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         document.getElementById('modalImage').src = url;
         document.getElementById('imageModal').classList.add('active');
     }
+    window.toggleAudio = function(audioId) {
+    const audio = document.getElementById(audioId);
+    const btn = audio.previousElementSibling.querySelector('.play-audio-btn');
+    const durationSpan = audio.previousElementSibling.querySelector('.audio-duration');
+    
+    if (audio.paused) {
+        // Pausar todos los otros audios primero
+        document.querySelectorAll('audio').forEach(a => {
+            if (a.id !== audioId && !a.paused) {
+                a.pause();
+                a.currentTime = 0;
+                const otherBtn = document.querySelector(`#${a.id}`).previousElementSibling.querySelector('.play-audio-btn');
+                if (otherBtn) otherBtn.innerHTML = '▶️';
+            }
+        });
+        
+        audio.play();
+        btn.innerHTML = '⏸️';
+        
+        audio.ontimeupdate = function() {
+            const minutes = Math.floor(audio.currentTime / 60);
+            const seconds = Math.floor(audio.currentTime % 60);
+            durationSpan.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        };
+        
+        audio.onended = function() {
+            btn.innerHTML = '▶️';
+            audio.currentTime = 0;
+            const minutes = Math.floor(audio.duration / 60);
+            const seconds = Math.floor(audio.duration % 60);
+            durationSpan.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        };
+        
+        // Mostrar duración total al cargar
+        if (audio.duration) {
+            const minutes = Math.floor(audio.duration / 60);
+            const seconds = Math.floor(audio.duration % 60);
+            durationSpan.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+    } else {
+        audio.pause();
+        btn.innerHTML = '▶️';
+    }
+}
     // ========================================
     // PEDIDOS
     // ========================================
@@ -2274,16 +2339,16 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
         const tiempoTranscurrido = pedido.tiempoAceptado ? calcularTiempoTranscurrido(pedido.tiempoAceptado) : '00:00';
         div.innerHTML = `
-            <strong>🚚 Pedido #${pedidoId.slice(-6)}</strong><br>
-            🏷️ Estado: <strong style="color: var(--color-primary);">${pedido.estado}</strong><br>
-            ${pedido.estado !== 'Aceptado' ? `<span class="timer">⏱️ ${tiempoTranscurrido}</span>` : ''}
-            <hr style="border-color: #444; margin: 10px 0;">
-            📦 ${pedido.producto || 'N/A'}<br>
-            💵 ${pedido.precio || 'N/A'}<br>
-            📍 ${pedido.direccion || 'N/A'}<br>
-            👤 ${pedido.nombre || 'N/A'}<br>
-            📞 ${pedido.telefono || 'N/A'}<br>
-            📝 ${pedido.detalles || 'Sin detalles'}<br>
+    <strong>🚚 Pedido #${pedidoId.slice(-6)}</strong><br>
+    🏷️ Estado: <strong style="color: var(--color-primary);">${pedido.estado || 'Desconocido'}</strong><br>
+    ${pedido.estado !== 'Aceptado' ? `<span class="timer">⏱️ ${tiempoTranscurrido}</span>` : ''}
+    <hr style="border-color: #444; margin: 10px 0;">
+    📦 ${pedido.items || pedido.producto || pedido.descripcion || 'Sin producto'}<br>
+    💵 ${pedido.total || pedido.precio || pedido.valor || 'Sin precio'}<br>
+    📍 ${pedido.direccionEntrega || pedido.direccion || pedido.ubicacion || 'Sin dirección'}<br>
+    👤 ${pedido.nombreCliente || pedido.nombre || pedido.cliente || 'Sin nombre'}<br>
+    📞 ${pedido.telefonoCliente || pedido.telefono || pedido.celular || 'Sin teléfono'}<br>
+    📝 ${pedido.observaciones || pedido.detalles || pedido.notas || 'Sin detalles'}<br>
             ${estadoBotones}
             <button onclick="window.iniciarCancelacion('${pedidoId}')" 
                     style="background: var(--color-accent-danger); color: white;">
@@ -2425,16 +2490,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 const fecha = pedido.tiempoCompletado || pedido.tiempoCancelado;
                 const fechaTexto = fecha ? new Date(fecha).toLocaleString() : 'N/A';
                 div.innerHTML = `
-                    <strong>${pedido.estado === 'Completado' ? '✅' : '❌'} Pedido #${pedidoId.slice(-6)}</strong><br>
-                    🏷️ Estado: <strong>${pedido.estado}</strong><br>
-                    ${pedido.motivoCancelacion ? `📝 Motivo: ${pedido.motivoCancelacion}<br>` : ''}
-                    📅 Fecha: ${fechaTexto}<br>
-                    <hr style="border-color: #444; margin: 10px 0;">
-                    📦 ${pedido.producto || 'N/A'}<br>
-                    💵 ${pedido.precio || 'N/A'}<br>
-                    📍 ${pedido.direccion || 'N/A'}<br>
-                    👤 ${pedido.nombre || 'N/A'}
-                `;
+    <strong>${pedido.estado === 'Completado' ? '✅' : '❌'} Pedido #${pedidoId.slice(-6)}</strong><br>
+    🏷️ Estado: <strong>${pedido.estado || 'Desconocido'}</strong><br>
+    ${pedido.motivoCancelacion ? `📝 Motivo: ${pedido.motivoCancelacion}<br>` : ''}
+    📅 Fecha: ${fechaTexto}<br>
+    <hr style="border-color: #444; margin: 10px 0;">
+    📦 ${pedido.items || pedido.producto || pedido.descripcion || pedido.detalle || 'Sin producto'}<br>
+    💵 ${pedido.total || pedido.precio || pedido.valor || pedido.costo || 'Sin precio'}<br>
+    📍 ${pedido.direccionEntrega || pedido.direccion || pedido.ubicacion || pedido.destino || 'Sin dirección'}<br>
+    👤 ${pedido.nombreCliente || pedido.nombre || pedido.cliente || pedido.receptor || 'Sin nombre'}<br>
+    📞 ${pedido.telefonoCliente || pedido.telefono || pedido.celular || pedido.contacto || 'Sin teléfono'}
+`;
                 listaHistorial.appendChild(div);
             });
         });
