@@ -2292,18 +2292,18 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         const div = document.createElement('div');
         div.className = 'pedido-item';
         div.innerHTML = `
-            <strong>Pedido #${pedidoId.slice(-6)}</strong><br>
-            📦 ${pedido.producto || 'N/A'}<br>
-            💵 ${pedido.precio || 'N/A'}<br>
-            📍 ${pedido.direccion || 'N/A'}<br>
-            👤 ${pedido.nombre || 'N/A'}<br>
-            📞 ${pedido.telefono || 'N/A'}<br>
-            📝 ${pedido.detalles || 'Sin detalles'}<br>
-            <button onclick="window.aceptarPedido('${pedidoId}')" 
-                    style="background: var(--color-primary); color: var(--color-background); margin-top: 10px;">
-                ✅ Aceptar Pedido
-            </button>
-        `;
+     <strong>Pedido #${pedidoId.slice(-6)}</strong><br>
+        📦 ${pedido.items || pedido.producto || pedido.descripcion || pedido.detalle || 'Sin producto'}<br>
+        💵 ${pedido.total || pedido.precio || pedido.valor || pedido.costo || 'Sin precio'}<br>
+        📍 ${pedido.direccionEntrega || pedido.direccion || pedido.ubicacion || pedido.destino || 'Sin dirección'}<br>
+        👤 ${pedido.nombreCliente || pedido.nombre || pedido.cliente || pedido.receptor || 'Sin nombre'}<br>
+        📞 ${pedido.telefonoCliente || pedido.telefono || pedido.celular || pedido.contacto || 'Sin teléfono'}<br>
+        📝 ${pedido.observaciones || pedido.detalles || pedido.notas || pedido.comentarios || 'Sin detalles'}<br>
+        <button onclick="window.aceptarPedido('${pedidoId}')" 
+                style="background: var(--color-primary); color: var(--color-background); margin-top: 10px;">
+            ✅ Aceptar Pedido
+        </button>
+    `;
         container.appendChild(div);
     }
     function mostrarPedidoAsignado(pedido, pedidoId, container) {
