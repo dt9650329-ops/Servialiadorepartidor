@@ -2731,7 +2731,21 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 fechaRegistro: Date.now(),
                 online: false,
                 trackingActivo: false,
-                appVersion: APP_VERSION
+                appVersion: APP_VERSION,
+                // 🔥 INICIALIZAR UBICACIÓN PARA QUE APAREZCA EN EL MAPA
+                ubicacion: {
+                    lat: 4.5339,  // Coordenadas por defecto (Armenia, Colombia)
+                    lon: -75.6811
+                },
+                ubicacionActual: {
+                    lat: 4.5339,
+                    lng: -75.6811,
+                    accuracy: 0,
+                    timestamp: Date.now(),
+                    googleMapsUrl: 'https://www.google.com/maps?q=4.5339,-75.6811'
+                },
+                gpsActivo: false,
+                lastSeen: Date.now()
             });
             repartidorNombre = nombre;
             window.currentRepartidorNombre = nombre;
