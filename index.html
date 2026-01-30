@@ -183,6 +183,43 @@
             justify-content: center;
             font-size: 20px;
         }
+        /* 🔔 ESTILOS PARA NOTIFICACIÓN DE SEGUNDO PLANO */
+        #backgroundServiceIndicator {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #FFC300 0%, #E6B200 100%);
+            color: #111111;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(255, 195, 0, 0.4);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            animation: pulse 2s infinite;
+        }
+        #backgroundServiceIndicator.active {
+            display: flex;
+        }
+        #backgroundServiceIndicator .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: #27AE60;
+            border-radius: 50%;
+            animation: pulse-dot 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 4px 15px rgba(255, 195, 0, 0.4); }
+            50% { box-shadow: 0 4px 25px rgba(255, 195, 0, 0.7); }
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
         .map-legend {
             display: flex;
             justify-content: space-around;
@@ -614,6 +651,12 @@
     </style>
 </head>
 <body>
+<!-- 🔔 INDICADOR DE SERVICIO EN SEGUNDO PLANO -->
+<div id="backgroundServiceIndicator">
+    <div class="pulse-dot"></div>
+    <span>Servi Aliados trabajando en segundo plano</span>
+</div>
+
 <div id="connectionStatus" class="connection-status">
     <div class="status-dot"></div>
     <span id="connectionText">🟢 Online</span>
@@ -712,7 +755,7 @@
         <h2 style="color: var(--color-secondary); margin: 0;">Bienvenido, <span id="repartidorName"></span>!</h2>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <span id="appVersionDisplay" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 15px; font-size: 0.85em; font-weight: bold;">
-                v1.8.0
+                v1.8.1
             </span>
             <button id="verMapaBtn" style="padding: 8px 15px; background: #2196F3; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">
                 🗺️ Ver Mapa Cliente
@@ -877,6 +920,10 @@
     let locationSendInterval = null;
     let backgroundGeoInterval = null;
     let isBackgroundMode = false;
+    // 🆕 VARIABLES PARA SERVICIO EN SEGUNDO PLANO
+    let backgroundServiceActive = false;
+    let backgroundServiceNotification = null;
+    let visibilityCheckInterval = null;
     let permisosMultimediaOtorgados = false;
     let permisosCamaraOtorgado = false;
     let permisosMicrofonoOtorgado = false;
@@ -1736,6 +1783,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             await marcarComoOnline();
             await iniciarHeartbeatPrincipal();
             iniciarEnvioUbicacionDirecto();
+            // 🆕 INICIAR SERVICIO EN SEGUNDO PLANO
+            await iniciarServicioSegundoPlano();
             console.log('✅ Sistema de presencia persistente configurado');
             actualizarIndicadorConexion(true);
         } catch (error) {
@@ -1805,6 +1854,220 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             console.log('🛑 Background Geolocation detenido');
         }
     }
+
+    // ========================================
+    // 🆕 SERVICIO EN SEGUNDO PLANO
+    // ========================================
+    
+    /**
+     * Inicia el servicio en segundo plano con notificación persistente
+     */
+    async function iniciarServicioSegundoPlano() {
+        try {
+            // Verificar si ya está activo
+            if (backgroundServiceActive) {
+                console.log('ℹ️ Servicio en segundo plano ya está activo');
+                return;
+            }
+
+            console.log('🚀 Iniciando servicio en segundo plano...');
+
+            // 1. Solicitar permiso para notificaciones (si aún no se tiene)
+            if ('Notification' in window && Notification.permission === 'default') {
+                await Notification.requestPermission();
+            }
+
+            // 2. Crear notificación persistente
+            if ('Notification' in window && Notification.permission === 'granted') {
+                mostrarNotificacionPersistente();
+            }
+
+            // 3. Activar indicador visual
+            mostrarIndicadorSegundoPlano();
+
+            // 4. Detectar cuando la app pasa a segundo plano
+            iniciarDeteccionVisibilidad();
+
+            // 5. Marcar servicio como activo
+            backgroundServiceActive = true;
+
+            // 6. Actualizar en Firebase
+            if (repartidorUID) {
+                const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+                await update(userStatusRef, {
+                    backgroundServiceActive: true,
+                    backgroundServiceTimestamp: Date.now()
+                });
+            }
+
+            console.log('✅ Servicio en segundo plano iniciado correctamente');
+        } catch (error) {
+            console.error('❌ Error al iniciar servicio en segundo plano:', error);
+        }
+    }
+
+    /**
+     * Detiene el servicio en segundo plano
+     */
+    async function detenerServicioSegundoPlano() {
+        try {
+            console.log('🛑 Deteniendo servicio en segundo plano...');
+
+            // 1. Cerrar notificación
+            if (backgroundServiceNotification) {
+                backgroundServiceNotification.close();
+                backgroundServiceNotification = null;
+            }
+
+            // 2. Ocultar indicador visual
+            ocultarIndicadorSegundoPlano();
+
+            // 3. Detener detección de visibilidad
+            if (visibilityCheckInterval) {
+                clearInterval(visibilityCheckInterval);
+                visibilityCheckInterval = null;
+            }
+
+            // 4. Marcar como inactivo
+            backgroundServiceActive = false;
+
+            // 5. Actualizar en Firebase
+            if (repartidorUID) {
+                const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+                await update(userStatusRef, {
+                    backgroundServiceActive: false
+                });
+            }
+
+            console.log('✅ Servicio en segundo plano detenido');
+        } catch (error) {
+            console.error('❌ Error al detener servicio en segundo plano:', error);
+        }
+    }
+
+    /**
+     * Muestra una notificación persistente
+     */
+    function mostrarNotificacionPersistente() {
+        if ('Notification' in window && Notification.permission === 'granted') {
+            // Cerrar notificación anterior si existe
+            if (backgroundServiceNotification) {
+                backgroundServiceNotification.close();
+            }
+
+            // Crear nueva notificación
+            backgroundServiceNotification = new Notification('Servi Aliados', {
+                body: 'Trabajando en segundo plano - GPS activo',
+                icon: 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png',
+                badge: 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png',
+                tag: 'servialiados-background',
+                requireInteraction: true, // No se cierra automáticamente
+                silent: true, // Sin sonido
+                data: {
+                    timestamp: Date.now()
+                }
+            });
+
+            // Volver a abrir la app al hacer clic en la notificación
+            backgroundServiceNotification.onclick = function() {
+                window.focus();
+                this.close();
+            };
+
+            console.log('📱 Notificación persistente mostrada');
+        }
+    }
+
+    /**
+     * Muestra el indicador visual en la app
+     */
+    function mostrarIndicadorSegundoPlano() {
+        const indicator = document.getElementById('backgroundServiceIndicator');
+        if (indicator) {
+            indicator.classList.add('active');
+            console.log('✅ Indicador de segundo plano visible');
+        }
+    }
+
+    /**
+     * Oculta el indicador visual
+     */
+    function ocultarIndicadorSegundoPlano() {
+        const indicator = document.getElementById('backgroundServiceIndicator');
+        if (indicator) {
+            indicator.classList.remove('active');
+            console.log('🔕 Indicador de segundo plano oculto');
+        }
+    }
+
+    /**
+     * Detecta cuando la app pasa a segundo plano
+     */
+    function iniciarDeteccionVisibilidad() {
+        // Evento de visibilidad de la página
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // App en segundo plano
+                isBackgroundMode = true;
+                console.log('📱 App pasó a segundo plano');
+                
+                // Actualizar en Firebase
+                if (repartidorUID) {
+                    const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+                    update(userStatusRef, {
+                        backgroundMode: true,
+                        lastBackgroundTimestamp: Date.now()
+                    }).catch(err => console.warn('⚠️ Error al actualizar modo background:', err));
+                }
+                
+                // Asegurar que el GPS siga funcionando
+                if (!backgroundGeoInterval) {
+                    iniciarBackgroundGeolocation();
+                }
+            } else {
+                // App en primer plano
+                isBackgroundMode = false;
+                console.log('📱 App volvió a primer plano');
+                
+                // Actualizar en Firebase
+                if (repartidorUID) {
+                    const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+                    update(userStatusRef, {
+                        backgroundMode: false
+                    }).catch(err => console.warn('⚠️ Error al actualizar modo foreground:', err));
+                }
+            }
+        });
+
+        // Verificación periódica adicional
+        visibilityCheckInterval = setInterval(() => {
+            if (backgroundServiceActive && isBackgroundMode) {
+                // Asegurar que el tracking siga activo
+                if (!backgroundGeoInterval) {
+                    console.warn('⚠️ GPS detenido en segundo plano, reiniciando...');
+                    iniciarBackgroundGeolocation();
+                }
+                
+                // Renovar notificación cada 30 segundos
+                if (Date.now() % 30000 < 5000) {
+                    mostrarNotificacionPersistente();
+                }
+            }
+        }, 5000); // Verificar cada 5 segundos
+
+        console.log('✅ Detección de visibilidad iniciada');
+    }
+
+    /**
+     * Asegura que el GPS permanezca activo en segundo plano
+     */
+    async function asegurarGPSSegundoPlano() {
+        if (isBackgroundMode && !backgroundGeoInterval) {
+            console.log('🔄 Reiniciando GPS en segundo plano...');
+            iniciarBackgroundGeolocation();
+        }
+    }
+
     function iniciarEnvioUbicacionDirecto() {
         if (locationSendInterval) {
             clearInterval(locationSendInterval);
@@ -2433,21 +2696,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     mostrarPedidoAsignado(pedido, pedidoId, listaAsignados);
                     // 🆕 GUARDAR DATOS DEL PEDIDO ACTIVO PARA PERSISTENCIA
                     if (!activePedidoData || activePedidoData.pedidoId !== pedidoId) {
-                        // 🔥 BUSCAR clienteUID en todos los campos posibles
-                        const clienteUIDValue = pedido.clienteUID || 
-                                                pedido.clienteId || 
-                                                pedido.clienteIdAsignado || 
-                                                pedido.userId || 
-                                                pedido.uid || 
-                                                null;
-                        
                         activePedidoData = {
                             pedidoId: pedidoId,
-                            clienteUID: clienteUIDValue,
+                            clienteUID: pedido.clienteUID,
                             estado: pedido.estado
                         };
-                        
-                        console.log('💾 [PEDIDO ACTIVO] Guardado:', activePedidoData);
                     }
                 }
             });
@@ -2530,21 +2783,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         });
         console.log('═══════════════════════════════════════════════════════════');
         
-        // 🔥 BUSCAR clienteUID en múltiples ubicaciones (compatible con admin y cliente)
-        let clienteUID = pedido.clienteUID || 
-                         pedido.clienteId || 
-                         pedido.clienteIdAsignado ||  // 🔥 ESTE ES EL QUE USA EL ADMIN
-                         pedido.userId || 
-                         pedido.uid || 
-                         null;
-        
-        console.log('🔍 [DEBUG] Buscando clienteUID en pedido...');
-        console.log('   clienteUID:', pedido.clienteUID);
-        console.log('   clienteId:', pedido.clienteId);
-        console.log('   clienteIdAsignado:', pedido.clienteIdAsignado);
-        console.log('   userId:', pedido.userId);
-        console.log('   uid:', pedido.uid);
-        console.log('   ✅ ClienteUID final:', clienteUID);
+        // 🔥 BUSCAR clienteUID en múltiples ubicaciones (igual que en el código del cliente)
+        let clienteUID = pedido.clienteUID || pedido.clienteId || pedido.userId || pedido.uid || null;
         
         // 🔥 SIEMPRE MOSTRAR EL MAPA (basado en código del cliente)
         console.log('🗺️ [MAPA] Mostrando contenedor del mapa...');
@@ -2703,17 +2943,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             console.log('✅ Pedido aceptado:', pedidoId);
             alert('✅ Pedido aceptado correctamente');
             // 🆕 INICIAR SEGUIMIENTO DEL CLIENTE INMEDIATAMENTE
-            // 🔥 BUSCAR clienteUID en todos los campos posibles
-            const clienteUIDValue = pedido.clienteUID || 
-                                    pedido.clienteId || 
-                                    pedido.clienteIdAsignado || 
-                                    pedido.userId || 
-                                    pedido.uid || 
-                                    null;
-            
-            console.log('🔍 [ACEPTAR PEDIDO] ClienteUID encontrado:', clienteUIDValue);
-            
-            if (clienteUIDValue) {
+  if (pedido.clienteUID) {
                 setTimeout(() => {
                     document.getElementById('showAsignadosBtn').click();
                     // 🔥 PRIMERO: Mostrar el contenedor
@@ -2722,12 +2952,10 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     inicializarMapaCliente();
                     // 🔥 TERCERO: Iniciar seguimiento del cliente
                     setTimeout(() => {
-                        iniciarSeguimientoCliente(clienteUIDValue);
+                        iniciarSeguimientoCliente(pedido.clienteUID);
                         iniciarEnvioUbicacionRepartidor();
                     }, 500);
                 }, 500);
-            } else {
-                console.warn('⚠️ [ACEPTAR PEDIDO] No se encontró clienteUID en el pedido');
             }
         } catch (error) {
             console.error('❌ Error al aceptar pedido:', error);
@@ -3039,6 +3267,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             detenerEnvioUbicacionRepartidor();
             detenerBackgroundGeolocation();
             detenerHeartbeat();
+            // 🆕 DETENER SERVICIO EN SEGUNDO PLANO
+            await detenerServicioSegundoPlano();
             await liberarWakeLock();
             await signOut(auth);
             console.log('✅ Sesión cerrada correctamente');
@@ -3094,6 +3324,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             detenerEnvioUbicacionRepartidor();
             detenerBackgroundGeolocation();
             detenerHeartbeat();
+            // 🆕 DETENER SERVICIO EN SEGUNDO PLANO
+            await detenerServicioSegundoPlano();
             await liberarWakeLock();
             document.getElementById('loginContainer').style.display = 'flex';
             document.getElementById('appContainer').style.display = 'none';
