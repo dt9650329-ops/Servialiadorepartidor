@@ -886,7 +886,7 @@
     window.get = get;
     window.onValue = onValue;
     window.off = off;
-    const APP_VERSION = "1.8.1";
+    const APP_VERSION = "1.8.2";
     window.addEventListener('DOMContentLoaded', () => {
         const versionDisplay = document.getElementById('appVersionDisplay');
         if (versionDisplay) {
@@ -928,6 +928,218 @@
     let permisosCamaraOtorgado = false;
     let permisosMicrofonoOtorgado = false;
     let permisosUbicacionOtorgado = false;
+    
+    // ========================================
+    // 🆕 CONFIGURACIÓN NATIVA APPCREATOR24
+    // ========================================
+    
+    // Wake Lock Agresivo
+    let wakeLockNative = null;
+    let wakeLockInterval = null;
+    
+    async function activarWakeLockAgresivo() {
+        try {
+            // API Wake Lock del navegador
+            if ('wakeLock' in navigator) {
+                wakeLockNative = await navigator.wakeLock.request('screen');
+                console.log('✅ Wake Lock nativo activado');
+                
+                wakeLockNative.addEventListener('release', () => {
+                    console.log('⚠️ Wake Lock liberado, reactivando...');
+                    setTimeout(activarWakeLockAgresivo, 1000);
+                });
+            }
+            
+            // Backup: Intervalo para mantener CPU activa
+            if (wakeLockInterval) clearInterval(wakeLockInterval);
+            wakeLockInterval = setInterval(() => {
+                const timestamp = Date.now();
+                localStorage.setItem('keepAlive', timestamp.toString());
+            }, 5000);
+            
+            console.log('✅ Keep-alive interval iniciado');
+            
+        } catch (error) {
+            console.warn('⚠️ Error Wake Lock:', error);
+        }
+    }
+    
+    // Geolocalización con watchPosition (SIEMPRE activo)
+    let geoWatchId = null;
+    let lastGeoUpdate = 0;
+    const GEO_MIN_INTERVAL = 15000;
+    
+    function iniciarGeolocationWatch() {
+        if (geoWatchId) {
+            navigator.geolocation.clearWatch(geoWatchId);
+        }
+        
+        geoWatchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const now = Date.now();
+                if (now - lastGeoUpdate < GEO_MIN_INTERVAL) return;
+                
+                lastGeoUpdate = now;
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                const accuracy = position.coords.accuracy;
+                
+                // Actualizar Firebase usando la referencia existente
+                if (repartidorUID && db) {
+                    const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
+                    update(userStatusRef, {
+                        ubicacion: { lat, lng: lon },
+                        ubicacionActual: {
+                            lat, lng: lon, accuracy,
+                            timestamp: now,
+                            googleMapsUrl: `https://www.google.com/maps?q=${lat},${lon}`
+                        },
+                        trackingActivo: true,
+                        online: true,
+                        backgroundMode: document.hidden,
+                        lastSeen: now
+                    }).catch(err => console.warn('⚠️ Error GPS Watch:', err));
+                }
+                
+                console.log(`📍 WATCH GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)} [${document.hidden ? 'BACKGROUND' : 'FOREGROUND'}]`);
+            },
+            (error) => {
+                console.warn('⚠️ GPS Watch Error:', error.message);
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 30000,
+                maximumAge: 0
+            }
+        );
+        
+        console.log('✅ GPS watchPosition iniciado (permanente - se mantiene activo siempre)');
+    }
+    
+    function detenerGeolocationWatch() {
+        if (geoWatchId) {
+            navigator.geolocation.clearWatch(geoWatchId);
+            geoWatchId = null;
+            console.log('🛑 GPS Watch detenido');
+        }
+    }
+    
+    // Audio silencioso (truco para mantener app activa)
+    let audioContext = null;
+    let audioOscillator = null;
+    
+    function reproducirAudioSilencioso() {
+        try {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            
+            if (!audioOscillator) {
+                audioOscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                audioOscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                audioOscillator.frequency.value = 1;
+                gainNode.gain.value = 0.001;
+                
+                audioOscillator.start();
+                console.log('🔊 Audio silencioso activo (keep-alive trick)');
+            }
+        } catch (error) {
+            console.warn('⚠️ Audio silencioso error:', error);
+        }
+    }
+    
+    function detenerAudioSilencioso() {
+        try {
+            if (audioOscillator) {
+                audioOscillator.stop();
+                audioOscillator = null;
+            }
+            if (audioContext) {
+                audioContext.close();
+                audioContext = null;
+            }
+            console.log('🔇 Audio silencioso detenido');
+        } catch (error) {
+            console.warn('⚠️ Error al detener audio:', error);
+        }
+    }
+    
+    // Iniciar sistema completo de segundo plano
+    function iniciarSistemaSegundoPlanoNativo() {
+        console.log('🚀 ===== INICIANDO SISTEMA SEGUNDO PLANO NATIVO =====');
+        activarWakeLockAgresivo();
+        iniciarGeolocationWatch();
+        reproducirAudioSilencioso();
+        console.log('✅ Sistema segundo plano NATIVO ACTIVO');
+    }
+    
+    function detenerSistemaSegundoPlanoNativo() {
+        console.log('🛑 ===== DETENIENDO SISTEMA SEGUNDO PLANO NATIVO =====');
+        
+        if (wakeLockInterval) {
+            clearInterval(wakeLockInterval);
+            wakeLockInterval = null;
+        }
+        
+        if (wakeLockNative) {
+            wakeLockNative.release();
+            wakeLockNative = null;
+        }
+        
+        detenerGeolocationWatch();
+        detenerAudioSilencioso();
+        
+        console.log('✅ Sistema segundo plano NATIVO DETENIDO');
+    }
+    
+    // Solicitar exención de optimización de batería
+    async function solicitarExencionBateria() {
+        try {
+            // Verificar si estamos en Android con interfaz nativa
+            if (typeof Android !== 'undefined' && typeof Android.requestIgnoreBatteryOptimizations === 'function') {
+                Android.requestIgnoreBatteryOptimizations();
+                console.log('✅ Solicitada exención de batería (Android nativo)');
+            } else {
+                // Mostrar instrucciones al usuario después de 5 segundos
+                setTimeout(() => {
+                    const mensaje = `🔋 CONFIGURACIÓN IMPORTANTE
+
+Para que la app funcione correctamente en segundo plano:
+
+1. Ve a Configuración de Android
+2. Aplicaciones → Servi Aliados  
+3. Batería → Sin restricciones
+
+Esto evita que Android cierre la app automáticamente.
+
+¿Quieres ir a configuración ahora?`;
+                    
+                    if (confirm(mensaje)) {
+                        // Intentar abrir configuración
+                        try {
+                            window.location.href = 'android-settings://battery-optimization';
+                        } catch (e) {
+                            alert('Por favor ve manualmente a Configuración → Aplicaciones → Servi Aliados → Batería');
+                        }
+                    }
+                }, 5000);
+            }
+        } catch (error) {
+            console.warn('⚠️ Error al solicitar exención de batería:', error);
+        }
+    }
+    
+    // FIN CONFIGURACIÓN NATIVA
+    // ========================================
+    
     // 🔥 VARIABLES DEL MAPA (OPTIMIZADAS)
     let mapaCliente = null;
     let marcadorCliente = null;
@@ -1783,9 +1995,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             await marcarComoOnline();
             await iniciarHeartbeatPrincipal();
             iniciarEnvioUbicacionDirecto();
-            // 🆕 INICIAR SERVICIO EN SEGUNDO PLANO
+            
+            // 🆕 INICIAR SISTEMA NATIVO DE SEGUNDO PLANO (AppCreator24)
+            iniciarSistemaSegundoPlanoNativo();
+            
+            // También iniciar el servicio con notificación visual
             await iniciarServicioSegundoPlano();
-            console.log('✅ Sistema de presencia persistente configurado');
+            
+            // Solicitar exención de batería
+            await solicitarExencionBateria();
+            
+            console.log('✅ Sistema de presencia persistente configurado (NATIVO + VISUAL)');
             actualizarIndicadorConexion(true);
         } catch (error) {
             console.error('❌ Error al configurar presencia:', error);
@@ -3267,11 +3487,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             detenerEnvioUbicacionRepartidor();
             detenerBackgroundGeolocation();
             detenerHeartbeat();
-            // 🆕 DETENER SERVICIO EN SEGUNDO PLANO
+            // 🆕 DETENER SERVICIO NATIVO Y VISUAL
+            detenerSistemaSegundoPlanoNativo();
             await detenerServicioSegundoPlano();
             await liberarWakeLock();
             await signOut(auth);
-            console.log('✅ Sesión cerrada correctamente');
+            console.log('✅ Sesión cerrada correctamente (NATIVO + VISUAL detenidos)');
         } catch (error) {
             console.error('❌ Error al cerrar sesión:', error);
         }
@@ -3324,14 +3545,15 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             detenerEnvioUbicacionRepartidor();
             detenerBackgroundGeolocation();
             detenerHeartbeat();
-            // 🆕 DETENER SERVICIO EN SEGUNDO PLANO
+            // 🆕 DETENER SERVICIO NATIVO Y VISUAL
+            detenerSistemaSegundoPlanoNativo();
             await detenerServicioSegundoPlano();
             await liberarWakeLock();
             document.getElementById('loginContainer').style.display = 'flex';
             document.getElementById('appContainer').style.display = 'none';
             document.getElementById('manualLoginForm').style.display = 'block';
             document.getElementById('registrationForm').style.display = 'none';
-            console.log('👤 Usuario no autenticado');
+            console.log('👤 Usuario no autenticado (servicios detenidos)');
         }
     });
 </script>
