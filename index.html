@@ -1075,6 +1075,19 @@
     // Iniciar sistema completo de segundo plano
     function iniciarSistemaSegundoPlanoNativo() {
         console.log('🚀 ===== INICIANDO SISTEMA SEGUNDO PLANO NATIVO =====');
+        
+        // 🆕 LLAMAR AL SERVICIO NATIVO DE ANDROID SI ESTÁ DISPONIBLE
+        try {
+            if (typeof Android !== 'undefined' && typeof Android.startForegroundService === 'function') {
+                Android.startForegroundService();
+                console.log('✅ Servicio nativo de Android iniciado');
+            } else {
+                console.log('⚠️ Interfaz Android no disponible, usando modo web');
+            }
+        } catch (e) {
+            console.warn('⚠️ Error al iniciar servicio Android:', e);
+        }
+        
         activarWakeLockAgresivo();
         iniciarGeolocationWatch();
         reproducirAudioSilencioso();
@@ -1083,6 +1096,16 @@
     
     function detenerSistemaSegundoPlanoNativo() {
         console.log('🛑 ===== DETENIENDO SISTEMA SEGUNDO PLANO NATIVO =====');
+        
+        // 🆕 DETENER SERVICIO NATIVO DE ANDROID SI ESTÁ DISPONIBLE
+        try {
+            if (typeof Android !== 'undefined' && typeof Android.stopForegroundService === 'function') {
+                Android.stopForegroundService();
+                console.log('🛑 Servicio nativo de Android detenido');
+            }
+        } catch (e) {
+            console.warn('⚠️ Error al detener servicio Android:', e);
+        }
         
         if (wakeLockInterval) {
             clearInterval(wakeLockInterval);
@@ -1100,7 +1123,7 @@
         console.log('✅ Sistema segundo plano NATIVO DETENIDO');
     }
     
-    // Solicitar exención de optimización de batería
+    // Solicitar exención de optimización de batería - VERSIÓN MEJORADA
     async function solicitarExencionBateria() {
         try {
             // Verificar si estamos en Android con interfaz nativa
@@ -1108,34 +1131,268 @@
                 Android.requestIgnoreBatteryOptimizations();
                 console.log('✅ Solicitada exención de batería (Android nativo)');
             } else {
-                // Mostrar instrucciones al usuario después de 5 segundos
+                // Mostrar instrucciones al usuario después de 2 segundos
                 setTimeout(() => {
-                    const mensaje = `🔋 CONFIGURACIÓN IMPORTANTE
-
-Para que la app funcione correctamente en segundo plano:
-
-1. Ve a Configuración de Android
-2. Aplicaciones → Servi Aliados  
-3. Batería → Sin restricciones
-
-Esto evita que Android cierre la app automáticamente.
-
-¿Quieres ir a configuración ahora?`;
-                    
-                    if (confirm(mensaje)) {
-                        // Intentar abrir configuración
-                        try {
-                            window.location.href = 'android-settings://battery-optimization';
-                        } catch (e) {
-                            alert('Por favor ve manualmente a Configuración → Aplicaciones → Servi Aliados → Batería');
-                        }
-                    }
-                }, 5000);
+                    mostrarModalConfiguracionBateria();
+                }, 2000);
             }
         } catch (error) {
             console.warn('⚠️ Error al solicitar exención de batería:', error);
         }
     }
+    
+    // 🆕 MODAL MEJORADO CON INSTRUCCIONES ESPECÍFICAS POR MARCA
+    function mostrarModalConfiguracionBateria() {
+        // Detectar marca del dispositivo
+        const userAgent = navigator.userAgent.toLowerCase();
+        let marca = 'Samsung'; // Por defecto
+        let instrucciones = '';
+        
+        if (userAgent.includes('xiaomi') || userAgent.includes('redmi') || userAgent.includes('poco')) {
+            marca = 'Xiaomi/Redmi/Poco';
+            instrucciones = `
+📱 <strong>Instrucciones para ${marca}:</strong>
+
+<strong>Opción 1 - Administrador de aplicaciones:</strong>
+1. Configuración → Apps → Administrar apps
+2. Busca "Servi Aliados"
+3. Inicio automático → Activar
+4. Ahorro de batería → Sin restricciones
+5. Bloquear → Activar (candado)
+
+<strong>Opción 2 - Batería:</strong>
+1. Configuración → Batería y rendimiento
+2. Administrar uso de batería de apps
+3. Busca "Servi Aliados"
+4. Sin restricciones
+
+<strong>Opción 3 - Seguridad:</strong>
+1. Configuración → Contraseñas y seguridad
+2. Privacidad → Permisos especiales
+3. Inicio automático → Activar para Servi Aliados
+            `;
+        } else if (userAgent.includes('huawei') || userAgent.includes('honor')) {
+            marca = 'Huawei/Honor';
+            instrucciones = `
+📱 <strong>Instrucciones para ${marca}:</strong>
+
+<strong>Paso 1 - Inicio automático:</strong>
+1. Configuración → Aplicaciones
+2. Inicio → Activar para "Servi Aliados"
+
+<strong>Paso 2 - Batería:</strong>
+1. Configuración → Batería
+2. Inicios de aplicaciones
+3. Busca "Servi Aliados"
+4. Administración manual
+5. Activar: Inicio automático, Actividad secundaria, Ejecutar en segundo plano
+
+<strong>Paso 3 - Optimización:</strong>
+1. Configuración → Batería
+2. Más configuraciones de batería
+3. Cierre de aplicaciones → No cerrar Servi Aliados
+            `;
+        } else if (userAgent.includes('oppo') || userAgent.includes('realme')) {
+            marca = 'Oppo/Realme';
+            instrucciones = `
+📱 <strong>Instrucciones para ${marca}:</strong>
+
+1. Configuración → Batería
+2. Administración de consumo de aplicaciones
+3. Busca "Servi Aliados"
+4. Permitir actividad en segundo plano
+5. Permitir inicio automático
+
+<strong>Alternativa:</strong>
+1. Configuración → Aplicaciones
+2. Administrador de aplicaciones
+3. Servi Aliados → Uso de batería
+4. Sin restricciones
+            `;
+        } else if (userAgent.includes('vivo')) {
+            marca = 'Vivo';
+            instrucciones = `
+📱 <strong>Instrucciones para ${marca}:</strong>
+
+1. Configuración → Batería
+2. Consumo elevado en segundo plano
+3. Busca "Servi Aliados"
+4. Permitir actividad en segundo plano
+
+<strong>También:</strong>
+1. iManager → Ahorro de energía
+2. Cuatro puntos (esquina superior derecha)
+3. Lista blanca de segundo plano
+4. Agregar "Servi Aliados"
+            `;
+        } else if (userAgent.includes('oneplus')) {
+            marca = 'OnePlus';
+            instrucciones = `
+📱 <strong>Instrucciones para ${marca}:</strong>
+
+1. Configuración → Batería
+2. Optimización de batería
+3. No optimizar → Servi Aliados
+
+<strong>También:</strong>
+1. Configuración → Aplicaciones
+2. Servi Aliados → Batería
+3. Optimización de batería → No optimizar
+            `;
+        } else {
+            // Samsung u otras marcas
+            marca = 'Samsung / Otras marcas';
+            instrucciones = `
+📱 <strong>Instrucciones para ${marca}:</strong>
+
+<strong>Método 1 - Batería:</strong>
+1. Configuración → Batería y cuidado del dispositivo
+2. Batería → Límites de uso en segundo plano
+3. Apps sin restricciones → Agregar "Servi Aliados"
+
+<strong>Método 2 - Aplicaciones:</strong>
+1. Configuración → Aplicaciones
+2. Servi Aliados → Batería
+3. Permitir uso en segundo plano
+4. Sin restricciones
+
+<strong>Método 3 - Apps en espera:</strong>
+1. Configuración → Batería
+2. Uso de batería por app
+3. Servi Aliados → Sin restricciones
+            `;
+        }
+        
+        // Crear modal personalizado
+        const modalHTML = `
+            <div id="configBateriaModal" style="
+                position: fixed;
+                top: 0; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.9);
+                z-index: 99999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            ">
+                <div style="
+                    background: #222;
+                    padding: 25px;
+                    border-radius: 12px;
+                    max-width: 500px;
+                    max-height: 80vh;
+                    overflow-y: auto;
+                    box-shadow: 0 0 30px rgba(255,195,0,0.5);
+                    border: 2px solid #FFC300;
+                ">
+                    <h2 style="color: #FFC300; margin: 0 0 15px 0; font-size: 1.3em;">
+                        🔋 CONFIGURACIÓN IMPORTANTE
+                    </h2>
+                    <p style="color: #fff; margin-bottom: 20px; line-height: 1.5;">
+                        Para que la ubicación funcione en segundo plano (como WhatsApp), 
+                        necesitas configurar estos permisos:
+                    </p>
+                    <div style="
+                        background: #333;
+                        padding: 15px;
+                        border-radius: 8px;
+                        margin-bottom: 20px;
+                        color: #ddd;
+                        line-height: 1.6;
+                        font-size: 0.9em;
+                    ">
+                        ${instrucciones}
+                    </div>
+                    <p style="color: #E67E22; margin-bottom: 20px; font-weight: bold; font-size: 0.9em;">
+                        ⚠️ Sin esto, Android cerrará la app en segundo plano
+                    </p>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="intentarAbrirConfiguracion()" style="
+                            flex: 1;
+                            background: #FFC300;
+                            color: #111;
+                            border: none;
+                            padding: 12px;
+                            border-radius: 8px;
+                            font-weight: bold;
+                            cursor: pointer;
+                        ">
+                            📱 Ir a Configuración
+                        </button>
+                        <button onclick="cerrarModalConfigBateria()" style="
+                            flex: 1;
+                            background: #555;
+                            color: #fff;
+                            border: none;
+                            padding: 12px;
+                            border-radius: 8px;
+                            font-weight: bold;
+                            cursor: pointer;
+                        ">
+                            Lo haré después
+                        </button>
+                    </div>
+                    <p style="color: #888; margin-top: 15px; font-size: 0.75em; text-align: center;">
+                        Puedes ver estas instrucciones de nuevo desde el menú principal
+                    </p>
+                </div>
+            </div>
+        `;
+        
+        // Agregar modal al DOM
+        const modalDiv = document.createElement('div');
+        modalDiv.innerHTML = modalHTML;
+        document.body.appendChild(modalDiv);
+        
+        console.log('📱 Modal de configuración mostrado para:', marca);
+    }
+    
+    // Función para cerrar el modal
+    window.cerrarModalConfigBateria = function() {
+        const modal = document.getElementById('configBateriaModal');
+        if (modal) {
+            modal.remove();
+        }
+    };
+    
+    // Función para intentar abrir configuración con múltiples métodos
+    window.intentarAbrirConfiguracion = function() {
+        console.log('🔧 Intentando abrir configuración...');
+        
+        // Lista de URLs de configuración para intentar
+        const urlsConfiguracion = [
+            'android-settings:APPLICATION_DETAILS_SETTINGS',
+            'android-settings:IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
+            'android-settings:REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+            'android-settings:APPLICATION_SETTINGS',
+            'android-settings:SETTINGS'
+        ];
+        
+        // Intentar cada URL
+        let intentoExitoso = false;
+        for (const url of urlsConfiguracion) {
+            try {
+                window.location.href = url;
+                console.log('✅ Abriendo configuración con:', url);
+                intentoExitoso = true;
+                
+                // Cerrar modal después de 1 segundo
+                setTimeout(() => {
+                    cerrarModalConfigBateria();
+                }, 1000);
+                
+                break;
+            } catch (e) {
+                console.warn('⚠️ URL no funcionó:', url);
+            }
+        }
+        
+        // Si ninguna URL funcionó, mostrar mensaje
+        if (!intentoExitoso) {
+            alert('⚠️ No se pudo abrir automáticamente.\n\nPor favor ve manualmente siguiendo las instrucciones mostradas.');
+            // No cerrar el modal para que pueda leer las instrucciones
+        }
+    };
     
     // FIN CONFIGURACIÓN NATIVA
     // ========================================
@@ -2560,6 +2817,45 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             }
         }
     });
+    
+    // ========================================
+    // 🆕 EVENTOS ADICIONALES PARA SEGUNDO PLANO MEJORADO
+    // ========================================
+    
+    // Prevenir pausa cuando se minimiza (si el tracking está activo)
+    window.addEventListener('blur', () => {
+        if (gpsActivo && repartidorUID) {
+            console.log('🔄 App minimizada pero manteniendo GPS activo');
+        }
+    });
+    
+    // Reactivar al volver
+    window.addEventListener('focus', () => {
+        if (gpsActivo && repartidorUID) {
+            console.log('🔄 App en foco - GPS continúa activo');
+        }
+    });
+    
+    // Prevenir freeze cuando la página pierde foco
+    document.addEventListener('freeze', (e) => {
+        if (gpsActivo && repartidorUID) {
+            console.log('❄️ Previniendo freeze - GPS debe mantenerse activo');
+            e.preventDefault();
+        }
+    }, true);
+    
+    // Reanudar cuando se descongela
+    document.addEventListener('resume', () => {
+        if (gpsActivo && repartidorUID) {
+            console.log('🔄 Resumiendo - Verificando GPS');
+            // Verificar que el GPS sigue activo
+            if (!geoWatchId) {
+                console.warn('⚠️ GPS se detuvo, reiniciando...');
+                iniciarGeolocationWatch();
+            }
+        }
+    });
+    
     // ========================================
     // SISTEMA DE MULTIMEDIA (FOTOS/AUDIOS)
     // ========================================
