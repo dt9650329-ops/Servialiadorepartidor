@@ -1302,43 +1302,45 @@
                 }
                 const clienteData = snapshot.val();
                 logDebugCliente('📊 Datos completos del cliente:', clienteData);
-                if (!clienteData.gpsActivo) {
-                    console.warn('⚠️ GPS del cliente no está activo');
-                    console.warn('   gpsActivo:', clienteData.gpsActivo);
-                    document.getElementById('distancia-cliente').textContent = '📏 GPS del cliente desactivado';
-                    document.getElementById('direccion-cliente').textContent = '🧭 Esperando que el cliente active GPS...';
-                    return;
+                // ✅ FIX: No bloquear si gpsActivo es undefined; solo advertir
+                if (clienteData.gpsActivo === false) {
+                    console.warn('⚠️ GPS del cliente marcado como inactivo, intentando ubicación guardada...');
                 }
-                logDebugCliente('✅ GPS del cliente ACTIVO');
-                // 🔥 BUSCAR CON "lng" (longitude)
+                logDebugCliente('📡 Buscando coordenadas del cliente...');
+                // ✅ FIX: Buscar lng Y lon (el cliente puede guardar cualquiera de los dos)
                 let clienteCoords = null;
-                // Opción 1: ubicacionActual (con "lng")
-                if (clienteData.ubicacionActual && 
-                    clienteData.ubicacionActual.lat && 
-                    clienteData.ubicacionActual.lng) {
-                    clienteCoords = {
-                        lat: parseFloat(clienteData.ubicacionActual.lat),
-                        lng: parseFloat(clienteData.ubicacionActual.lng)
-                    };
-                    logDebugCliente('✅ Ubicación encontrada en ubicacionActual:', clienteCoords);
+                // Opción 1: ubicacionActual (con "lng" o "lon")
+                if (clienteData.ubicacionActual && clienteData.ubicacionActual.lat) {
+                    const lngVal = clienteData.ubicacionActual.lng || clienteData.ubicacionActual.lon;
+                    if (lngVal) {
+                        clienteCoords = {
+                            lat: parseFloat(clienteData.ubicacionActual.lat),
+                            lng: parseFloat(lngVal)
+                        };
+                        logDebugCliente('✅ Ubicación encontrada en ubicacionActual:', clienteCoords);
+                    }
                 }
-                // Opción 2: ubicacion (con "lng")
-                else if (clienteData.ubicacion && 
-                         clienteData.ubicacion.lat && 
-                         clienteData.ubicacion.lng) {
-                    clienteCoords = {
-                        lat: parseFloat(clienteData.ubicacion.lat),
-                        lng: parseFloat(clienteData.ubicacion.lng)
-                    };
-                    logDebugCliente('✅ Ubicación encontrada en ubicacion:', clienteCoords);
+                // Opción 2: ubicacion (con "lng" o "lon") — el cliente guarda "lon" aquí
+                if (!clienteCoords && clienteData.ubicacion && clienteData.ubicacion.lat) {
+                    const lngVal = clienteData.ubicacion.lng || clienteData.ubicacion.lon;
+                    if (lngVal) {
+                        clienteCoords = {
+                            lat: parseFloat(clienteData.ubicacion.lat),
+                            lng: parseFloat(lngVal)
+                        };
+                        logDebugCliente('✅ Ubicación encontrada en ubicacion (lon/lng):', clienteCoords);
+                    }
                 }
-                // Opción 3: campos directos
-                else if (clienteData.lat && clienteData.lng) {
-                    clienteCoords = {
-                        lat: parseFloat(clienteData.lat),
-                        lng: parseFloat(clienteData.lng)
-                    };
-                    logDebugCliente('✅ Ubicación encontrada en campos directos:', clienteCoords);
+                // Opción 3: campos directos lat/lng o lat/lon
+                if (!clienteCoords && clienteData.lat) {
+                    const lngVal = clienteData.lng || clienteData.lon;
+                    if (lngVal) {
+                        clienteCoords = {
+                            lat: parseFloat(clienteData.lat),
+                            lng: parseFloat(lngVal)
+                        };
+                        logDebugCliente('✅ Ubicación encontrada en campos directos:', clienteCoords);
+                    }
                 }
                 if (!clienteCoords) {
                     console.error('❌ NO SE PUDO OBTENER UBICACIÓN DEL CLIENTE');
@@ -2532,16 +2534,27 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
 
         // ── Pedidos de historial asignados a este repartidor (del formulario) ──
+        // ✅ FIX: Registrar IDs ya pintados para no duplicar
+        const yaRenderizados = new Set();
+        document.querySelectorAll('[id^="pedido-asignado-"]').forEach(el => {
+            yaRenderizados.add(el.id.replace('pedido-asignado-', ''));
+        });
+        // También los que venían de pedidos_pendientes (el mismo pedidoId)
+        Object.keys(dataPendientes || {}).forEach(id => yaRenderizados.add(id));
+
         try {
             const histSnap = await get(ref(db, 'pedidos_historial'));
             if (histSnap.exists()) {
                 histSnap.forEach(child => {
                     const p = child.val();
+                    // ✅ FIX: Saltar si ya fue renderizado desde pedidos_pendientes
+                    if (yaRenderizados.has(child.key)) return;
                     if (p.repartidorUID === repartidorUID &&
                         (p.estado === 'Aceptado' || p.estado === 'Esperando' || p.estado === 'En Camino' ||
                          p.estado === 'aceptado' || p.estado === 'esperando' || p.estado === 'en_camino')) {
                         contadorAsignados++;
                         mostrarPedidoAsignado(p, child.key, listaAsignados);
+                        yaRenderizados.add(child.key);
                     }
                 });
             }
@@ -2603,27 +2616,29 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     function mostrarPedidoAsignado(pedido, pedidoId, container) {
         const div = document.createElement('div');
         div.className = 'pedido-item asignado';
-        if (pedido.estado === 'Esperando') {
+        const estadoNorm = (pedido.estado || '').toLowerCase().replace(' ', '_');
+        if (estadoNorm === 'esperando') {
             div.classList.add('esperando');
-        } else if (pedido.estado === 'En Camino') {
+        } else if (estadoNorm === 'en_camino' || estadoNorm === 'en camino') {
             div.classList.add('en-camino');
         }
         let estadoBotones = '';
-        if (pedido.estado === 'Aceptado') {
+        // ✅ FIX: comparar en minúsculas para cubrir ambos formatos
+        if (estadoNorm === 'aceptado') {
             estadoBotones = `
                 <button onclick="window.cambiarEstadoPedido('${pedidoId}', 'Esperando')" 
                         style="background: var(--color-waiting); color: white;">
                     ⏳ Marcar como Esperando
                 </button>
             `;
-        } else if (pedido.estado === 'Esperando') {
+        } else if (estadoNorm === 'esperando') {
             estadoBotones = `
                 <button onclick="window.cambiarEstadoPedido('${pedidoId}', 'En Camino')" 
                         style="background: var(--color-delivery); color: white;">
                     🚚 Marcar En Camino
                 </button>
             `;
-        } else if (pedido.estado === 'En Camino') {
+        } else if (estadoNorm === 'en_camino' || estadoNorm === 'en camino') {
             estadoBotones = `
                 <button onclick="window.completarPedido('${pedidoId}')" 
                         style="background: #27ae60; color: white;">
@@ -2632,14 +2647,31 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             `;
         }
         const tiempoTranscurrido = pedido.tiempoAceptado ? calcularTiempoTranscurrido(pedido.tiempoAceptado) : '00:00';
+        // ✅ FIX: mapear campos del formulario del cliente (montoTotal, dirRecogida, dirEntrega, etc.)
+        const precioMostrar = pedido.precio || pedido.valor || pedido.total || pedido.monto || pedido.costoTotal
+            || (pedido.montoTotal ? `$${Number(pedido.montoTotal).toLocaleString('es-CO')}` : 'Sin precio');
+        const descMostrar = pedido.producto || pedido.descripcion || pedido.item
+            || (pedido.zonaRecogida ? `De ${pedido.zonaRecogida} a ${pedido.zonaEntrega || '?'}` : 'Sin descripción');
+        const dirMostrar = pedido.direccion || pedido.direccionEntrega || pedido.direccionCliente
+            || pedido.dirEntrega || pedido.ubicacionTexto || pedido.address || 'Sin dirección';
+        const telMostrar = pedido.telefonoCliente || pedido.telefono || pedido.celular
+            || pedido.phone || pedido.telRecibe || 'Sin teléfono';
+        // Info de recogida si es pedido formulario
+        const recogidaInfo = (pedido.dirRecogida || pedido.nombreEntrega) ? `
+            <div style="background:#1e3a1e;border-radius:6px;padding:6px 8px;margin:4px 0;font-size:0.9em;">
+                📦 <strong>Recoge en:</strong> ${pedido.dirRecogida || '—'}<br>
+                👤 ${pedido.nombreEntrega || '—'} · 📞 ${pedido.telEntrega || '—'}
+            </div>` : '';
         div.innerHTML = `
     <strong style="color: var(--color-primary);">🚚 Pedido #${pedido.codigo || pedido.id || pedidoId.substring(0, 8)}</strong><br>
             <span class="timer" id="timer-${pedidoId}">⏱️ ${tiempoTranscurrido}</span><br>
-            📦 ${pedido.producto || pedido.descripcion || pedido.item || 'Sin descripción'}<br>
-    💵 ${pedido.precio || pedido.valor || pedido.total || pedido.monto || pedido.costoTotal || 'Sin precio'}<br>
-    📍 ${pedido.direccion || pedido.direccionEntrega || pedido.direccionCliente || pedido.ubicacionTexto || pedido.address || 'Sin dirección'}<br>
-    📞 ${pedido.telefonoCliente || pedido.telefono || pedido.celular || pedido.phone || 'Sin teléfono'}<br>
-    📝 ${pedido.observaciones || pedido.detalles || pedido.notas || pedido.comentarios || 'Sin detalles'}<br>            ${estadoBotones}
+            📦 ${descMostrar}<br>
+    💵 ${precioMostrar}<br>
+    ${recogidaInfo}
+    📍 ${dirMostrar}<br>
+    📞 ${telMostrar}<br>
+    📝 ${pedido.observaciones || pedido.detalles || pedido.notas || pedido.comentarios || 'Sin detalles'}<br>
+            ${estadoBotones}
             <button onclick="window.iniciarCancelacion('${pedidoId}')" 
                     style="background: var(--color-accent-danger); color: white;">
                 ❌ Cancelar Domicilio
