@@ -2600,9 +2600,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         listaAsignados.innerHTML  = '';
         let contadorPendientes = 0;
         let contadorAsignados  = 0;
+        // 🔧 FIX: Rastrear IDs ya mostrados para evitar duplicados
+        const pedidosYaMostrados = new Set();
 
         // ── Pedidos del formulario cliente (nuevo sistema) ──
         for (const [pedidoId, pedido] of Object.entries(pedidosFormulario)) {
+            pedidosYaMostrados.add(pedidoId); // 🔧 FIX: marcar como mostrado
             contadorPendientes++;
             await mostrarPedidoFormulario(pedido, pedidoId, listaPendientes);
             if (!initialLoad && !pedidosActivos[pedidoId]) {
@@ -2623,8 +2626,10 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         // ── Pedidos del sistema anterior (pedidos_pendientes) ──
         if (pedidosPendientesAntiguos) {
             Object.keys(pedidosPendientesAntiguos).forEach(pedidoId => {
+                if (pedidosYaMostrados.has(pedidoId)) return; // 🔧 FIX: saltar duplicados
                 const pedido = pedidosPendientesAntiguos[pedidoId];
                 if (pedido.estado === 'Pendiente') {
+                    pedidosYaMostrados.add(pedidoId);
                     contadorPendientes++;
                     mostrarPedidoPendiente(pedido, pedidoId, listaPendientes);
                     if (!initialLoad && !pedidosActivos[pedidoId]) {
@@ -2642,10 +2647,20 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     pedidosActivos[pedidoId] = true;
                 } else if (pedido.repartidorUID === repartidorUID &&
                           (pedido.estado === 'Aceptado' || pedido.estado === 'Esperando' || pedido.estado === 'En Camino')) {
+                    pedidosYaMostrados.add(pedidoId);
                     contadorAsignados++;
                     mostrarPedidoAsignado(pedido, pedidoId, listaAsignados);
-                    if (!activePedidoData || activePedidoData.pedidoId !== pedidoId) {
-                        activePedidoData = { pedidoId, clienteUID: pedido.clienteUID, estado: pedido.estado };
+                    // 🔧 FIX: Guardar TODOS los pedidos activos (no solo el último)
+                    if (pedido.clienteUID && !clientesListeners[pedido.clienteUID]) {
+                        if (!activePedidoData) activePedidoData = { pedidoId, clienteUID: pedido.clienteUID, estado: pedido.estado };
+                        // Iniciar seguimiento si el mapa está visible
+                        if (document.getElementById('mapa-cliente-container').style.display !== 'none' && mapaCliente) {
+                            iniciarSeguimientoCliente(pedido.clienteUID, {
+                                pedidoId,
+                                desc: pedido.producto || pedido.descripcion || `Pedido #${pedidoId.slice(-6)}`,
+                                monto: pedido.precio || pedido.total || ''
+                            });
+                        }
                     }
                 }
             });
@@ -2656,12 +2671,26 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             const histSnap = await get(ref(db, 'pedidos_historial'));
             if (histSnap.exists()) {
                 histSnap.forEach(child => {
+                    if (pedidosYaMostrados.has(child.key)) return; // 🔧 FIX: saltar duplicados
                     const p = child.val();
                     if (p.repartidorUID === repartidorUID &&
                         (p.estado === 'Aceptado' || p.estado === 'Esperando' || p.estado === 'En Camino' ||
                          p.estado === 'aceptado' || p.estado === 'esperando' || p.estado === 'en_camino')) {
+                        pedidosYaMostrados.add(child.key);
                         contadorAsignados++;
                         mostrarPedidoAsignado(p, child.key, listaAsignados);
+                        // 🔧 FIX: Iniciar seguimiento para TODOS los clientes activos
+                        const cId = p.clienteUID || p.clienteIdAsignado;
+                        if (cId && !clientesListeners[cId]) {
+                            if (!activePedidoData) activePedidoData = { pedidoId: child.key, clienteUID: cId, estado: p.estado };
+                            if (document.getElementById('mapa-cliente-container').style.display !== 'none' && mapaCliente) {
+                                iniciarSeguimientoCliente(cId, {
+                                    pedidoId: child.key,
+                                    desc: p.producto || p.descripcion || `Pedido #${child.key.slice(-6)}`,
+                                    monto: p.precio || p.total || ''
+                                });
+                            }
+                        }
                     }
                 });
             }
@@ -3039,20 +3068,76 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         document.getElementById('pendientesSection').style.display = 'none';
         document.getElementById('asignadosSection').style.display = 'block';
         document.getElementById('historialSection').style.display = 'none';
-        // 🆕 RESTAURAR SEGUIMIENTO SI HAY PEDIDO ACTIVO
-                if (activePedidoData && activePedidoData.clienteUID) {
-            setTimeout(() => {
-                // 🔥 PRIMERO: Mostrar el contenedor
-                document.getElementById('mapa-cliente-container').style.display = 'block';
-                // 🔥 SEGUNDO: Inicializar el mapa
-                inicializarMapaCliente();
-                // 🔥 TERCERO: Iniciar seguimiento
-                setTimeout(() => {
-                    iniciarSeguimientoCliente(activePedidoData.clienteUID);
-                    iniciarEnvioUbicacionRepartidor();
-                }, 500);
-            }, 300);
-        }
+        // 🔧 FIX: Restaurar seguimiento para TODOS los pedidos activos
+        setTimeout(async () => {
+            // Buscar todos los pedidos activos asignados al repartidor
+            const fuentes = [
+                // fuente 1: pedidos_pendientes
+                async () => {
+                    const snap = await get(ref(db, 'pedidos_pendientes'));
+                    if (!snap.exists()) return [];
+                    const resultado = [];
+                    snap.forEach(child => {
+                        const p = child.val();
+                        if (p.repartidorUID === repartidorUID &&
+                            (p.estado === 'Aceptado' || p.estado === 'Esperando' || p.estado === 'En Camino')) {
+                            const cId = p.clienteUID || p.clienteIdAsignado;
+                            if (cId) resultado.push({ clienteId: cId, pedidoId: child.key, pedido: p });
+                        }
+                    });
+                    return resultado;
+                },
+                // fuente 2: pedidos_historial
+                async () => {
+                    const snap = await get(ref(db, 'pedidos_historial'));
+                    if (!snap.exists()) return [];
+                    const resultado = [];
+                    snap.forEach(child => {
+                        const p = child.val();
+                        if (p.repartidorUID === repartidorUID &&
+                            (p.estado === 'Aceptado' || p.estado === 'Esperando' || p.estado === 'En Camino' ||
+                             p.estado === 'aceptado' || p.estado === 'esperando' || p.estado === 'en_camino')) {
+                            const cId = p.clienteUID || p.clienteIdAsignado;
+                            if (cId) resultado.push({ clienteId: cId, pedidoId: child.key, pedido: p });
+                        }
+                    });
+                    return resultado;
+                }
+            ];
+
+            try {
+                const resultados = await Promise.all(fuentes.map(f => f()));
+                const todos = resultados.flat();
+                const clientesVistos = new Set();
+
+                if (todos.length > 0) {
+                    document.getElementById('mapa-cliente-container').style.display = 'block';
+                    if (!mapaCliente) inicializarMapaCliente();
+                    setTimeout(() => {
+                        todos.forEach(({ clienteId, pedidoId, pedido }) => {
+                            if (clientesVistos.has(clienteId)) return;
+                            clientesVistos.add(clienteId);
+                            iniciarSeguimientoCliente(clienteId, {
+                                pedidoId,
+                                desc: pedido.producto || pedido.descripcion || `Pedido #${pedidoId.slice(-6)}`,
+                                monto: pedido.precio || pedido.total || ''
+                            });
+                        });
+                        iniciarEnvioUbicacionRepartidor();
+                    }, 500);
+                } else if (activePedidoData && activePedidoData.clienteUID) {
+                    // fallback legacy
+                    document.getElementById('mapa-cliente-container').style.display = 'block';
+                    if (!mapaCliente) inicializarMapaCliente();
+                    setTimeout(() => {
+                        iniciarSeguimientoCliente(activePedidoData.clienteUID);
+                        iniciarEnvioUbicacionRepartidor();
+                    }, 500);
+                }
+            } catch(e) {
+                console.warn('⚠️ Error restaurando seguimiento:', e);
+            }
+        }, 300);
     });
     document.getElementById('showHistorialBtn').addEventListener('click', () => {
         document.getElementById('chatSection').style.display = 'none';
@@ -3063,22 +3148,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     });
     document.getElementById('verMapaBtn').addEventListener('click', () => {
         document.getElementById('showAsignadosBtn').click();
-        setTimeout(() => {
-            const mapaContainer = document.getElementById('mapa-cliente-container');
-            if (mapaContainer.style.display === 'none') {
-                // 🔥 PRIMERO: Mostrar contenedor
-                mapaContainer.style.display = 'block';
-                // 🔥 SEGUNDO: Inicializar mapa
-                inicializarMapaCliente();
-                // 🔥 TERCERO: Iniciar seguimiento después de que el mapa esté listo
-                setTimeout(() => {
-                    if (activePedidoData && activePedidoData.clienteUID) {
-                        iniciarSeguimientoCliente(activePedidoData.clienteUID);
-                        iniciarEnvioUbicacionRepartidor();
-                    }
-                }, 500);
-            }
-        }, 300);
     });
     // ========================================
     // AUTENTICACIÓN
