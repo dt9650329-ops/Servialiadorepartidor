@@ -1615,10 +1615,119 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             await marcarComoOnline();
             await iniciarHeartbeatPrincipal();
             iniciarEnvioUbicacionDirecto();
+            
+            // 🆕 Buscar y asignar pedidos pendientes automáticamente
+            await buscarYAsignarPedidosPendientes();
+            
             console.log('✅ Sistema de presencia persistente configurado');
             actualizarIndicadorConexion(true);
         } catch (error) {
             console.error('❌ Error al configurar presencia:', error);
+        }
+    }
+    
+    // ========================================
+    // 🆕 ASIGNACIÓN AUTOMÁTICA DE PEDIDOS PENDIENTES
+    // ========================================
+    async function buscarYAsignarPedidosPendientes() {
+        if (!repartidorUID || !db) {
+            console.warn('⚠️ No se puede buscar pedidos sin UID');
+            return;
+        }
+        
+        console.log('🔍 Buscando pedidos pendientes sin repartidor...');
+        
+        try {
+            // Buscar en pedidos_historial
+            const pedidosRef = ref(db, 'pedidos_historial');
+            const snapshot = await get(pedidosRef);
+            
+            if (!snapshot.exists()) {
+                console.log('📭 No hay pedidos en el historial');
+                return;
+            }
+            
+            let pedidosAsignados = 0;
+            const promesas = [];
+            
+            snapshot.forEach((childSnapshot) => {
+                const pedido = childSnapshot.val();
+                const pedidoId = childSnapshot.key;
+                
+                // Verificar si el pedido está sin repartidor o pendiente sin asignar
+                const sinRepartidor = pedido.estado === 'sin_repartidor' || 
+                                     (pedido.estado === 'pendiente' && !pedido.repartidorUID);
+                
+                if (sinRepartidor) {
+                    console.log(`✅ Pedido encontrado: ${pedidoId.substring(0, 8)} - Asignando...`);
+                    
+                    // Preparar la asignación
+                    const promesa = asignarPedidoARepartidor(pedidoId, pedido);
+                    promesas.push(promesa);
+                    pedidosAsignados++;
+                }
+            });
+            
+            // Ejecutar todas las asignaciones
+            if (promesas.length > 0) {
+                await Promise.all(promesas);
+                console.log(`🎉 ${pedidosAsignados} pedido(s) asignado(s) automáticamente`);
+                
+                // Mostrar notificación al repartidor
+                if (pedidosAsignados > 0) {
+                    reproducirNotificacion();
+                    if (navigator.vibrate) {
+                        navigator.vibrate([300, 100, 300, 100, 500]);
+                    }
+                    
+                    // Cambiar a la pestaña de pedidos pendientes
+                    setTimeout(() => {
+                        document.getElementById('chatSection').style.display = 'none';
+                        document.getElementById('pendientesSection').style.display = 'block';
+                        document.getElementById('asignadosSection').style.display = 'none';
+                        document.getElementById('historialSection').style.display = 'none';
+                    }, 500);
+                }
+            } else {
+                console.log('📭 No hay pedidos pendientes para asignar');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error al buscar pedidos pendientes:', error);
+        }
+    }
+    
+    async function asignarPedidoARepartidor(pedidoId, pedidoData) {
+        try {
+            // Obtener información del repartidor
+            const repSnapshot = await get(ref(db, `repartidores_info/${repartidorUID}`));
+            const repData = repSnapshot.exists() ? repSnapshot.val() : {};
+            const repNombre = repData.nombre || repartidorNombre || 'Repartidor';
+            
+            // Actualizar el pedido en pedidos_historial
+            await update(ref(db, `pedidos_historial/${pedidoId}`), {
+                estado: 'pendiente',
+                repartidorUID: repartidorUID,
+                repartidorNombre: repNombre,
+                repartidorIdAsignado: `repartidor_${repartidorUID}`,
+                timestampAsignacionAutomatica: Date.now(),
+                asignacionAutomatica: true
+            });
+            
+            // Crear entrada en repartidores_pedidos
+            await set(ref(db, `repartidores_pedidos/${repartidorUID}/${pedidoId}`), {
+                ...pedidoData,
+                estado: 'pendiente',
+                repartidorUID: repartidorUID,
+                repartidorNombre: repNombre,
+                timestampAsignacionAutomatica: Date.now(),
+                asignacionAutomatica: true
+            });
+            
+            console.log(`✅ Pedido ${pedidoId.substring(0, 8)} asignado correctamente`);
+            
+        } catch (error) {
+            console.error(`❌ Error al asignar pedido ${pedidoId}:`, error);
         }
     }
     // ========================================
@@ -2449,6 +2558,37 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 });
             }
             renderizarTodosLosPedidos();
+        });
+        
+        // ── 🆕 3. Listener: pedidos_historial (para auto-asignación en tiempo real) ──
+        const historialRef = ref(db, 'pedidos_historial');
+        onValue(historialRef, async (snapshot) => {
+            if (!snapshot.exists()) return;
+            
+            snapshot.forEach(async (childSnapshot) => {
+                const pedido = childSnapshot.val();
+                const pedidoId = childSnapshot.key;
+                
+                // Si hay un pedido sin repartidor y el repartidor está online
+                const sinRepartidor = (pedido.estado === 'sin_repartidor' || 
+                                      (pedido.estado === 'pendiente' && !pedido.repartidorUID)) &&
+                                      !pedido.asignacionAutomatica; // Evitar reasignar lo ya asignado
+                
+                if (sinRepartidor) {
+                    console.log(`🔔 Nuevo pedido sin repartidor detectado: ${pedidoId.substring(0, 8)}`);
+                    
+                    // Verificar que este repartidor esté online y activo
+                    const repSnapshot = await get(ref(db, `repartidores_info/${repartidorUID}`));
+                    if (repSnapshot.exists()) {
+                        const repData = repSnapshot.val();
+                        if (repData.online === true && repData.trackingActivo === true) {
+                            // Auto-asignar el pedido
+                            await asignarPedidoARepartidor(pedidoId, pedido);
+                            console.log(`✅ Pedido ${pedidoId.substring(0, 8)} auto-asignado`);
+                        }
+                    }
+                }
+            });
         });
     }
 
