@@ -18,11 +18,11 @@
                 .catch(err => console.error('❌ Error SW:', err));
         }
     </script>
+    <!-- 🛠️ ERUDA: Solo para desarrollo local, desactivado en producción -->
+    <!--
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
-    <script>
-        eruda.init();
-        console.log('✅ Eruda inicializado correctamente');
-    </script>
+    <script>eruda.init();</script>
+    -->
     <title>Panel Repartidor - v1.8.0 OPTIMIZADO</title>
     <style>
         :root {
@@ -137,6 +137,11 @@
         .pedido-item.esperando { border-left: 5px solid var(--color-waiting); }
         .pedido-item.en-camino { border-left: 5px solid var(--color-delivery); }
         .pedido-item strong { color: var(--color-primary); }
+        @keyframes pedidoNuevo {
+            0% { background: #333333; }
+            50% { background: #4a3800; border-left-color: #FFC300; box-shadow: 0 0 15px rgba(255,195,0,0.5); }
+            100% { background: #333333; }
+        }
         .pedido-item button { 
             border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; margin-top: 5px; 
             font-weight: bold;
@@ -182,43 +187,6 @@
             align-items: center;
             justify-content: center;
             font-size: 20px;
-        }
-        /* 🔔 ESTILOS PARA NOTIFICACIÓN DE SEGUNDO PLANO */
-        #backgroundServiceIndicator {
-            position: fixed;
-            top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: linear-gradient(135deg, #FFC300 0%, #E6B200 100%);
-            color: #111111;
-            padding: 8px 15px;
-            border-radius: 20px;
-            font-size: 0.85em;
-            font-weight: bold;
-            box-shadow: 0 4px 15px rgba(255, 195, 0, 0.4);
-            z-index: 9999;
-            display: none;
-            align-items: center;
-            gap: 8px;
-            animation: pulse 2s infinite;
-        }
-        #backgroundServiceIndicator.active {
-            display: flex;
-        }
-        #backgroundServiceIndicator .pulse-dot {
-            width: 8px;
-            height: 8px;
-            background: #27AE60;
-            border-radius: 50%;
-            animation: pulse-dot 1.5s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { box-shadow: 0 4px 15px rgba(255, 195, 0, 0.4); }
-            50% { box-shadow: 0 4px 25px rgba(255, 195, 0, 0.7); }
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(0.8); }
         }
         .map-legend {
             display: flex;
@@ -651,23 +619,17 @@
     </style>
 </head>
 <body>
-<!-- 🔔 INDICADOR DE SERVICIO EN SEGUNDO PLANO -->
-<div id="backgroundServiceIndicator">
-    <div class="pulse-dot"></div>
-    <span>Servi Aliados trabajando en segundo plano</span>
-</div>
-
 <div id="connectionStatus" class="connection-status">
     <div class="status-dot"></div>
     <span id="connectionText">🟢 Online</span>
 </div>
 <div id="gpsIndicator" class="gps-indicator">
     <div class="gps-dot"></div>
-    <span>📍 GPS Activo (15s)</span>
+    <span>📍 GPS Activo (20s)</span>
 </div>
 <div id="gps-indicator-repartidor" class="gps-indicator-repartidor">
     <div class="gps-dot"></div>
-    <span>🏍️ GPS Activo (15s)</span>
+    <span>🏍️ GPS Activo (20s)</span>
 </div>
 <div id="permisosModal">
     <div class="permisos-content">
@@ -678,7 +640,7 @@
                 <div class="permiso-icon">📍</div>
                 <div class="permiso-info">
                     <strong>Ubicación GPS</strong>
-                    <small>Tracking cada 15 segundos (optimizado)</small>
+                    <small>Tracking cada 20 segundos (optimizado)</small>
                 </div>
             </div>
             <div class="permiso-item">
@@ -697,7 +659,7 @@
             </div>
         </div>
         <div class="permisos-warning">
-            ⚠️ <strong>Importante:</strong> El GPS se activará automáticamente y enviará tu ubicación cada 15 segundos para optimizar costos de Firebase.
+            ⚠️ <strong>Importante:</strong> El GPS se activará automáticamente y enviará tu ubicación cada 20 segundos para optimizar costos de Firebase.
         </div>
         <div class="permisos-buttons">
             <button class="btn-permitir" onclick="solicitarTodosLosPermisos()">
@@ -755,7 +717,7 @@
         <h2 style="color: var(--color-secondary); margin: 0;">Bienvenido, <span id="repartidorName"></span>!</h2>
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <span id="appVersionDisplay" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 15px; font-size: 0.85em; font-weight: bold;">
-                v1.8.1
+                v1.8.0
             </span>
             <button id="verMapaBtn" style="padding: 8px 15px; background: #2196F3; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">
                 🗺️ Ver Mapa Cliente
@@ -886,7 +848,34 @@
     window.get = get;
     window.onValue = onValue;
     window.off = off;
-    const APP_VERSION = "1.8.3";
+    const APP_VERSION = "1.8.0";
+
+    // ✅ SEGURIDAD: URL del backend
+    const BACKEND_URL = 'https://tu-backend.onrender.com'; // ← Cambiar cuando despliegues en Render
+
+    // ✅ SEGURIDAD: Sanitizar texto para prevenir XSS
+    function sanitizarHTML(texto) {
+        if (!texto) return '';
+        const div = document.createElement('div');
+        div.textContent = String(texto);
+        return div.innerHTML;
+    }
+
+    // ✅ SEGURIDAD: Llamar al backend con autenticación
+    async function llamarBackend(ruta, metodo = 'GET', datos = null) {
+        const usuario = auth.currentUser;
+        if (!usuario) throw new Error('No autenticado');
+        const token = await usuario.getIdToken();
+        const opciones = {
+            method: metodo,
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+        };
+        if (datos) opciones.body = JSON.stringify(datos);
+        const res = await fetch(BACKEND_URL + ruta, opciones);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || 'Error del servidor');
+        return json;
+    }
     window.addEventListener('DOMContentLoaded', () => {
         const versionDisplay = document.getElementById('appVersionDisplay');
         if (versionDisplay) {
@@ -908,7 +897,7 @@
     let isRecording = false;
     let watchId = null;
     let lastLocationUpdate = 0;
-    const LOCATION_UPDATE_INTERVAL = 15000; // 🔥 15 SEGUNDOS (optimizado)
+    const LOCATION_UPDATE_INTERVAL = 20000; // 🔥 20 SEGUNDOS (optimizado costos)
     let isTrackingEnabled = false;
     let pedidosActivos = {};
     let gpsErrorCount = 0;
@@ -920,483 +909,10 @@
     let locationSendInterval = null;
     let backgroundGeoInterval = null;
     let isBackgroundMode = false;
-    // 🆕 VARIABLES PARA SERVICIO EN SEGUNDO PLANO
-    let backgroundServiceActive = false;
-    let backgroundServiceNotification = null;
-    let visibilityCheckInterval = null;
     let permisosMultimediaOtorgados = false;
     let permisosCamaraOtorgado = false;
     let permisosMicrofonoOtorgado = false;
     let permisosUbicacionOtorgado = false;
-    
-    // ========================================
-    // 🆕 CONFIGURACIÓN NATIVA APPCREATOR24
-    // ========================================
-    
-    // Wake Lock Agresivo
-    let wakeLockNative = null;
-    let wakeLockInterval = null;
-    
-    async function activarWakeLockAgresivo() {
-        try {
-            // API Wake Lock del navegador
-            if ('wakeLock' in navigator) {
-                wakeLockNative = await navigator.wakeLock.request('screen');
-                console.log('✅ Wake Lock nativo activado');
-                
-                wakeLockNative.addEventListener('release', () => {
-                    console.log('⚠️ Wake Lock liberado, reactivando...');
-                    setTimeout(activarWakeLockAgresivo, 1000);
-                });
-            }
-            
-            // Backup: Intervalo para mantener CPU activa
-            if (wakeLockInterval) clearInterval(wakeLockInterval);
-            wakeLockInterval = setInterval(() => {
-                const timestamp = Date.now();
-                localStorage.setItem('keepAlive', timestamp.toString());
-            }, 5000);
-            
-            console.log('✅ Keep-alive interval iniciado');
-            
-        } catch (error) {
-            console.warn('⚠️ Error Wake Lock:', error);
-        }
-    }
-    
-    // Geolocalización con watchPosition (SIEMPRE activo)
-    let geoWatchId = null;
-    let lastGeoUpdate = 0;
-    const GEO_MIN_INTERVAL = 15000;
-    
-    function iniciarGeolocationWatch() {
-        if (geoWatchId) {
-            navigator.geolocation.clearWatch(geoWatchId);
-        }
-        
-        geoWatchId = navigator.geolocation.watchPosition(
-            (position) => {
-                const now = Date.now();
-                if (now - lastGeoUpdate < GEO_MIN_INTERVAL) return;
-                
-                lastGeoUpdate = now;
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
-                const accuracy = position.coords.accuracy;
-                
-                // Actualizar Firebase usando la referencia existente
-                if (repartidorUID && db) {
-                    const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
-                    update(userStatusRef, {
-                        ubicacion: { lat, lng: lon },
-                        ubicacionActual: {
-                            lat, lng: lon, accuracy,
-                            timestamp: now,
-                            googleMapsUrl: `https://www.google.com/maps?q=${lat},${lon}`
-                        },
-                        trackingActivo: true,
-                        online: true,
-                        backgroundMode: document.hidden,
-                        lastSeen: now
-                    }).catch(err => console.warn('⚠️ Error GPS Watch:', err));
-                }
-                
-                console.log(`📍 WATCH GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)} [${document.hidden ? 'BACKGROUND' : 'FOREGROUND'}]`);
-            },
-            (error) => {
-                console.warn('⚠️ GPS Watch Error:', error.message);
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 30000,
-                maximumAge: 0
-            }
-        );
-        
-        console.log('✅ GPS watchPosition iniciado (permanente - se mantiene activo siempre)');
-    }
-    
-    function detenerGeolocationWatch() {
-        if (geoWatchId) {
-            navigator.geolocation.clearWatch(geoWatchId);
-            geoWatchId = null;
-            console.log('🛑 GPS Watch detenido');
-        }
-    }
-    
-    // Audio silencioso (truco para mantener app activa)
-    let audioContext = null;
-    let audioOscillator = null;
-    
-    function reproducirAudioSilencioso() {
-        try {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            
-            if (audioContext.state === 'suspended') {
-                audioContext.resume();
-            }
-            
-            if (!audioOscillator) {
-                audioOscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                audioOscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                audioOscillator.frequency.value = 1;
-                gainNode.gain.value = 0.001;
-                
-                audioOscillator.start();
-                console.log('🔊 Audio silencioso activo (keep-alive trick)');
-            }
-        } catch (error) {
-            console.warn('⚠️ Audio silencioso error:', error);
-        }
-    }
-    
-    function detenerAudioSilencioso() {
-        try {
-            if (audioOscillator) {
-                audioOscillator.stop();
-                audioOscillator = null;
-            }
-            if (audioContext) {
-                audioContext.close();
-                audioContext = null;
-            }
-            console.log('🔇 Audio silencioso detenido');
-        } catch (error) {
-            console.warn('⚠️ Error al detener audio:', error);
-        }
-    }
-    
-    // Iniciar sistema completo de segundo plano
-    function iniciarSistemaSegundoPlanoNativo() {
-        console.log('🚀 ===== INICIANDO SISTEMA SEGUNDO PLANO NATIVO =====');
-        
-        // 🆕 LLAMAR AL SERVICIO NATIVO DE ANDROID SI ESTÁ DISPONIBLE
-        try {
-            if (typeof Android !== 'undefined' && typeof Android.startForegroundService === 'function') {
-                Android.startForegroundService();
-                console.log('✅ Servicio nativo de Android iniciado');
-            } else {
-                console.log('⚠️ Interfaz Android no disponible, usando modo web');
-            }
-        } catch (e) {
-            console.warn('⚠️ Error al iniciar servicio Android:', e);
-        }
-        
-        activarWakeLockAgresivo();
-        iniciarGeolocationWatch();
-        reproducirAudioSilencioso();
-        console.log('✅ Sistema segundo plano NATIVO ACTIVO');
-    }
-    
-    function detenerSistemaSegundoPlanoNativo() {
-        console.log('🛑 ===== DETENIENDO SISTEMA SEGUNDO PLANO NATIVO =====');
-        
-        // 🆕 DETENER SERVICIO NATIVO DE ANDROID SI ESTÁ DISPONIBLE
-        try {
-            if (typeof Android !== 'undefined' && typeof Android.stopForegroundService === 'function') {
-                Android.stopForegroundService();
-                console.log('🛑 Servicio nativo de Android detenido');
-            }
-        } catch (e) {
-            console.warn('⚠️ Error al detener servicio Android:', e);
-        }
-        
-        if (wakeLockInterval) {
-            clearInterval(wakeLockInterval);
-            wakeLockInterval = null;
-        }
-        
-        if (wakeLockNative) {
-            wakeLockNative.release();
-            wakeLockNative = null;
-        }
-        
-        detenerGeolocationWatch();
-        detenerAudioSilencioso();
-        
-        console.log('✅ Sistema segundo plano NATIVO DETENIDO');
-    }
-    
-    // Solicitar exención de optimización de batería - VERSIÓN MEJORADA
-    async function solicitarExencionBateria() {
-        try {
-            // Verificar si estamos en Android con interfaz nativa
-            if (typeof Android !== 'undefined' && typeof Android.requestIgnoreBatteryOptimizations === 'function') {
-                Android.requestIgnoreBatteryOptimizations();
-                console.log('✅ Solicitada exención de batería (Android nativo)');
-            } else {
-                // Mostrar instrucciones al usuario después de 2 segundos
-                setTimeout(() => {
-                    mostrarModalConfiguracionBateria();
-                }, 2000);
-            }
-        } catch (error) {
-            console.warn('⚠️ Error al solicitar exención de batería:', error);
-        }
-    }
-    
-    // 🆕 MODAL MEJORADO CON INSTRUCCIONES ESPECÍFICAS POR MARCA
-    function mostrarModalConfiguracionBateria() {
-        // Detectar marca del dispositivo
-        const userAgent = navigator.userAgent.toLowerCase();
-        let marca = 'Samsung'; // Por defecto
-        let instrucciones = '';
-        
-        if (userAgent.includes('xiaomi') || userAgent.includes('redmi') || userAgent.includes('poco')) {
-            marca = 'Xiaomi/Redmi/Poco';
-            instrucciones = `
-📱 <strong>Instrucciones para ${marca}:</strong>
-
-<strong>Opción 1 - Administrador de aplicaciones:</strong>
-1. Configuración → Apps → Administrar apps
-2. Busca "Servi Aliados"
-3. Inicio automático → Activar
-4. Ahorro de batería → Sin restricciones
-5. Bloquear → Activar (candado)
-
-<strong>Opción 2 - Batería:</strong>
-1. Configuración → Batería y rendimiento
-2. Administrar uso de batería de apps
-3. Busca "Servi Aliados"
-4. Sin restricciones
-
-<strong>Opción 3 - Seguridad:</strong>
-1. Configuración → Contraseñas y seguridad
-2. Privacidad → Permisos especiales
-3. Inicio automático → Activar para Servi Aliados
-            `;
-        } else if (userAgent.includes('huawei') || userAgent.includes('honor')) {
-            marca = 'Huawei/Honor';
-            instrucciones = `
-📱 <strong>Instrucciones para ${marca}:</strong>
-
-<strong>Paso 1 - Inicio automático:</strong>
-1. Configuración → Aplicaciones
-2. Inicio → Activar para "Servi Aliados"
-
-<strong>Paso 2 - Batería:</strong>
-1. Configuración → Batería
-2. Inicios de aplicaciones
-3. Busca "Servi Aliados"
-4. Administración manual
-5. Activar: Inicio automático, Actividad secundaria, Ejecutar en segundo plano
-
-<strong>Paso 3 - Optimización:</strong>
-1. Configuración → Batería
-2. Más configuraciones de batería
-3. Cierre de aplicaciones → No cerrar Servi Aliados
-            `;
-        } else if (userAgent.includes('oppo') || userAgent.includes('realme')) {
-            marca = 'Oppo/Realme';
-            instrucciones = `
-📱 <strong>Instrucciones para ${marca}:</strong>
-
-1. Configuración → Batería
-2. Administración de consumo de aplicaciones
-3. Busca "Servi Aliados"
-4. Permitir actividad en segundo plano
-5. Permitir inicio automático
-
-<strong>Alternativa:</strong>
-1. Configuración → Aplicaciones
-2. Administrador de aplicaciones
-3. Servi Aliados → Uso de batería
-4. Sin restricciones
-            `;
-        } else if (userAgent.includes('vivo')) {
-            marca = 'Vivo';
-            instrucciones = `
-📱 <strong>Instrucciones para ${marca}:</strong>
-
-1. Configuración → Batería
-2. Consumo elevado en segundo plano
-3. Busca "Servi Aliados"
-4. Permitir actividad en segundo plano
-
-<strong>También:</strong>
-1. iManager → Ahorro de energía
-2. Cuatro puntos (esquina superior derecha)
-3. Lista blanca de segundo plano
-4. Agregar "Servi Aliados"
-            `;
-        } else if (userAgent.includes('oneplus')) {
-            marca = 'OnePlus';
-            instrucciones = `
-📱 <strong>Instrucciones para ${marca}:</strong>
-
-1. Configuración → Batería
-2. Optimización de batería
-3. No optimizar → Servi Aliados
-
-<strong>También:</strong>
-1. Configuración → Aplicaciones
-2. Servi Aliados → Batería
-3. Optimización de batería → No optimizar
-            `;
-        } else {
-            // Samsung u otras marcas
-            marca = 'Samsung / Otras marcas';
-            instrucciones = `
-📱 <strong>Instrucciones para ${marca}:</strong>
-
-<strong>Método 1 - Batería:</strong>
-1. Configuración → Batería y cuidado del dispositivo
-2. Batería → Límites de uso en segundo plano
-3. Apps sin restricciones → Agregar "Servi Aliados"
-
-<strong>Método 2 - Aplicaciones:</strong>
-1. Configuración → Aplicaciones
-2. Servi Aliados → Batería
-3. Permitir uso en segundo plano
-4. Sin restricciones
-
-<strong>Método 3 - Apps en espera:</strong>
-1. Configuración → Batería
-2. Uso de batería por app
-3. Servi Aliados → Sin restricciones
-            `;
-        }
-        
-        // Crear modal personalizado
-        const modalHTML = `
-            <div id="configBateriaModal" style="
-                position: fixed;
-                top: 0; left: 0; right: 0; bottom: 0;
-                background: rgba(0,0,0,0.9);
-                z-index: 99999;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-            ">
-                <div style="
-                    background: #222;
-                    padding: 25px;
-                    border-radius: 12px;
-                    max-width: 500px;
-                    max-height: 80vh;
-                    overflow-y: auto;
-                    box-shadow: 0 0 30px rgba(255,195,0,0.5);
-                    border: 2px solid #FFC300;
-                ">
-                    <h2 style="color: #FFC300; margin: 0 0 15px 0; font-size: 1.3em;">
-                        🔋 CONFIGURACIÓN IMPORTANTE
-                    </h2>
-                    <p style="color: #fff; margin-bottom: 20px; line-height: 1.5;">
-                        Para que la ubicación funcione en segundo plano (como WhatsApp), 
-                        necesitas configurar estos permisos:
-                    </p>
-                    <div style="
-                        background: #333;
-                        padding: 15px;
-                        border-radius: 8px;
-                        margin-bottom: 20px;
-                        color: #ddd;
-                        line-height: 1.6;
-                        font-size: 0.9em;
-                    ">
-                        ${instrucciones}
-                    </div>
-                    <p style="color: #E67E22; margin-bottom: 20px; font-weight: bold; font-size: 0.9em;">
-                        ⚠️ Sin esto, Android cerrará la app en segundo plano
-                    </p>
-                    <div style="display: flex; gap: 10px;">
-                        <button onclick="intentarAbrirConfiguracion()" style="
-                            flex: 1;
-                            background: #FFC300;
-                            color: #111;
-                            border: none;
-                            padding: 12px;
-                            border-radius: 8px;
-                            font-weight: bold;
-                            cursor: pointer;
-                        ">
-                            📱 Ir a Configuración
-                        </button>
-                        <button onclick="cerrarModalConfigBateria()" style="
-                            flex: 1;
-                            background: #555;
-                            color: #fff;
-                            border: none;
-                            padding: 12px;
-                            border-radius: 8px;
-                            font-weight: bold;
-                            cursor: pointer;
-                        ">
-                            Lo haré después
-                        </button>
-                    </div>
-                    <p style="color: #888; margin-top: 15px; font-size: 0.75em; text-align: center;">
-                        Puedes ver estas instrucciones de nuevo desde el menú principal
-                    </p>
-                </div>
-            </div>
-        `;
-        
-        // Agregar modal al DOM
-        const modalDiv = document.createElement('div');
-        modalDiv.innerHTML = modalHTML;
-        document.body.appendChild(modalDiv);
-        
-        console.log('📱 Modal de configuración mostrado para:', marca);
-    }
-    
-    // Función para cerrar el modal
-    window.cerrarModalConfigBateria = function() {
-        const modal = document.getElementById('configBateriaModal');
-        if (modal) {
-            modal.remove();
-        }
-    };
-    
-    // Función para intentar abrir configuración con múltiples métodos
-    window.intentarAbrirConfiguracion = function() {
-        console.log('🔧 Intentando abrir configuración...');
-        
-        // Lista de URLs de configuración para intentar
-        const urlsConfiguracion = [
-            'android-settings:APPLICATION_DETAILS_SETTINGS',
-            'android-settings:IGNORE_BATTERY_OPTIMIZATION_SETTINGS',
-            'android-settings:REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
-            'android-settings:APPLICATION_SETTINGS',
-            'android-settings:SETTINGS'
-        ];
-        
-        // Intentar cada URL
-        let intentoExitoso = false;
-        for (const url of urlsConfiguracion) {
-            try {
-                window.location.href = url;
-                console.log('✅ Abriendo configuración con:', url);
-                intentoExitoso = true;
-                
-                // Cerrar modal después de 1 segundo
-                setTimeout(() => {
-                    cerrarModalConfigBateria();
-                }, 1000);
-                
-                break;
-            } catch (e) {
-                console.warn('⚠️ URL no funcionó:', url);
-            }
-        }
-        
-        // Si ninguna URL funcionó, mostrar mensaje
-        if (!intentoExitoso) {
-            alert('⚠️ No se pudo abrir automáticamente.\n\nPor favor ve manualmente siguiendo las instrucciones mostradas.');
-            // No cerrar el modal para que pueda leer las instrucciones
-        }
-    };
-    
-    // FIN CONFIGURACIÓN NATIVA
-    // ========================================
-    
     // 🔥 VARIABLES DEL MAPA (OPTIMIZADAS)
     let mapaCliente = null;
     let marcadorCliente = null;
@@ -1407,7 +923,7 @@
     let repartidorLocationWatchId = null;
     let isRepartidorLocationActive = false;
     let lastRepartidorLocationUpdate = 0;
-    const REPARTIDOR_LOCATION_INTERVAL = 15000; // 🔥 15 SEGUNDOS
+    const REPARTIDOR_LOCATION_INTERVAL = 20000; // 🔥 20 SEGUNDOS
     // 🆕 VARIABLE PARA GUARDAR EL PEDIDO ACTIVO Y PERSISTIR UBICACIÓN
     let activePedidoData = null;
     // ========================================
@@ -1463,22 +979,13 @@
     // INICIALIZAR MAPA
     // ========================================
     function inicializarMapaCliente() {
-    console.log('═══════════════════════════════════════════════════════════');
-    console.log('[MAPA] 🗺️ INICIALIZANDO MAPA DEL CLIENTE...');
-    console.log('═══════════════════════════════════════════════════════════');
+    console.log('[MAPA] 🗺️ Inicializando mapa del cliente...');
     
     const container = document.getElementById('mapa-cliente');
     if (!container) {
         console.error('[MAPA] ❌ Contenedor NO encontrado');
         return false;
     }
-    
-    console.log('[MAPA] ✅ Contenedor encontrado');
-    console.log('[MAPA] 📏 Dimensiones del contenedor:', {
-        width: container.offsetWidth,
-        height: container.offsetHeight,
-        display: window.getComputedStyle(container).display
-    });
     
     if (mapaCliente) {
         try {
@@ -1496,14 +1003,8 @@
     try {
         container.innerHTML = '';
         
-        // 🔥 Coordenadas de Armenia, Colombia
-        const centerLat = 4.5339;
-        const centerLng = -75.6811;
-        
-        console.log('[MAPA] 🎯 Creando mapa centrado en:', centerLat, centerLng);
-        
         mapaCliente = L.map('mapa-cliente', {
-            center: [centerLat, centerLng],
+            center: [4.710989, -74.072092],
             zoom: 13,
             zoomControl: true,
             attributionControl: true,
@@ -1512,53 +1013,29 @@
             touchZoom: true
         });
         
-        console.log('[MAPA] 🗺️ Mapa base creado');
-        
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19,
             minZoom: 3
         }).addTo(mapaCliente);
         
-        console.log('[MAPA] 🌍 Capa de tiles agregada');
-        
-        // 🔥 CRÍTICO: Múltiples intentos de actualizar el tamaño
+        // CRÍTICO: Forzar tamaño
         setTimeout(() => {
             if (mapaCliente) {
-                console.log('[MAPA] 🔄 Actualizando tamaño (100ms)...');
                 mapaCliente.invalidateSize();
+                console.log('[MAPA] ✅ Tamaño actualizado');
             }
         }, 100);
         
         setTimeout(() => {
-            if (mapaCliente) {
-                console.log('[MAPA] 🔄 Actualizando tamaño (300ms)...');
-                mapaCliente.invalidateSize();
-            }
-        }, 300);
-        
-        setTimeout(() => {
-            if (mapaCliente) {
-                console.log('[MAPA] 🔄 Actualizando tamaño (500ms)...');
-                mapaCliente.invalidateSize();
-            }
+            if (mapaCliente) mapaCliente.invalidateSize();
         }, 500);
         
-        setTimeout(() => {
-            if (mapaCliente) {
-                console.log('[MAPA] 🔄 Actualizando tamaño (1000ms)...');
-                mapaCliente.invalidateSize();
-            }
-        }, 1000);
-        
-        console.log('[MAPA] 🎉 Mapa inicializado exitosamente');
-        console.log('═══════════════════════════════════════════════════════════');
+        console.log('[MAPA] 🎉 Mapa OK');
         return true;
         
     } catch (error) {
-        console.error('[MAPA] ❌ ERROR AL CREAR MAPA:', error);
-        console.error('[MAPA] Stack:', error.stack);
-        console.log('═══════════════════════════════════════════════════════════');
+        console.error('[MAPA] ❌ ERROR:', error);
         return false;
     }
 }
@@ -1568,70 +1045,49 @@
     function agregarMarcadorClienteEnMapaRepartidor(coords) {
         console.log('');
         console.log('═══════════════════════════════════════════════════════════');
-        console.log('📍 [MARCADOR CLIENTE] INICIANDO PROCESO...');
+        logDebugCliente('🎯 AGREGANDO MARCADOR DEL CLIENTE', coords);
         console.log('═══════════════════════════════════════════════════════════');
-        logDebugCliente('🎯 Coordenadas recibidas:', coords);
         
         // Validar coordenadas
-        if (!coords) {
-            console.error('❌ [MARCADOR CLIENTE] coords es null o undefined');
-            document.getElementById('distancia-cliente').textContent = '❌ Sin coordenadas del cliente';
-            return false;
-        }
-        
-        if (!coords.lat || !coords.lng) {
-            console.error('❌ [MARCADOR CLIENTE] Faltan lat o lng:', coords);
-            console.error('   coords.lat:', coords.lat);
-            console.error('   coords.lng:', coords.lng);
-            document.getElementById('distancia-cliente').textContent = '❌ Coordenadas incompletas';
+        if (!coords || !coords.lat || !coords.lng) {
+            console.error('❌ Coordenadas del cliente inválidas:', coords);
+            document.getElementById('distancia-cliente').textContent = '❌ Coordenadas inválidas';
             return false;
         }
         
         const lat = parseFloat(coords.lat);
         const lon = parseFloat(coords.lng);
         
-        console.log('📍 [MARCADOR CLIENTE] Valores parseados:');
-        console.log('   lat:', lat, '(tipo:', typeof lat, ')');
-        console.log('   lon:', lon, '(tipo:', typeof lon, ')');
-        
         if (isNaN(lat) || isNaN(lon)) {
-            console.error('❌ [MARCADOR CLIENTE] Coordenadas son NaN');
-            console.error('   lat después de parseFloat:', lat);
-            console.error('   lon después de parseFloat:', lon);
+            console.error('❌ Coordenadas del cliente son NaN:', coords);
             return false;
         }
         
         if (lat === 0 && lon === 0) {
-            console.warn('⚠️ [MARCADOR CLIENTE] Coordenadas en (0, 0) - ubicación inválida');
+            console.warn('⚠️ Coordenadas en (0, 0) - ubicación inválida');
             return false;
         }
         
         // Validar que el mapa exista
         if (!mapaCliente) {
-            console.error('❌ [MARCADOR CLIENTE] MAPA NO EXISTE');
-            console.error('   mapaCliente:', mapaCliente);
-            document.getElementById('distancia-cliente').textContent = '❌ Mapa no inicializado';
-            alert('⚠️ El mapa no se ha inicializado correctamente. Por favor, recarga la página.');
+            console.error('❌ MAPA NO INICIALIZADO - No se puede agregar marcador');
             return false;
         }
-        
-        console.log('✅ [MARCADOR CLIENTE] Mapa existe, procediendo...');
         
         clienteCoordsRepartidorApp = coords;
         
         // Guardar en localStorage
         if (window.currentClienteID) {
             guardarUbicacionClienteEnStorage(window.currentClienteID, coords);
-            console.log('💾 [MARCADOR CLIENTE] Guardado en localStorage');
         }
         
         try {
             // Remover marcador anterior si existe
             if (marcadorCliente) {
-                console.log('🔄 [MARCADOR CLIENTE] Actualizando marcador existente');
+                logDebugCliente('🔄 Actualizando marcador existente');
                 marcadorCliente.setLatLng([lat, lon]);
             } else {
-                console.log('➕ [MARCADOR CLIENTE] Creando nuevo marcador');
+                logDebugCliente('➕ Creando nuevo marcador del cliente');
                 
                 const iconCliente = L.divIcon({
                     className: 'custom-marker-cliente',
@@ -1639,9 +1095,6 @@
                     iconSize: [40, 40],
                     iconAnchor: [20, 20]
                 });
-                
-                console.log('🎨 [MARCADOR CLIENTE] Icono creado');
-                console.log('📍 [MARCADOR CLIENTE] Agregando al mapa en:', [lat, lon]);
                 
                 marcadorCliente = L.marker([lat, lon], { 
                     icon: iconCliente,
@@ -1651,45 +1104,26 @@
                 
                 marcadorCliente.bindPopup('<b>📍 Cliente</b><br>Ubicación del destino');
                 
-                console.log('✅ [MARCADOR CLIENTE] Marcador agregado exitosamente al mapa');
+                logDebugCliente('✅ Marcador del cliente agregado exitosamente');
                 
                 // Centrar mapa en el cliente
-                console.log('🎯 [MARCADOR CLIENTE] Centrando mapa en cliente...');
                 mapaCliente.setView([lat, lon], 16);
-                
-                // Forzar actualización del mapa
-                setTimeout(() => {
-                    if (mapaCliente) {
-                        mapaCliente.invalidateSize();
-                        console.log('🔄 [MARCADOR CLIENTE] Tamaño del mapa actualizado');
-                    }
-                }, 100);
             }
             
             // Actualizar información de distancia
             if (repartidorCoords) {
-                console.log('📊 [MARCADOR CLIENTE] Calculando distancia con repartidor...');
                 calcularDistanciaYDireccion();
             } else {
-                console.log('⏳ [MARCADOR CLIENTE] Esperando ubicación del repartidor...');
                 document.getElementById('distancia-cliente').textContent = '📏 Esperando tu ubicación GPS...';
                 document.getElementById('direccion-cliente').textContent = '🧭 Activando GPS del repartidor...';
             }
             
             console.log('═══════════════════════════════════════════════════════════');
-            console.log('✅ [MARCADOR CLIENTE] PROCESO COMPLETADO EXITOSAMENTE');
-            console.log('═══════════════════════════════════════════════════════════');
             console.log('');
             return true;
             
         } catch (error) {
-            console.error('═══════════════════════════════════════════════════════════');
-            console.error('❌ [MARCADOR CLIENTE] ERROR AL AGREGAR MARCADOR');
-            console.error('   Error:', error);
-            console.error('   Stack:', error.stack);
-            console.error('═══════════════════════════════════════════════════════════');
-            document.getElementById('distancia-cliente').textContent = '❌ Error al agregar marcador';
-            alert(`❌ Error al agregar marcador del cliente:\n\n${error.message}`);
+            console.error('❌ Error al agregar marcador del cliente:', error);
             return false;
         }
     }
@@ -1702,14 +1136,14 @@
         logDebugRepartidor('🏍️ AGREGANDO MARCADOR DEL REPARTIDOR', coords);
         console.log('═══════════════════════════════════════════════════════════');
         
-        // 🔥 CORRECCIÓN: Aceptar tanto "lng" como "lon" para máxima compatibilidad
-        if (!coords || !coords.lat || (!coords.lng && !coords.lon)) {
+        // Validar coordenadas
+        if (!coords || !coords.lat || !coords.lng) {
             console.error('❌ Coordenadas del repartidor inválidas:', coords);
             return false;
         }
         
         const lat = parseFloat(coords.lat);
-        const lon = parseFloat(coords.lng || coords.lon); // 🔥 Soportar ambos formatos
+        const lon = parseFloat(coords.lng);
         
         if (isNaN(lat) || isNaN(lon)) {
             console.error('❌ Coordenadas del repartidor son NaN:', coords);
@@ -1722,8 +1156,7 @@
             return false;
         }
         
-        // 🔥 CORRECCIÓN: Guardar con el formato estándar "lng"
-        repartidorCoords = { lat: lat, lng: lon };
+        repartidorCoords = coords;
         
         try {
             // Remover o actualizar marcador
@@ -1877,33 +1310,33 @@
                     return;
                 }
                 logDebugCliente('✅ GPS del cliente ACTIVO');
-                // 🔥 BUSCAR CON "lng" Y "lon" (COMPATIBILIDAD TOTAL)
+                // 🔥 BUSCAR CON "lng" (longitude)
                 let clienteCoords = null;
-                // Opción 1: ubicacionActual (con "lng" o "lon")
+                // Opción 1: ubicacionActual (con "lng")
                 if (clienteData.ubicacionActual && 
                     clienteData.ubicacionActual.lat && 
-                    (clienteData.ubicacionActual.lng || clienteData.ubicacionActual.lon)) {
+                    clienteData.ubicacionActual.lng) {
                     clienteCoords = {
                         lat: parseFloat(clienteData.ubicacionActual.lat),
-                        lng: parseFloat(clienteData.ubicacionActual.lng || clienteData.ubicacionActual.lon)
+                        lng: parseFloat(clienteData.ubicacionActual.lng)
                     };
                     logDebugCliente('✅ Ubicación encontrada en ubicacionActual:', clienteCoords);
                 }
-                // Opción 2: ubicacion (con "lng" o "lon")
+                // Opción 2: ubicacion (con "lng")
                 else if (clienteData.ubicacion && 
                          clienteData.ubicacion.lat && 
-                         (clienteData.ubicacion.lng || clienteData.ubicacion.lon)) {
+                         clienteData.ubicacion.lng) {
                     clienteCoords = {
                         lat: parseFloat(clienteData.ubicacion.lat),
-                        lng: parseFloat(clienteData.ubicacion.lng || clienteData.ubicacion.lon)
+                        lng: parseFloat(clienteData.ubicacion.lng)
                     };
                     logDebugCliente('✅ Ubicación encontrada en ubicacion:', clienteCoords);
                 }
-                // Opción 3: campos directos (con "lng" o "lon")
-                else if (clienteData.lat && (clienteData.lng || clienteData.lon)) {
+                // Opción 3: campos directos
+                else if (clienteData.lat && clienteData.lng) {
                     clienteCoords = {
                         lat: parseFloat(clienteData.lat),
-                        lng: parseFloat(clienteData.lng || clienteData.lon)
+                        lng: parseFloat(clienteData.lng)
                     };
                     logDebugCliente('✅ Ubicación encontrada en campos directos:', clienteCoords);
                 }
@@ -1911,9 +1344,9 @@
                     console.error('❌ NO SE PUDO OBTENER UBICACIÓN DEL CLIENTE');
                     console.error('Estructura de datos recibida:', clienteData);
                     console.error('Campos buscados:');
-                    console.error('  - ubicacionActual.lat/lng/lon:', clienteData.ubicacionActual);
-                    console.error('  - ubicacion.lat/lng/lon:', clienteData.ubicacion);
-                    console.error('  - lat/lng/lon directos:', clienteData.lat, clienteData.lng, clienteData.lon);
+                    console.error('  - ubicacionActual.lat/lng:', clienteData.ubicacionActual);
+                    console.error('  - ubicacion.lat/lng:', clienteData.ubicacion);
+                    console.error('  - lat/lng directos:', clienteData.lat, clienteData.lng);
                     document.getElementById('distancia-cliente').textContent = '📏 No se pudo obtener ubicación del cliente';
                     document.getElementById('direccion-cliente').textContent = '🧭 Verifica que el cliente tenga GPS activo';
                     return;
@@ -1976,15 +1409,8 @@
                 const lon = position.coords.longitude;
                 const accuracy = position.coords.accuracy;
                 logDebugRepartidor(`📍 Ubicación: ${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracy)}m) [15s]`);
-                
-                // 🔥 CORRECCIÓN: Usar "lng" en lugar de "lon" para consistencia con Leaflet
-                const coords = { lat: lat, lng: lon };
-                console.log('🗺️ [DEBUG MAPA] Coordenadas para agregar marcador:', coords);
-                console.log('🗺️ [DEBUG MAPA] ¿Mapa existe?', mapaCliente ? 'SÍ' : 'NO');
-                
                 // Actualizar marcador en el mapa
-                agregarMarcadorRepartidorEnMapa(coords);
-                
+                agregarMarcadorRepartidorEnMapa({ lat, lon });
                 // Enviar a Firebase
                 enviarUbicacionRepartidorAFirebase(lat, lon, accuracy);
             },
@@ -2252,17 +1678,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             await marcarComoOnline();
             await iniciarHeartbeatPrincipal();
             iniciarEnvioUbicacionDirecto();
-            
-            // 🆕 INICIAR SISTEMA NATIVO DE SEGUNDO PLANO (AppCreator24)
-            iniciarSistemaSegundoPlanoNativo();
-            
-            // También iniciar el servicio con notificación visual
-            await iniciarServicioSegundoPlano();
-            
-            // Solicitar exención de batería
-            await solicitarExencionBateria();
-            
-            console.log('✅ Sistema de presencia persistente configurado (NATIVO + VISUAL)');
+            console.log('✅ Sistema de presencia persistente configurado');
             actualizarIndicadorConexion(true);
         } catch (error) {
             console.error('❌ Error al configurar presencia:', error);
@@ -2321,8 +1737,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             } catch (error) {
                 console.warn('⚠️ Error en background GPS:', error.message);
             }
-        }, 15000); // 🔥 15 SEGUNDOS (optimizado)
-        console.log('✅ Background Geolocation iniciado (cada 15s - optimizado)');
+        }, 20000); // 🔥 20 SEGUNDOS (optimizado)
+        console.log('✅ Background Geolocation iniciado (cada 20s - optimizado)');
     }
     function detenerBackgroundGeolocation() {
         if (backgroundGeoInterval) {
@@ -2331,220 +1747,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             console.log('🛑 Background Geolocation detenido');
         }
     }
-
-    // ========================================
-    // 🆕 SERVICIO EN SEGUNDO PLANO
-    // ========================================
-    
-    /**
-     * Inicia el servicio en segundo plano con notificación persistente
-     */
-    async function iniciarServicioSegundoPlano() {
-        try {
-            // Verificar si ya está activo
-            if (backgroundServiceActive) {
-                console.log('ℹ️ Servicio en segundo plano ya está activo');
-                return;
-            }
-
-            console.log('🚀 Iniciando servicio en segundo plano...');
-
-            // 1. Solicitar permiso para notificaciones (si aún no se tiene)
-            if ('Notification' in window && Notification.permission === 'default') {
-                await Notification.requestPermission();
-            }
-
-            // 2. Crear notificación persistente
-            if ('Notification' in window && Notification.permission === 'granted') {
-                mostrarNotificacionPersistente();
-            }
-
-            // 3. Activar indicador visual
-            mostrarIndicadorSegundoPlano();
-
-            // 4. Detectar cuando la app pasa a segundo plano
-            iniciarDeteccionVisibilidad();
-
-            // 5. Marcar servicio como activo
-            backgroundServiceActive = true;
-
-            // 6. Actualizar en Firebase
-            if (repartidorUID) {
-                const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
-                await update(userStatusRef, {
-                    backgroundServiceActive: true,
-                    backgroundServiceTimestamp: Date.now()
-                });
-            }
-
-            console.log('✅ Servicio en segundo plano iniciado correctamente');
-        } catch (error) {
-            console.error('❌ Error al iniciar servicio en segundo plano:', error);
-        }
-    }
-
-    /**
-     * Detiene el servicio en segundo plano
-     */
-    async function detenerServicioSegundoPlano() {
-        try {
-            console.log('🛑 Deteniendo servicio en segundo plano...');
-
-            // 1. Cerrar notificación
-            if (backgroundServiceNotification) {
-                backgroundServiceNotification.close();
-                backgroundServiceNotification = null;
-            }
-
-            // 2. Ocultar indicador visual
-            ocultarIndicadorSegundoPlano();
-
-            // 3. Detener detección de visibilidad
-            if (visibilityCheckInterval) {
-                clearInterval(visibilityCheckInterval);
-                visibilityCheckInterval = null;
-            }
-
-            // 4. Marcar como inactivo
-            backgroundServiceActive = false;
-
-            // 5. Actualizar en Firebase
-            if (repartidorUID) {
-                const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
-                await update(userStatusRef, {
-                    backgroundServiceActive: false
-                });
-            }
-
-            console.log('✅ Servicio en segundo plano detenido');
-        } catch (error) {
-            console.error('❌ Error al detener servicio en segundo plano:', error);
-        }
-    }
-
-    /**
-     * Muestra una notificación persistente
-     */
-    function mostrarNotificacionPersistente() {
-        if ('Notification' in window && Notification.permission === 'granted') {
-            // Cerrar notificación anterior si existe
-            if (backgroundServiceNotification) {
-                backgroundServiceNotification.close();
-            }
-
-            // Crear nueva notificación
-            backgroundServiceNotification = new Notification('Servi Aliados', {
-                body: 'Trabajando en segundo plano - GPS activo',
-                icon: 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png',
-                badge: 'https://cdn-icons-png.flaticon.com/512/2830/2830284.png',
-                tag: 'servialiados-background',
-                requireInteraction: true, // No se cierra automáticamente
-                silent: true, // Sin sonido
-                data: {
-                    timestamp: Date.now()
-                }
-            });
-
-            // Volver a abrir la app al hacer clic en la notificación
-            backgroundServiceNotification.onclick = function() {
-                window.focus();
-                this.close();
-            };
-
-            console.log('📱 Notificación persistente mostrada');
-        }
-    }
-
-    /**
-     * Muestra el indicador visual en la app
-     */
-    function mostrarIndicadorSegundoPlano() {
-        const indicator = document.getElementById('backgroundServiceIndicator');
-        if (indicator) {
-            indicator.classList.add('active');
-            console.log('✅ Indicador de segundo plano visible');
-        }
-    }
-
-    /**
-     * Oculta el indicador visual
-     */
-    function ocultarIndicadorSegundoPlano() {
-        const indicator = document.getElementById('backgroundServiceIndicator');
-        if (indicator) {
-            indicator.classList.remove('active');
-            console.log('🔕 Indicador de segundo plano oculto');
-        }
-    }
-
-    /**
-     * Detecta cuando la app pasa a segundo plano
-     */
-    function iniciarDeteccionVisibilidad() {
-        // Evento de visibilidad de la página
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                // App en segundo plano
-                isBackgroundMode = true;
-                console.log('📱 App pasó a segundo plano');
-                
-                // Actualizar en Firebase
-                if (repartidorUID) {
-                    const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
-                    update(userStatusRef, {
-                        backgroundMode: true,
-                        lastBackgroundTimestamp: Date.now()
-                    }).catch(err => console.warn('⚠️ Error al actualizar modo background:', err));
-                }
-                
-                // Asegurar que el GPS siga funcionando
-                if (!backgroundGeoInterval) {
-                    iniciarBackgroundGeolocation();
-                }
-            } else {
-                // App en primer plano
-                isBackgroundMode = false;
-                console.log('📱 App volvió a primer plano');
-                
-                // Actualizar en Firebase
-                if (repartidorUID) {
-                    const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
-                    update(userStatusRef, {
-                        backgroundMode: false
-                    }).catch(err => console.warn('⚠️ Error al actualizar modo foreground:', err));
-                }
-            }
-        });
-
-        // Verificación periódica adicional
-        visibilityCheckInterval = setInterval(() => {
-            if (backgroundServiceActive && isBackgroundMode) {
-                // Asegurar que el tracking siga activo
-                if (!backgroundGeoInterval) {
-                    console.warn('⚠️ GPS detenido en segundo plano, reiniciando...');
-                    iniciarBackgroundGeolocation();
-                }
-                
-                // Renovar notificación cada 30 segundos
-                if (Date.now() % 30000 < 5000) {
-                    mostrarNotificacionPersistente();
-                }
-            }
-        }, 5000); // Verificar cada 5 segundos
-
-        console.log('✅ Detección de visibilidad iniciada');
-    }
-
-    /**
-     * Asegura que el GPS permanezca activo en segundo plano
-     */
-    async function asegurarGPSSegundoPlano() {
-        if (isBackgroundMode && !backgroundGeoInterval) {
-            console.log('🔄 Reiniciando GPS en segundo plano...');
-            iniciarBackgroundGeolocation();
-        }
-    }
-
     function iniciarEnvioUbicacionDirecto() {
         if (locationSendInterval) {
             clearInterval(locationSendInterval);
@@ -2563,8 +1765,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     console.warn('⚠️ Error en envío directo de ubicación:', error);
                 }
             }
-        }, 15000); // 🔥 15 SEGUNDOS (optimizado)
-        console.log('✅ Envío directo de ubicación iniciado (cada 15s - optimizado)');
+        }, 20000); // 🔥 20 SEGUNDOS (optimizado)
+        console.log('✅ Envío directo de ubicación iniciado (cada 20s - optimizado)');
     }
     async function iniciarTrackingGPSAutomatico() {
         console.log('🚀 Iniciando GPS automático al login (optimizado)...');
@@ -2817,45 +2019,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             }
         }
     });
-    
-    // ========================================
-    // 🆕 EVENTOS ADICIONALES PARA SEGUNDO PLANO MEJORADO
-    // ========================================
-    
-    // Prevenir pausa cuando se minimiza (si el tracking está activo)
-    window.addEventListener('blur', () => {
-        if (gpsActivo && repartidorUID) {
-            console.log('🔄 App minimizada pero manteniendo GPS activo');
-        }
-    });
-    
-    // Reactivar al volver
-    window.addEventListener('focus', () => {
-        if (gpsActivo && repartidorUID) {
-            console.log('🔄 App en foco - GPS continúa activo');
-        }
-    });
-    
-    // Prevenir freeze cuando la página pierde foco
-    document.addEventListener('freeze', (e) => {
-        if (gpsActivo && repartidorUID) {
-            console.log('❄️ Previniendo freeze - GPS debe mantenerse activo');
-            e.preventDefault();
-        }
-    }, true);
-    
-    // Reanudar cuando se descongela
-    document.addEventListener('resume', () => {
-        if (gpsActivo && repartidorUID) {
-            console.log('🔄 Resumiendo - Verificando GPS');
-            // Verificar que el GPS sigue activo
-            if (!geoWatchId) {
-                console.warn('⚠️ GPS se detuvo, reiniciando...');
-                iniciarGeolocationWatch();
-            }
-        }
-    });
-    
     // ========================================
     // SISTEMA DE MULTIMEDIA (FOTOS/AUDIOS)
     // ========================================
@@ -3118,8 +2281,10 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     `;
                 } else {
                     msgDiv.className = msg.remitente === 'admin' ? 'mensaje admin-msg' : 'mensaje rep-msg';
+                    // ✅ SEGURIDAD: Sanitizado para prevenir XSS
+                    const textoSeguro = sanitizarHTML(msg.mensaje || msg.texto || 'Sin mensaje');
                     msgDiv.innerHTML = `
-                        ${msg.mensaje || msg.texto || 'Sin mensaje'}
+                        ${textoSeguro}
                         <span class="chat-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
                     `;
                 }
@@ -3179,103 +2344,258 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // ========================================
     // PEDIDOS
     // ========================================
+
+    // ── Caché de pedidos del formulario cliente (repartidores_pedidos) ──
+    let pedidosFormulario = {}; // pedidoId → pedidoData
+
+    // ── Calcula tiempo real (min) desde posición del repartidor
+    //    hasta las coords del cliente usando Haversine ──
+    async function calcularTiempoRealRecogida(clienteIdAsignado) {
+        try {
+            // 1. Coords del repartidor (ya en memoria si GPS activo)
+            let repLat = null, repLng = null;
+            if (repartidorCoords && repartidorCoords.lat && repartidorCoords.lng) {
+                repLat = repartidorCoords.lat;
+                repLng = repartidorCoords.lng;
+            } else if (repartidorUID) {
+                const repSnap = await get(ref(db, `repartidores_info/${repartidorUID}/ubicacionActual`));
+                if (repSnap.exists()) {
+                    const u = repSnap.val();
+                    repLat = u.lat; repLng = u.lng;
+                }
+            }
+            if (!repLat || !repLng) return null;
+
+            // 2. Coords del cliente desde Firebase
+            if (!clienteIdAsignado) return null;
+            const cliSnap = await get(ref(db, `usuarios/${clienteIdAsignado}/ubicacionActual`));
+            if (!cliSnap.exists()) {
+                // Intentar con "ubicacion" (lat/lon)
+                const cliSnap2 = await get(ref(db, `usuarios/${clienteIdAsignado}/ubicacion`));
+                if (!cliSnap2.exists()) return null;
+                const u2 = cliSnap2.val();
+                if (!u2.lat) return null;
+                const distM = calcularDistancia(repLat, repLng, u2.lat, u2.lon || u2.lng);
+                return Math.max(1, Math.round(distM / (25000 / 60))); // 25 km/h moto
+            }
+            const u = cliSnap.val();
+            if (!u.lat) return null;
+            const distM = calcularDistancia(repLat, repLng, u.lat, u.lng || u.lon);
+            const distKm = (distM / 1000).toFixed(1);
+            const minutos = Math.max(1, Math.round(distM / (25000 / 60))); // 25 km/h moto
+            return { minutos, distKm };
+        } catch(e) {
+            console.warn('⚠️ Error calculando tiempo real:', e);
+            return null;
+        }
+    }
+
+    // ── Renderizar tarjeta de pedido del FORMULARIO cliente ──
+    async function mostrarPedidoFormulario(pedido, pedidoId, container) {
+        const div = document.createElement('div');
+        div.className = 'pedido-item';
+        div.id = `pedido-${pedidoId}`;
+        div.style.borderLeft = '5px solid #FFC300';
+
+        // Calcular tiempo real mientras renderizamos
+        const tiempoInfo = await calcularTiempoRealRecogida(pedido.clienteIdAsignado);
+        const tiempoTexto = tiempoInfo
+            ? `⏱️ <strong style="color:#FFC300;">~${tiempoInfo.minutos} min</strong> <small style="color:#aaa;">(${tiempoInfo.distKm} km hasta punto de recogida)</small>`
+            : `⏱️ <span style="color:#aaa;">Tiempo estimado: 15 – 20 min</span>`;
+
+        const zonaInfo = pedido.zonaRecogida ? `
+        <div style="background:#2a2a2a;padding:8px;border-radius:6px;margin:6px 0;border-left:3px solid #FFC300;">
+            📍 Recoge en <strong style="color:#FFC300;">${sanitizarHTML(pedido.zonaRecogida)}</strong>
+            → 🏠 Entrega en <strong style="color:#FFC300;">${sanitizarHTML(pedido.zonaEntrega || '?')}</strong>
+        </div>` : '';
+
+        div.innerHTML = `
+        <strong>🔔 Pedido #${pedidoId.slice(-6)}</strong>
+        <span style="background:#FFC300;color:#000;padding:2px 8px;border-radius:10px;font-size:0.75em;margin-left:6px;">FORMULARIO</span><br>
+        ${tiempoTexto}<br><br>
+        <div style="background:#1e3a1e;border-radius:8px;padding:10px;margin:6px 0;">
+            <strong style="color:#27ae60;">📦 Punto A – Recogida</strong><br>
+            👤 ${sanitizarHTML(pedido.nombreEntrega || '—')}<br>
+            📍 ${sanitizarHTML(pedido.dirRecogida || '—')}<br>
+            📞 ${sanitizarHTML(pedido.telEntrega || '—')}<br>
+            ${zonaInfo}
+        </div>
+        <div style="background:#1a1a3e;border-radius:8px;padding:10px;margin:6px 0;">
+            <strong style="color:#4A9EFF;">🏠 Punto B – Entrega</strong><br>
+            👤 ${sanitizarHTML(pedido.nombreRecibe || pedido.clienteNombre || '—')}<br>
+            📍 ${sanitizarHTML(pedido.dirEntrega || pedido.direccionCliente || '—')}<br>
+            📞 ${sanitizarHTML(pedido.telRecibe || pedido.telefonoCliente || '—')}
+        </div>
+        <div style="text-align:center;margin:8px 0;">
+            <span style="font-size:1.3em;font-weight:bold;color:#FFC300;">
+                💵 $${Number(pedido.montoTotal || pedido.precio || 0).toLocaleString('es-CO')}
+            </span>
+        </div>
+        <button onclick="window.aceptarPedidoFormulario('${pedidoId}')"
+                style="background:#FFC300;color:#000;margin-top:8px;width:100%;padding:14px;font-size:1.05em;font-weight:bold;border:none;border-radius:8px;cursor:pointer;">
+            ✅ ACEPTAR PEDIDO
+        </button>`;
+        container.appendChild(div);
+    }
+
     function escucharPedidos() {
         if (!repartidorUID) return;
+
+        // ── 1. Listener: pedidos_pendientes (sistema anterior) ──
         const pedidosRef = ref(db, 'pedidos_pendientes');
         onValue(pedidosRef, (snapshot) => {
-            const data = snapshot.val();
-            const listaPendientes = document.getElementById('pedidosList');
-            const listaAsignados = document.getElementById('pedidosAsignadosList');
-            let contadorPendientes = 0;
-            let contadorAsignados = 0;
-            listaPendientes.innerHTML = '';
-            listaAsignados.innerHTML = '';
-            if (!data) {
-                listaPendientes.innerHTML = '<p style="color: #999;">No hay pedidos pendientes.</p>';
-                listaAsignados.innerHTML = '<p style="color: #999;">No tienes pedidos asignados.</p>';
-                document.getElementById('pendientesBadge').style.display = 'none';
-                document.getElementById('asignadosCount').textContent = '0';
-                return;
+            renderizarTodosLosPedidos(snapshot.val(), 'pendientes');
+        });
+
+        // ── 2. Listener: repartidores_pedidos/{uid} (pedidos del formulario cliente) ──
+        const formPedidosRef = ref(db, `repartidores_pedidos/${repartidorUID}`);
+        onValue(formPedidosRef, (snapshot) => {
+            pedidosFormulario = {};
+            if (snapshot.exists()) {
+                snapshot.forEach(child => {
+                    const p = child.val();
+                    // Solo los que están pendientes o sin_repartidor
+                    if (p.estado === 'pendiente' || p.estado === 'sin_repartidor') {
+                        pedidosFormulario[child.key] = p;
+                    }
+                });
             }
-            Object.keys(data).forEach(pedidoId => {
-                const pedido = data[pedidoId];
+            renderizarTodosLosPedidos(null, 'formulario');
+        });
+    }
+
+    // ── Renderizador unificado ──
+    async function renderizarTodosLosPedidos(dataPendientes, origen) {
+        const listaPendientes = document.getElementById('pedidosList');
+        const listaAsignados  = document.getElementById('pedidosAsignadosList');
+        listaPendientes.innerHTML = '';
+        listaAsignados.innerHTML  = '';
+        let contadorPendientes = 0;
+        let contadorAsignados  = 0;
+
+        // ── Pedidos del formulario cliente (nuevo sistema) ──
+        for (const [pedidoId, pedido] of Object.entries(pedidosFormulario)) {
+            contadorPendientes++;
+            await mostrarPedidoFormulario(pedido, pedidoId, listaPendientes);
+            if (!initialLoad && !pedidosActivos[pedidoId]) {
+                reproducirNotificacion();
+                document.getElementById('chatSection').style.display = 'none';
+                document.getElementById('pendientesSection').style.display = 'block';
+                document.getElementById('asignadosSection').style.display = 'none';
+                document.getElementById('historialSection').style.display = 'none';
+                if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 500]);
+                setTimeout(() => {
+                    const el = document.getElementById(`pedido-${pedidoId}`);
+                    if (el) el.style.animation = 'pedidoNuevo 1s ease 3';
+                }, 100);
+            }
+            pedidosActivos[pedidoId] = true;
+        }
+
+        // ── Pedidos del sistema anterior (pedidos_pendientes) ──
+        if (!dataPendientes) {
+            // Obtener snapshot fresco si se llamó desde el listener de formulario
+            try {
+                const snap = await get(ref(db, 'pedidos_pendientes'));
+                dataPendientes = snap.val();
+            } catch(e) { dataPendientes = null; }
+        }
+
+        if (dataPendientes) {
+            Object.keys(dataPendientes).forEach(pedidoId => {
+                const pedido = dataPendientes[pedidoId];
                 if (pedido.estado === 'Pendiente') {
                     contadorPendientes++;
                     mostrarPedidoPendiente(pedido, pedidoId, listaPendientes);
                     if (!initialLoad && !pedidosActivos[pedidoId]) {
                         reproducirNotificacion();
+                        document.getElementById('chatSection').style.display = 'none';
+                        document.getElementById('pendientesSection').style.display = 'block';
+                        document.getElementById('asignadosSection').style.display = 'none';
+                        document.getElementById('historialSection').style.display = 'none';
+                        if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 500]);
+                        setTimeout(() => {
+                            const el = document.getElementById(`pedido-${pedidoId}`);
+                            if (el) el.style.animation = 'pedidoNuevo 1s ease 3';
+                        }, 100);
                     }
                     pedidosActivos[pedidoId] = true;
-                } else if (pedido.repartidorUID === repartidorUID && 
+                } else if (pedido.repartidorUID === repartidorUID &&
                           (pedido.estado === 'Aceptado' || pedido.estado === 'Esperando' || pedido.estado === 'En Camino')) {
                     contadorAsignados++;
                     mostrarPedidoAsignado(pedido, pedidoId, listaAsignados);
-                    // 🆕 GUARDAR DATOS DEL PEDIDO ACTIVO PARA PERSISTENCIA
                     if (!activePedidoData || activePedidoData.pedidoId !== pedidoId) {
-                        activePedidoData = {
-                            pedidoId: pedidoId,
-                            clienteUID: pedido.clienteUID,
-                            estado: pedido.estado
-                        };
+                        activePedidoData = { pedidoId, clienteUID: pedido.clienteUID, estado: pedido.estado };
                     }
                 }
             });
-            if (contadorPendientes === 0) {
-                listaPendientes.innerHTML = '<p style="color: #999;">No hay pedidos pendientes.</p>';
-                document.getElementById('pendientesBadge').style.display = 'none';
-            } else {
-                document.getElementById('pendientesBadge').style.display = 'inline-block';
-                document.getElementById('pendientesBadge').textContent = contadorPendientes;
+        }
+
+        // ── Pedidos de historial asignados a este repartidor (del formulario) ──
+        try {
+            const histSnap = await get(ref(db, 'pedidos_historial'));
+            if (histSnap.exists()) {
+                histSnap.forEach(child => {
+                    const p = child.val();
+                    if (p.repartidorUID === repartidorUID &&
+                        (p.estado === 'Aceptado' || p.estado === 'Esperando' || p.estado === 'En Camino' ||
+                         p.estado === 'aceptado' || p.estado === 'esperando' || p.estado === 'en_camino')) {
+                        contadorAsignados++;
+                        mostrarPedidoAsignado(p, child.key, listaAsignados);
+                    }
+                });
             }
-            if (contadorAsignados === 0) {
-                listaAsignados.innerHTML = '<p style="color: #999;">No tienes pedidos asignados.</p>';
-                activePedidoData = null; // 🆕 LIMPIAR DATOS DEL PEDIDO ACTIVO
-            }
-            document.getElementById('asignadosCount').textContent = contadorAsignados;
-            initialLoad = false;
-        });
+        } catch(e) {}
+
+        // ── Actualizar contadores ──
+        if (contadorPendientes === 0) {
+            listaPendientes.innerHTML = '<p style="color: #999;">No hay pedidos pendientes.</p>';
+            document.getElementById('pendientesBadge').style.display = 'none';
+        } else {
+            document.getElementById('pendientesBadge').style.display = 'inline-block';
+            document.getElementById('pendientesBadge').textContent = contadorPendientes;
+        }
+        if (contadorAsignados === 0) {
+            listaAsignados.innerHTML = '<p style="color: #999;">No tienes pedidos asignados.</p>';
+            activePedidoData = null;
+        }
+        document.getElementById('asignadosCount').textContent = contadorAsignados;
+        initialLoad = false;
+        if (repartidorUID) {
+            update(ref(db, `repartidores_info/${repartidorUID}`), {
+                pedidosActivos: contadorAsignados
+            }).catch(() => {});
+        }
     }
     function mostrarPedidoPendiente(pedido, pedidoId, container) {
         const div = document.createElement('div');
         div.className = 'pedido-item';
-        
-        // 🔥 DEBUG: Mostrar TODOS los campos del pedido
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('📦 [PEDIDO PENDIENTE] ID:', pedidoId);
-        console.log('📦 [PEDIDO PENDIENTE] Objeto completo:', pedido);
-        console.log('📦 [PEDIDO PENDIENTE] Todos los campos:');
-        Object.keys(pedido).forEach(key => {
-            console.log(`   - ${key}:`, pedido[key]);
-        });
-        console.log('═══════════════════════════════════════════════════════════');
-        
-        // 🔥 CORRECCIÓN: Buscar todos los posibles campos y mostrar el que tenga valor
-        const producto = pedido.items || pedido.producto || pedido.descripcion || pedido.detalle || pedido.item || pedido.productos || pedido.articulo || '';
-        const precio = pedido.montoTotal || pedido.total || pedido.precio || pedido.valor || pedido.costo || pedido.monto || pedido.costoTotal || pedido.precioTotal || '';
-        const direccion = pedido.direccionEntrega || pedido.direccion || pedido.ubicacion || pedido.destino || pedido.direccionCliente || pedido.ubicacionTexto || pedido.address || '';
-        const nombre = pedido.nombreCliente || pedido.nombre || pedido.cliente || pedido.receptor || pedido.clienteNombre || pedido.destinatario || '';
-        const telefono = pedido.telefonoCliente || pedido.telefono || pedido.celular || pedido.contacto || pedido.phone || pedido.numeroContacto || '';
-        const detalles = pedido.observaciones || pedido.detalles || pedido.notas || pedido.comentarios || pedido.nota || pedido.descripcionExtra || '';
-        
-        console.log('📦 Valores extraídos:');
-        console.log('   producto:', producto);
-        console.log('   precio:', precio);
-        console.log('   direccion:', direccion);
-        console.log('   nombre:', nombre);
-        console.log('   telefono:', telefono);
-        console.log('   detalles:', detalles);
-        
+        div.id = `pedido-${pedidoId}`;
+        // 🆕 Info de zona y domicilio si viene del formulario del cliente
+        const zonaRecogida = pedido.zonaRecogida ? pedido.zonaRecogida.toUpperCase() : null;
+        const zonaEntrega = pedido.zonaEntrega ? pedido.zonaEntrega.toUpperCase() : null;
+        const valorDomicilio = pedido.valorDomicilio ? `$${Number(pedido.valorDomicilio).toLocaleString('es-CO')}` : null;
+        const montoProducto = pedido.montoProducto ? `$${Number(pedido.montoProducto).toLocaleString('es-CO')}` : null;
+        const zonaInfo = zonaRecogida ? `
+        <div style="background:#2a2a2a;padding:8px;border-radius:6px;margin:6px 0;border-left:3px solid var(--color-primary);">
+            📍 Recoge en: <strong style="color:var(--color-primary);">${sanitizarHTML(zonaRecogida)}</strong> → 
+            🏠 Entrega en: <strong style="color:var(--color-primary);">${sanitizarHTML(zonaEntrega || '?')}</strong><br>
+            🛵 Domicilio: <strong style="color:#27ae60;">${sanitizarHTML(valorDomicilio || '?')}</strong>
+            ${montoProducto ? ` | 💰 Cobrar: <strong style="color:#e67e22;">${sanitizarHTML(montoProducto)}</strong>` : ''}
+        </div>` : '';
+        // ✅ SEGURIDAD: Sanitizar campos del pedido para prevenir XSS
         div.innerHTML = `
-     <strong>Pedido #${pedidoId.slice(-6)}</strong><br>
-        📦 ${producto || '<span style="color: #ff6b6b;">⚠️ Sin producto especificado</span>'}<br>
-        💵 ${precio || '<span style="color: #ff6b6b;">⚠️ Sin precio especificado</span>'}<br>
-        📍 ${direccion || '<span style="color: #ff6b6b;">⚠️ Sin dirección especificada</span>'}<br>
-        👤 ${nombre || '<span style="color: #ff6b6b;">⚠️ Sin nombre especificado</span>'}<br>
-        📞 ${telefono || '<span style="color: #ff6b6b;">⚠️ Sin teléfono especificado</span>'}<br>
-        📝 ${detalles || '<span style="color: #999;">Sin detalles adicionales</span>'}<br>
+        <strong>🔔 Pedido #${pedidoId.slice(-6)}</strong><br>
+        📦 ${sanitizarHTML(pedido.items || pedido.producto || pedido.descripcion || pedido.detalle || 'Sin producto')}<br>
+        💵 ${sanitizarHTML(pedido.total || pedido.precio || pedido.valor || pedido.costo || (valorDomicilio ? `Domicilio: ${valorDomicilio}` : 'Sin precio'))}<br>
+        📍 ${sanitizarHTML(pedido.direccionRecogida || pedido.direccionEntrega || pedido.direccion || pedido.ubicacion || pedido.destino || 'Sin dirección')}<br>
+        👤 ${sanitizarHTML(pedido.nombreCliente || pedido.nombre || pedido.cliente || pedido.receptor || 'Sin nombre')}<br>
+        📞 ${sanitizarHTML(pedido.telefonoCliente || pedido.telefono || pedido.celular || pedido.contacto || 'Sin teléfono')}<br>
+        ${zonaInfo}
+        📝 ${sanitizarHTML(pedido.observaciones || pedido.detalles || pedido.notas || pedido.comentarios || '—')}<br>
         <button onclick="window.aceptarPedido('${pedidoId}')" 
-                style="background: var(--color-primary); color: var(--color-background); margin-top: 10px;">
-            ✅ Aceptar Pedido
+                style="background: var(--color-primary); color: var(--color-background); margin-top: 10px; width:100%; padding:12px; font-size:1em;">
+            ✅ ACEPTAR PEDIDO
         </button>
     `;
         container.appendChild(div);
@@ -3288,112 +2608,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         } else if (pedido.estado === 'En Camino') {
             div.classList.add('en-camino');
         }
-        
-        // 🔥 DEBUG: Mostrar TODOS los campos del pedido
-        console.log('═══════════════════════════════════════════════════════════');
-        console.log('🚚 [PEDIDO ASIGNADO] ID:', pedidoId);
-        console.log('🚚 [PEDIDO ASIGNADO] Objeto completo:', pedido);
-        console.log('🚚 [PEDIDO ASIGNADO] Todos los campos:');
-        Object.keys(pedido).forEach(key => {
-            console.log(`   - ${key}:`, pedido[key]);
-        });
-        console.log('═══════════════════════════════════════════════════════════');
-        
-        // 🔥 BUSCAR clienteUID en múltiples ubicaciones (igual que en el código del cliente)
-        let clienteUID = pedido.clienteUID || pedido.clienteId || pedido.userId || pedido.uid || null;
-        
-        // 🔥 SIEMPRE MOSTRAR EL MAPA (basado en código del cliente)
-        console.log('🗺️ [MAPA] Mostrando contenedor del mapa...');
-        setTimeout(() => {
-            document.getElementById('mapa-cliente-container').style.display = 'block';
-            
-            // Inicializar mapa si no existe
-            if (!mapaCliente) {
-                console.log('🗺️ [MAPA] Inicializando mapa...');
-                inicializarMapaCliente();
-                
-                // Dar tiempo para que se renderice
-                setTimeout(() => {
-                    // PRIMERO: Agregar marcador del repartidor (nuestra ubicación)
-                    console.log('🏍️ [MAPA] Obteniendo ubicación del repartidor...');
-                    if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition((position) => {
-                            const repartidorCoords = {
-                                lat: position.coords.latitude,
-                                lng: position.coords.longitude
-                            };
-                            console.log('✅ [MAPA] Ubicación del repartidor obtenida:', repartidorCoords);
-                            agregarMarcadorRepartidorEnMapa(repartidorCoords);
-                            
-                            // Centrar mapa en la ubicación del repartidor
-                            if (mapaCliente) {
-                                mapaCliente.setView([repartidorCoords.lat, repartidorCoords.lng], 15);
-                            }
-                        }, (error) => {
-                            console.error('❌ [MAPA] Error al obtener ubicación del repartidor:', error);
-                        });
-                    }
-                    
-                    // SEGUNDO: Iniciar envío de ubicación del repartidor
-                    iniciarEnvioUbicacionRepartidor();
-                    
-                    // TERCERO: Si hay clienteUID, iniciar seguimiento del cliente
-                    if (clienteUID) {
-                        console.log('✅ [MAPA] ClienteUID encontrado:', clienteUID);
-                        setTimeout(() => {
-                            iniciarSeguimientoCliente(clienteUID);
-                        }, 500);
-                    } else {
-                        console.warn('⚠️ [MAPA] No hay clienteUID disponible');
-                        const direccion = pedido.direccion || pedido.direccionEntrega || pedido.direccionCliente || 'No especificada';
-                        document.getElementById('distancia-cliente').textContent = 
-                            '📍 Dirección de entrega: ' + direccion;
-                        document.getElementById('direccion-cliente').textContent = 
-                            'ℹ️ El pedido no tiene seguimiento GPS del cliente';
-                    }
-                }, 300);
-            } else {
-                // Si el mapa ya existe
-                console.log('🗺️ [MAPA] Mapa ya existe, actualizando...');
-                mapaCliente.invalidateSize();
-                
-                // Actualizar ubicación del repartidor
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition((position) => {
-                        const repartidorCoords = {
-                            lat: position.coords.latitude,
-                            lng: position.coords.longitude
-                        };
-                        agregarMarcadorRepartidorEnMapa(repartidorCoords);
-                    });
-                }
-                
-                // Iniciar seguimiento si hay clienteUID
-                if (clienteUID) {
-                    setTimeout(() => {
-                        iniciarSeguimientoCliente(clienteUID);
-                        iniciarEnvioUbicacionRepartidor();
-                    }, 300);
-                }
-            }
-        }, 200);
-        
-        // 🔥 CORRECCIÓN: Buscar todos los posibles campos y mostrar el que tenga valor
-        const producto = pedido.producto || pedido.descripcion || pedido.item || pedido.items || pedido.productos || pedido.articulo || pedido.detalle || '';
-        const precio = pedido.montoTotal || pedido.precio || pedido.valor || pedido.total || pedido.monto || pedido.costoTotal || pedido.precioTotal || pedido.costo || '';
-        const direccion = pedido.direccion || pedido.direccionEntrega || pedido.direccionCliente || pedido.ubicacionTexto || pedido.address || pedido.ubicacion || pedido.destino || '';
-        const nombre = pedido.nombreCliente || pedido.nombre || pedido.cliente || pedido.receptor || pedido.clienteNombre || pedido.destinatario || '';
-        const telefono = pedido.telefonoCliente || pedido.telefono || pedido.celular || pedido.phone || pedido.contacto || pedido.numeroContacto || '';
-        const detalles = pedido.observaciones || pedido.detalles || pedido.notas || pedido.comentarios || pedido.nota || pedido.descripcionExtra || '';
-        
-        console.log('🚚 Valores extraídos:');
-        console.log('   producto:', producto);
-        console.log('   precio:', precio);
-        console.log('   direccion:', direccion);
-        console.log('   nombre:', nombre);
-        console.log('   telefono:', telefono);
-        console.log('   detalles:', detalles);
-        
         let estadoBotones = '';
         if (pedido.estado === 'Aceptado') {
             estadoBotones = `
@@ -3421,12 +2635,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         div.innerHTML = `
     <strong style="color: var(--color-primary);">🚚 Pedido #${pedido.codigo || pedido.id || pedidoId.substring(0, 8)}</strong><br>
             <span class="timer" id="timer-${pedidoId}">⏱️ ${tiempoTranscurrido}</span><br>
-            📦 ${producto || '<span style="color: #ff6b6b;">⚠️ Sin producto especificado</span>'}<br>
-    💵 ${precio || '<span style="color: #ff6b6b;">⚠️ Sin precio especificado</span>'}<br>
-    👤 ${nombre || '<span style="color: #ff6b6b;">⚠️ Sin nombre especificado</span>'}<br>
-    📍 ${direccion || '<span style="color: #ff6b6b;">⚠️ Sin dirección especificada</span>'}<br>
-    📞 ${telefono || '<span style="color: #ff6b6b;">⚠️ Sin teléfono especificado</span>'}<br>
-    📝 ${detalles || '<span style="color: #999;">Sin detalles adicionales</span>'}<br>            ${estadoBotones}
+            📦 ${pedido.producto || pedido.descripcion || pedido.item || 'Sin descripción'}<br>
+    💵 ${pedido.precio || pedido.valor || pedido.total || pedido.monto || pedido.costoTotal || 'Sin precio'}<br>
+    📍 ${pedido.direccion || pedido.direccionEntrega || pedido.direccionCliente || pedido.ubicacionTexto || pedido.address || 'Sin dirección'}<br>
+    📞 ${pedido.telefonoCliente || pedido.telefono || pedido.celular || pedido.phone || 'Sin teléfono'}<br>
+    📝 ${pedido.observaciones || pedido.detalles || pedido.notas || pedido.comentarios || 'Sin detalles'}<br>            ${estadoBotones}
             <button onclick="window.iniciarCancelacion('${pedidoId}')" 
                     style="background: var(--color-accent-danger); color: white;">
                 ❌ Cancelar Domicilio
@@ -3478,6 +2691,67 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             alert('❌ Error al aceptar el pedido');
         }
     }
+
+    // ── Aceptar pedido proveniente del formulario del cliente ──
+    window.aceptarPedidoFormulario = async function(pedidoId) {
+        try {
+            const pedido = pedidosFormulario[pedidoId];
+            if (!pedido) {
+                alert('❌ El pedido ya no está disponible');
+                return;
+            }
+            const timestamp = Date.now();
+
+            // 1. Mover a pedidos_pendientes con estado Aceptado
+            await set(ref(db, `pedidos_pendientes/${pedidoId}`), {
+                ...pedido,
+                estado: 'Aceptado',
+                repartidorUID: repartidorUID,
+                repartidorNombre: repartidorNombre,
+                tiempoAceptado: timestamp,
+                // Campos compatibles con mostrarPedidoAsignado
+                producto: pedido.descripcion || `De ${pedido.zonaRecogida} a ${pedido.zonaEntrega}`,
+                precio: `$${Number(pedido.montoTotal || 0).toLocaleString('es-CO')}`,
+                direccion: pedido.dirEntrega || pedido.direccionCliente,
+                telefonoCliente: pedido.telRecibe || pedido.telefonoCliente,
+                clienteUID: pedido.clienteIdAsignado
+            });
+
+            // 2. Actualizar el pedido en pedidos_historial
+            await update(ref(db, `pedidos_historial/${pedidoId}`), {
+                estado: 'Aceptado',
+                repartidorUID: repartidorUID,
+                repartidorNombre: repartidorNombre,
+                tiempoAceptado: timestamp
+            });
+
+            // 3. Eliminar de repartidores_pedidos (ya fue aceptado)
+            await remove(ref(db, `repartidores_pedidos/${repartidorUID}/${pedidoId}`));
+
+            // 4. Quitar del caché local
+            delete pedidosFormulario[pedidoId];
+
+            console.log('✅ Pedido formulario aceptado:', pedidoId);
+            alert('✅ ¡Pedido aceptado! Dirígete al punto de recogida.');
+
+            // 5. Iniciar seguimiento del cliente en el mapa
+            const clienteId = pedido.clienteIdAsignado;
+            if (clienteId) {
+                setTimeout(() => {
+                    document.getElementById('showAsignadosBtn').click();
+                    document.getElementById('mapa-cliente-container').style.display = 'block';
+                    inicializarMapaCliente();
+                    setTimeout(() => {
+                        iniciarSeguimientoCliente(clienteId);
+                        iniciarEnvioUbicacionRepartidor();
+                    }, 500);
+                }, 500);
+            }
+        } catch (error) {
+            console.error('❌ Error al aceptar pedido formulario:', error);
+            alert('❌ Error al aceptar el pedido: ' + error.message);
+        }
+    };
     window.cambiarEstadoPedido = async function(pedidoId, nuevoEstado) {
         try {
             const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
@@ -3495,20 +2769,33 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         const confirmacion = confirm('¿Confirmar que el pedido ha sido completado?');
         if (!confirmacion) return;
         try {
-            const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
-            const snapshot = await get(pedidoRef);
-            if (!snapshot.exists()) {
-                alert('❌ El pedido no existe');
-                return;
+            // Intentar primero en pedidos_pendientes
+            const pedidoPendRef = ref(db, `pedidos_pendientes/${pedidoId}`);
+            const snapPend = await get(pedidoPendRef);
+            if (snapPend.exists()) {
+                const pedido = snapPend.val();
+                await set(ref(db, `pedidos_historial/${pedidoId}`), {
+                    ...pedido,
+                    estado: 'Completado',
+                    tiempoCompletado: Date.now()
+                });
+                await remove(pedidoPendRef);
+            } else {
+                // Está en pedidos_historial directamente (pedido del formulario)
+                await update(ref(db, `pedidos_historial/${pedidoId}`), {
+                    estado: 'Completado',
+                    tiempoCompletado: Date.now()
+                });
+                // Decrementar pedidosActivos del repartidor
+                if (repartidorUID) {
+                    const repSnap = await get(ref(db, `repartidores_info/${repartidorUID}/pedidosActivos`));
+                    const actual = repSnap.exists() ? (repSnap.val() || 1) : 1;
+                    await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                        pedidosActivos: Math.max(0, actual - 1)
+                    });
+                }
             }
-            const pedido = snapshot.val();
-            await set(ref(db, `pedidos_historial/${pedidoId}`), {
-                ...pedido,
-                estado: 'Completado',
-                tiempoCompletado: Date.now()
-            });
-            await remove(pedidoRef);
-            window.detenerSeguimiento(); // 🆕 DETENER SEGUIMIENTO AL COMPLETAR
+            window.detenerSeguimiento();
             console.log('✅ Pedido completado:', pedidoId);
             alert('✅ Pedido completado y movido al historial');
         } catch (error) {
@@ -3573,17 +2860,18 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 div.style.borderLeft = pedido.estado === 'Completado' ? '5px solid #27ae60' : '5px solid #C0392B';
                 const fecha = pedido.tiempoCompletado || pedido.tiempoCancelado;
                 const fechaTexto = fecha ? new Date(fecha).toLocaleString() : 'N/A';
+                // ✅ SEGURIDAD: Sanitizar campos del historial para prevenir XSS
                 div.innerHTML = `
     <strong>${pedido.estado === 'Completado' ? '✅' : '❌'} Pedido #${pedidoId.slice(-6)}</strong><br>
-    🏷️ Estado: <strong>${pedido.estado || 'Desconocido'}</strong><br>
-    ${pedido.motivoCancelacion ? `📝 Motivo: ${pedido.motivoCancelacion}<br>` : ''}
+    🏷️ Estado: <strong>${sanitizarHTML(pedido.estado || 'Desconocido')}</strong><br>
+    ${pedido.motivoCancelacion ? `📝 Motivo: ${sanitizarHTML(pedido.motivoCancelacion)}<br>` : ''}
     📅 Fecha: ${fechaTexto}<br>
     <hr style="border-color: #444; margin: 10px 0;">
-    📦 ${pedido.items || pedido.producto || pedido.descripcion || pedido.detalle || 'Sin producto'}<br>
-    💵 ${pedido.total || pedido.precio || pedido.valor || pedido.costo || 'Sin precio'}<br>
-    📍 ${pedido.direccionEntrega || pedido.direccion || pedido.ubicacion || pedido.destino || 'Sin dirección'}<br>
-    👤 ${pedido.nombreCliente || pedido.nombre || pedido.cliente || pedido.receptor || 'Sin nombre'}<br>
-    📞 ${pedido.telefonoCliente || pedido.telefono || pedido.celular || pedido.contacto || 'Sin teléfono'}
+    📦 ${sanitizarHTML(pedido.items || pedido.producto || pedido.descripcion || pedido.detalle || 'Sin producto')}<br>
+    💵 ${sanitizarHTML(pedido.total || pedido.precio || pedido.valor || pedido.costo || 'Sin precio')}<br>
+    📍 ${sanitizarHTML(pedido.direccionEntrega || pedido.direccion || pedido.ubicacion || pedido.destino || 'Sin dirección')}<br>
+    👤 ${sanitizarHTML(pedido.nombreCliente || pedido.nombre || pedido.cliente || pedido.receptor || 'Sin nombre')}<br>
+    📞 ${sanitizarHTML(pedido.telefonoCliente || pedido.telefono || pedido.celular || pedido.contacto || 'Sin teléfono')}
 `;
                 listaHistorial.appendChild(div);
             });
@@ -3783,12 +3071,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             detenerEnvioUbicacionRepartidor();
             detenerBackgroundGeolocation();
             detenerHeartbeat();
-            // 🆕 DETENER SERVICIO NATIVO Y VISUAL
-            detenerSistemaSegundoPlanoNativo();
-            await detenerServicioSegundoPlano();
             await liberarWakeLock();
             await signOut(auth);
-            console.log('✅ Sesión cerrada correctamente (NATIVO + VISUAL detenidos)');
+            console.log('✅ Sesión cerrada correctamente');
         } catch (error) {
             console.error('❌ Error al cerrar sesión:', error);
         }
@@ -3841,15 +3126,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             detenerEnvioUbicacionRepartidor();
             detenerBackgroundGeolocation();
             detenerHeartbeat();
-            // 🆕 DETENER SERVICIO NATIVO Y VISUAL
-            detenerSistemaSegundoPlanoNativo();
-            await detenerServicioSegundoPlano();
             await liberarWakeLock();
             document.getElementById('loginContainer').style.display = 'flex';
             document.getElementById('appContainer').style.display = 'none';
             document.getElementById('manualLoginForm').style.display = 'block';
             document.getElementById('registrationForm').style.display = 'none';
-            console.log('👤 Usuario no autenticado (servicios detenidos)');
+            console.log('👤 Usuario no autenticado');
         }
     });
 </script>
