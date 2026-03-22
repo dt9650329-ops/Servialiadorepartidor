@@ -240,6 +240,12 @@
         #cancelModalContent button:hover {
             opacity: 0.8;
         }
+        /* === CHAT P2P REPARTIDOR === */
+        .chat-p2p-box { height:240px; overflow-y:auto; padding:10px; background:#111; display:flex; flex-direction:column; gap:6px; border-radius:8px; border:1px solid #333; margin-bottom:8px; }
+        .chat-p2p-btn { background:#1a3a5c; border:1px solid #4A9EFF; color:#4A9EFF; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:14px; width:100%; margin-top:8px; position:relative; display:flex; align-items:center; justify-content:center; gap:8px; }
+        .chat-p2p-btn:hover { background:#1e4a72; }
+        .badge-p2p { background:#e74c3c; color:#fff; border-radius:10px; padding:2px 7px; font-size:11px; font-weight:bold; min-width:18px; text-align:center; }
+        /* === FIN CHAT P2P === */
         .chat-box {
              background: #222222; padding: 15px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.5); margin-top: 20px;
         }
@@ -804,6 +810,34 @@
             </div>
         </div>
         <div class="pedidos-list" id="pedidosAsignadosList">No tienes pedidos asignados actualmente.</div>
+
+        <!-- === CHAT P2P CON CLIENTE === -->
+        <div id="chat-p2p-rep-container" style="display:none; margin-top:16px; background:#1a1a2e; border:1px solid #4A9EFF; border-radius:12px; overflow:hidden;">
+          <div style="background:#16213e; padding:10px 14px; display:flex; align-items:center; justify-content:space-between;">
+            <span style="color:#4A9EFF; font-weight:bold; font-size:14px;">💬 Chat con el Cliente</span>
+            <span id="badge-p2p-rep" style="display:none; background:#e74c3c; color:#fff; border-radius:10px; padding:2px 8px; font-size:11px; font-weight:bold;"></span>
+          </div>
+          <div id="chat-p2p-rep-box" class="chat-p2p-box"></div>
+          <div style="padding:10px; background:#1a1a2e; border-top:1px solid #333;">
+            <div style="display:flex; gap:6px; margin-bottom:6px;">
+              <button onclick="abrirGaleriaP2PRep()" style="background:#333; border:none; color:#ddd; padding:7px 10px; border-radius:6px; cursor:pointer; font-size:13px;">🖼️ Foto</button>
+              <button id="btn-audio-p2p-rep" onclick="toggleGrabarAudioP2PRep()" style="background:#333; border:none; color:#ddd; padding:7px 10px; border-radius:6px; cursor:pointer; font-size:13px;">🎤 Audio</button>
+            </div>
+            <div id="audio-preview-p2p-rep" style="display:none; background:#222; border-radius:6px; padding:8px; margin-bottom:6px;">
+              <audio id="preview-audio-p2p-rep" controls style="width:100%; max-width:280px;"></audio>
+              <div style="display:flex; gap:6px; margin-top:6px;">
+                <button onclick="enviarAudioP2PRep()" style="flex:1; background:#27ae60; color:#fff; border:none; padding:7px; border-radius:6px; cursor:pointer; font-size:12px;">✅ Enviar</button>
+                <button onclick="cancelarAudioP2PRep()" style="background:#c0392b; color:#fff; border:none; padding:7px 10px; border-radius:6px; cursor:pointer; font-size:12px;">✕</button>
+              </div>
+            </div>
+            <input type="file" id="foto-input-p2p-rep" accept="image/*" style="display:none" onchange="enviarFotoP2PRep(this)" />
+            <div style="display:flex; gap:6px;">
+              <input type="text" id="input-chat-p2p-rep" placeholder="Mensaje al cliente..." style="flex:1; background:#222; border:1px solid #444; color:#fff; padding:8px 12px; border-radius:8px; font-size:14px;" onkeypress="if(event.key==='Enter') enviarMensajeP2PRep()" />
+              <button onclick="enviarMensajeP2PRep()" style="background:#4A9EFF; color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold;">➤</button>
+            </div>
+          </div>
+        </div>
+        <!-- === FIN CHAT P2P === -->
     </div>
     <div id="historialSection" style="display:none;">
         <h3 style="color: var(--color-secondary);">📜 Historial de Domicilios Completados/Cancelados</h3>
@@ -2793,8 +2827,20 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     style="background: var(--color-accent-danger); color: white;">
                 ❌ Cancelar Domicilio
             </button>
+            <button onclick="abrirChatP2PRep('${pedidoId}', '${pedido.clienteIdAsignado || pedido.clienteUID || ''}')"
+                    class="chat-p2p-btn" id="btn-chat-cliente-${pedidoId}">
+                💬 Hablar con el Cliente <span class="badge-p2p" id="badge-chat-${pedidoId}" style="display:none;"></span>
+            </button>
+            <div style="background:#1a2a1a; border-radius:8px; padding:8px; margin-top:6px; font-size:12px; color:#aaa;">
+                📦 Recoge en: <strong style="color:#FFC300;">${pedido.barrioRecogida || pedido.zonaRecogida || '—'}</strong>
+                ${pedido.comunaRecogida ? '· Comuna '+pedido.comunaRecogida : ''}<br>
+                🏠 Entrega en: <strong style="color:#4A9EFF;">${pedido.barrioEntrega || pedido.zonaEntrega || '—'}</strong>
+                ${pedido.comunaEntrega ? '· Comuna '+pedido.comunaEntrega : ''}
+            </div>
         `;
         container.appendChild(div);
+        // Iniciar escucha de mensajes no leídos para este pedido
+        escucharNoLeidosP2P(pedidoId);
     }
     function calcularTiempoTranscurrido(timestamp) {
         const ahora = Date.now();
@@ -3340,5 +3386,192 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     });
 </script>
+
+<script>
+// ============================================================
+// MÓDULO REPARTIDOR: CHAT P2P + UBICACIÓN GUARDADA
+// ============================================================
+
+// ── CHAT P2P REPARTIDOR ↔ CLIENTE ──────────────────────────
+let _p2pRepPedidoId = null;
+let _p2pRepClienteId = null;
+let _p2pRepListener = null;
+let _p2pRepAudio = null;
+let _p2pRepAudioChunks = [];
+let _p2pRepRecording = false;
+const _p2pRepBadges = {}; // pedidoId → listener
+
+window.abrirChatP2PRep = function(pedidoId, clienteId) {
+  _p2pRepPedidoId = pedidoId;
+  _p2pRepClienteId = clienteId;
+  const cont = document.getElementById('chat-p2p-rep-container');
+  if (cont) { cont.style.display = 'block'; cont.scrollIntoView({behavior:'smooth'}); }
+  escucharMensajesP2PRep(pedidoId);
+};
+
+function escucharMensajesP2PRep(pedidoId) {
+  if (_p2pRepListener) { try { _p2pRepListener(); } catch(e){} }
+  const chatRef = ref(db, 'chat_p2p/' + pedidoId);
+  _p2pRepListener = onValue(chatRef, snap => {
+    const box = document.getElementById('chat-p2p-rep-box');
+    if (!box) return;
+    box.innerHTML = '';
+    let noLeidos = 0;
+    snap.forEach(child => {
+      const m = child.val();
+      const esRep = m.remitente === 'repartidor';
+      if (!esRep && !m.leido) noLeidos++;
+      const div = document.createElement('div');
+      div.style.cssText = 'display:flex;flex-direction:column;align-items:' + (esRep?'flex-end':'flex-start') + ';margin-bottom:6px;';
+      let contenido = '';
+      if (m.tipo === 'imagen') {
+        contenido = '<img src="' + m.url + '" style="max-width:190px;border-radius:8px;cursor:pointer;" onclick="window.open(this.src)" />';
+      } else if (m.tipo === 'audio') {
+        contenido = '<audio controls src="' + m.url + '" style="max-width:210px;"></audio>';
+      } else {
+        contenido = '<span style="word-break:break-word;">' + (m.texto||'') + '</span>';
+      }
+      div.innerHTML = '<div style="max-width:78%;background:' + (esRep?'#1a3a1a':'#2a2a2a') + ';border-radius:10px;padding:7px 11px;color:#fff;font-size:13px;">' + contenido + '<span style="font-size:10px;color:#888;display:block;margin-top:3px;text-align:right;">' + new Date(m.ts||Date.now()).toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'}) + (esRep?'':' · Cliente') + '</span></div>';
+      box.appendChild(div);
+    });
+    box.scrollTop = box.scrollHeight;
+    const badge = document.getElementById('badge-p2p-rep');
+    if (badge) { badge.textContent = noLeidos > 0 ? noLeidos + ' nuevo' + (noLeidos>1?'s':'') : ''; badge.style.display = noLeidos>0?'inline':'none'; }
+    if (noLeidos > 0) marcarLeidosP2PRep(pedidoId, 'cliente');
+  });
+}
+
+function escucharNoLeidosP2P(pedidoId) {
+  const chatRef = ref(db, 'chat_p2p/' + pedidoId);
+  _p2pRepBadges[pedidoId] = onValue(chatRef, snap => {
+    let noLeidos = 0;
+    snap.forEach(child => { const m = child.val(); if (m.remitente==='cliente' && !m.leido) noLeidos++; });
+    const badge = document.getElementById('badge-chat-' + pedidoId);
+    if (badge) { badge.textContent = noLeidos > 0 ? noLeidos : ''; badge.style.display = noLeidos>0?'inline':'none'; }
+  });
+}
+
+function marcarLeidosP2PRep(pedidoId, remitente) {
+  const chatRef = ref(db, 'chat_p2p/' + pedidoId);
+  get(chatRef).then(snap => {
+    snap.forEach(child => {
+      const m = child.val();
+      if (m.remitente === remitente && !m.leido) {
+        update(ref(db, 'chat_p2p/' + pedidoId + '/' + child.key), { leido: true });
+      }
+    });
+  });
+}
+
+window.enviarMensajeP2PRep = function() {
+  if (!_p2pRepPedidoId || !repartidorUID) return;
+  const inp = document.getElementById('input-chat-p2p-rep');
+  const txt = inp.value.trim();
+  if (!txt) return;
+  inp.value = '';
+  const msgRef = push(ref(db, 'chat_p2p/' + _p2pRepPedidoId));
+  set(msgRef, { tipo:'texto', texto:txt, remitente:'repartidor', ts:Date.now(), leido:false, repartidorNombre: repartidorNombre||'Repartidor' });
+};
+
+window.abrirGaleriaP2PRep = function() { document.getElementById('foto-input-p2p-rep').click(); };
+
+window.enviarFotoP2PRep = async function(input) {
+  if (!input.files[0] || !_p2pRepPedidoId) return;
+  const file = input.files[0];
+  try {
+    const storRef = storageRef(storage, 'chat_p2p/' + _p2pRepPedidoId + '/' + Date.now() + '.jpg');
+    const snap = await uploadBytesResumable(storRef, file).then ? 
+      await new Promise((res,rej) => { const t = uploadBytesResumable(storRef,file); t.on('state_changed',null,rej,()=>res(t.snapshot)); }) :
+      await uploadBytesResumable(storRef, file);
+    const url = await getDownloadURL(storRef);
+    const msgRef = push(ref(db, 'chat_p2p/' + _p2pRepPedidoId));
+    set(msgRef, { tipo:'imagen', url, remitente:'repartidor', ts:Date.now(), leido:false });
+  } catch(e) { 
+    // Fallback upload simple
+    try {
+      const { uploadBytes, getDownloadURL: gdl } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js');
+      const sRef = storageRef(storage, 'chat_p2p/' + _p2pRepPedidoId + '/' + Date.now() + '.jpg');
+      const s = await uploadBytes(sRef, file);
+      const url = await gdl(s.ref);
+      const msgRef = push(ref(db, 'chat_p2p/' + _p2pRepPedidoId));
+      set(msgRef, { tipo:'imagen', url, remitente:'repartidor', ts:Date.now(), leido:false });
+    } catch(e2) { alert('Error al subir foto'); }
+  }
+  input.value = '';
+};
+
+window.toggleGrabarAudioP2PRep = async function() {
+  const btn = document.getElementById('btn-audio-p2p-rep');
+  if (!_p2pRepRecording) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      _p2pRepAudio = new MediaRecorder(stream);
+      _p2pRepAudioChunks = [];
+      _p2pRepAudio.ondataavailable = e => _p2pRepAudioChunks.push(e.data);
+      _p2pRepAudio.onstop = () => {
+        const blob = new Blob(_p2pRepAudioChunks, { type:'audio/webm' });
+        document.getElementById('preview-audio-p2p-rep').src = URL.createObjectURL(blob);
+        document.getElementById('audio-preview-p2p-rep').style.display = 'block';
+        _p2pRepAudio._blob = blob;
+        stream.getTracks().forEach(t => t.stop());
+      };
+      _p2pRepAudio.start();
+      _p2pRepRecording = true;
+      btn.textContent = '⏹️ Detener';
+      btn.style.background = '#c0392b';
+    } catch(e) { alert('Error al acceder al micrófono'); }
+  } else {
+    _p2pRepAudio.stop();
+    _p2pRepRecording = false;
+    btn.textContent = '🎤 Audio';
+    btn.style.background = '#333';
+  }
+};
+
+window.enviarAudioP2PRep = async function() {
+  if (!_p2pRepAudio?._blob || !_p2pRepPedidoId) return;
+  try {
+    const sRef = storageRef(storage, 'chat_p2p/' + _p2pRepPedidoId + '/audio_' + Date.now() + '.webm');
+    const snap = await new Promise((res,rej) => { const t = uploadBytesResumable(sRef,_p2pRepAudio._blob); t.on('state_changed',null,rej,()=>res(t.snapshot)); });
+    const url = await getDownloadURL(sRef);
+    const msgRef = push(ref(db, 'chat_p2p/' + _p2pRepPedidoId));
+    set(msgRef, { tipo:'audio', url, remitente:'repartidor', ts:Date.now(), leido:false });
+    cancelarAudioP2PRep();
+  } catch(e) { alert('Error al subir audio: ' + e.message); }
+};
+
+window.cancelarAudioP2PRep = function() {
+  document.getElementById('audio-preview-p2p-rep').style.display = 'none';
+  document.getElementById('preview-audio-p2p-rep').src = '';
+  if (_p2pRepAudio) _p2pRepAudio._blob = null;
+};
+
+// Abrir chat automáticamente al aceptar pedido
+const _origAceptar = window.aceptarPedidoFormulario;
+if (_origAceptar) {
+  window.aceptarPedidoFormulario = async function(pedidoId) {
+    await _origAceptar(pedidoId);
+    const pedido = window._ultimoPedidoAceptado || {};
+    setTimeout(() => {
+      const cont = document.getElementById('chat-p2p-rep-container');
+      if (cont) cont.style.display = 'block';
+      abrirChatP2PRep(pedidoId, pedido.clienteIdAsignado || '');
+    }, 800);
+  };
+}
+
+// ── GUARDAR DATOS LIVIANOS DEL PEDIDO (ANALÍTICA) ──────────
+window._guardarDatosPedidoLigero = function(pedidoId, barrioA, barrioB, zonaA, zonaB) {
+  if (!pedidoId || !db) return;
+  try {
+    set(ref(db, 'pedidos_stats/' + pedidoId), {
+      bA: barrioA || zonaA || '',
+      bB: barrioB || zonaB || '',
+      ts: Date.now()
+    });
+  } catch(e) {}
+};
+</script>
+
 </body>
 </html>
