@@ -814,7 +814,10 @@
         <!-- === CHAT P2P CON CLIENTE === -->
         <div id="chat-p2p-rep-container" style="display:none; margin-top:16px; background:#1a1a2e; border:1px solid #4A9EFF; border-radius:12px; overflow:hidden;">
           <div style="background:#16213e; padding:10px 14px; display:flex; align-items:center; justify-content:space-between;">
-            <span style="color:#4A9EFF; font-weight:bold; font-size:14px;">💬 Chat con el Cliente</span>
+            <div>
+              <div style="color:#4A9EFF; font-weight:bold; font-size:14px;">💬 Chat con el Cliente</div>
+              <div id="chat-p2p-cliente-info" style="margin-top:3px;"></div>
+            </div>
             <span id="badge-p2p-rep" style="display:none; background:#e74c3c; color:#fff; border-radius:10px; padding:2px 8px; font-size:11px; font-weight:bold;"></span>
           </div>
           <div id="chat-p2p-rep-box" class="chat-p2p-box"></div>
@@ -2831,7 +2834,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     style="background: var(--color-accent-danger); color: white;">
                 ❌ Cancelar Domicilio
             </button>
-            <button onclick="abrirChatP2PRep('${pedidoId}', '${pedido.clienteIdAsignado || pedido.clienteUID || ''}')"
+            <button onclick="abrirChatP2PRep('${pedidoId}', '${pedido.clienteIdAsignado || pedido.clienteUID || ''}', '${(pedido.nombreRecibe || pedido.clienteNombre || '').replace(/'/g,'')}', '${pedido.telRecibe || pedido.telefonoCliente || ''}')"
                     class="chat-p2p-btn" id="btn-chat-cliente-${pedidoId}">
                 💬 Hablar con el Cliente <span class="badge-p2p" id="badge-chat-${pedidoId}" style="display:none;"></span>
             </button>
@@ -3018,6 +3021,23 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             if (Object.keys(coordsClientes).length === 0) {
                 window.detenerSeguimiento();
             }
+            // Enviar mensaje automático de cierre en el chat P2P
+            try {
+                const msgCierreRef = push(ref(db, 'chat_p2p/' + pedidoId));
+                await set(msgCierreRef, {
+                    tipo: 'texto',
+                    texto: '✅ Pedido entregado. ¡Gracias por usar Servi Aliados!',
+                    remitente: 'sistema',
+                    ts: Date.now(),
+                    leido: false,
+                    repartidorNombre: repartidorNombre || 'Sistema'
+                });
+            } catch(e) {}
+            // Ocultar el chat del repartidor
+            const chatCont = document.getElementById('chat-p2p-rep-container');
+            if (chatCont) chatCont.style.display = 'none';
+            if (_p2pRepListener) { try { _p2pRepListener(); } catch(e){} _p2pRepListener = null; }
+            _p2pRepPedidoId = null;
             console.log('✅ Pedido completado:', pedidoId);
             alert('✅ Pedido completado y movido al historial');
         } catch (error) {
@@ -3412,11 +3432,17 @@ let _p2pRepAudioChunks = [];
 let _p2pRepRecording = false;
 const _p2pRepBadges = {}; // pedidoId → listener
 
-window.abrirChatP2PRep = function(pedidoId, clienteId) {
+window.abrirChatP2PRep = function(pedidoId, clienteId, nombreCliente, telCliente) {
   _p2pRepPedidoId = pedidoId;
   _p2pRepClienteId = clienteId;
   const cont = document.getElementById('chat-p2p-rep-container');
   if (cont) { cont.style.display = 'block'; cont.scrollIntoView({behavior:'smooth'}); }
+  // Mostrar nombre y teléfono del cliente en el header
+  const info = document.getElementById('chat-p2p-cliente-info');
+  if (info && (nombreCliente || telCliente)) {
+    info.innerHTML = (nombreCliente ? '<span style="color:#f0f0f0;font-size:13px;font-weight:bold;">👤 ' + nombreCliente + '</span>' : '')
+      + (telCliente ? ' <a href="tel:' + telCliente + '" style="color:#27ae60;font-size:13px;margin-left:8px;text-decoration:none;">📞 ' + telCliente + '</a>' : '');
+  }
   escucharMensajesP2PRep(pedidoId);
 };
 
