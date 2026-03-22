@@ -881,6 +881,10 @@
     const auth = getAuth(app);
     const storage = getStorage(app);
     window.db = db;
+    window.storage = storage;
+    window.storageRef = storageRef;
+    window.uploadBytesResumable = uploadBytesResumable;
+    window.getDownloadURL = getDownloadURL;
     window.ref = ref;
     window.update = update;
     window.get = get;
@@ -2831,11 +2835,18 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     class="chat-p2p-btn" id="btn-chat-cliente-${pedidoId}">
                 💬 Hablar con el Cliente <span class="badge-p2p" id="badge-chat-${pedidoId}" style="display:none;"></span>
             </button>
-            <div style="background:#1a2a1a; border-radius:8px; padding:8px; margin-top:6px; font-size:12px; color:#aaa;">
-                📦 Recoge en: <strong style="color:#FFC300;">${pedido.barrioRecogida || pedido.zonaRecogida || '—'}</strong>
-                ${pedido.comunaRecogida ? '· Comuna '+pedido.comunaRecogida : ''}<br>
-                🏠 Entrega en: <strong style="color:#4A9EFF;">${pedido.barrioEntrega || pedido.zonaEntrega || '—'}</strong>
-                ${pedido.comunaEntrega ? '· Comuna '+pedido.comunaEntrega : ''}
+            <div style="background:#1a2a1a; border:1px solid #2a3a2a; border-radius:10px; padding:10px; margin-top:8px; font-size:13px;">
+                <div style="margin-bottom:6px;">
+                  📦 <span style="color:#aaa;">Recoge en:</span>
+                  <strong style="color:#FFC300;">${pedido.barrioRecogida || pedido.zonaRecogida || '—'}</strong>
+                  ${pedido.barrioRecogida && pedido.zonaRecogida ? '<span style="background:#c0392b;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:4px;">'+pedido.zonaRecogida+'</span>' : ''}
+                </div>
+                <div>
+                  🏠 <span style="color:#aaa;">Entrega en:</span>
+                  <strong style="color:#4A9EFF;">${pedido.barrioEntrega || pedido.zonaEntrega || '—'}</strong>
+                  ${pedido.barrioEntrega && pedido.zonaEntrega ? '<span style="background:#2980b9;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:4px;">'+pedido.zonaEntrega+'</span>' : ''}
+                  ${pedido.dirEntrega ? '<br><span style="color:#888;font-size:11px;margin-left:18px;">📍 '+pedido.dirEntrega+'</span>' : ''}
+                </div>
             </div>
         `;
         container.appendChild(div);
@@ -3479,24 +3490,16 @@ window.enviarFotoP2PRep = async function(input) {
   if (!input.files[0] || !_p2pRepPedidoId) return;
   const file = input.files[0];
   try {
-    const storRef = storageRef(storage, 'chat_p2p/' + _p2pRepPedidoId + '/' + Date.now() + '.jpg');
-    const snap = await uploadBytesResumable(storRef, file).then ? 
-      await new Promise((res,rej) => { const t = uploadBytesResumable(storRef,file); t.on('state_changed',null,rej,()=>res(t.snapshot)); }) :
-      await uploadBytesResumable(storRef, file);
-    const url = await getDownloadURL(storRef);
+    const _sRef = window.storageRef || storageRef;
+    const _stor = window.storage || storage;
+    const _uploadR = window.uploadBytesResumable || uploadBytesResumable;
+    const _getDL = window.getDownloadURL || getDownloadURL;
+    const storRef = _sRef(_stor, 'chat_p2p/' + _p2pRepPedidoId + '/' + Date.now() + '.jpg');
+    await new Promise((res,rej) => { const t = _uploadR(storRef,file); t.on('state_changed',null,rej,()=>res(t.snapshot)); });
+    const url = await _getDL(storRef);
     const msgRef = push(ref(db, 'chat_p2p/' + _p2pRepPedidoId));
     set(msgRef, { tipo:'imagen', url, remitente:'repartidor', ts:Date.now(), leido:false });
-  } catch(e) { 
-    // Fallback upload simple
-    try {
-      const { uploadBytes, getDownloadURL: gdl } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js');
-      const sRef = storageRef(storage, 'chat_p2p/' + _p2pRepPedidoId + '/' + Date.now() + '.jpg');
-      const s = await uploadBytes(sRef, file);
-      const url = await gdl(s.ref);
-      const msgRef = push(ref(db, 'chat_p2p/' + _p2pRepPedidoId));
-      set(msgRef, { tipo:'imagen', url, remitente:'repartidor', ts:Date.now(), leido:false });
-    } catch(e2) { alert('Error al subir foto'); }
-  }
+  } catch(e) { alert('Error al subir foto: ' + e.message); }
   input.value = '';
 };
 
@@ -3531,9 +3534,13 @@ window.toggleGrabarAudioP2PRep = async function() {
 window.enviarAudioP2PRep = async function() {
   if (!_p2pRepAudio?._blob || !_p2pRepPedidoId) return;
   try {
-    const sRef = storageRef(storage, 'chat_p2p/' + _p2pRepPedidoId + '/audio_' + Date.now() + '.webm');
-    const snap = await new Promise((res,rej) => { const t = uploadBytesResumable(sRef,_p2pRepAudio._blob); t.on('state_changed',null,rej,()=>res(t.snapshot)); });
-    const url = await getDownloadURL(sRef);
+    const _sRef2 = window.storageRef || storageRef;
+    const _stor2 = window.storage || storage;
+    const _uploadR2 = window.uploadBytesResumable || uploadBytesResumable;
+    const _getDL2 = window.getDownloadURL || getDownloadURL;
+    const sRef = _sRef2(_stor2, 'chat_p2p/' + _p2pRepPedidoId + '/audio_' + Date.now() + '.webm');
+    const snap = await new Promise((res,rej) => { const t = _uploadR2(sRef,_p2pRepAudio._blob); t.on('state_changed',null,rej,()=>res(t.snapshot)); });
+    const url = await _getDL2(sRef);
     const msgRef = push(ref(db, 'chat_p2p/' + _p2pRepPedidoId));
     set(msgRef, { tipo:'audio', url, remitente:'repartidor', ts:Date.now(), leido:false });
     cancelarAudioP2PRep();
