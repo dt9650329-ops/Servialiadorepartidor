@@ -889,6 +889,8 @@
     window.uploadBytesResumable = uploadBytesResumable;
     window.getDownloadURL = getDownloadURL;
     window.ref = ref;
+    window.push = push;
+    window.set = set;
     window.update = update;
     window.get = get;
     window.onValue = onValue;
@@ -3448,8 +3450,10 @@ window.abrirChatP2PRep = function(pedidoId, clienteId, nombreCliente, telCliente
 
 function escucharMensajesP2PRep(pedidoId) {
   if (_p2pRepListener) { try { _p2pRepListener(); } catch(e){} }
-  const chatRef = ref(db, 'chat_p2p/' + pedidoId);
-  _p2pRepListener = onValue(chatRef, snap => {
+  const _db = window.db; const _ref = window.ref; const _onValue = window.onValue; const _update = window.update; const _get = window.get;
+  if (!_db || !_ref || !_onValue) { setTimeout(()=>escucharMensajesP2PRep(pedidoId), 800); return; }
+  const chatRef = _ref(_db, 'chat_p2p/' + pedidoId);
+  _p2pRepListener = _onValue(chatRef, snap => {
     const box = document.getElementById('chat-p2p-rep-box');
     if (!box) return;
     box.innerHTML = '';
@@ -3479,8 +3483,10 @@ function escucharMensajesP2PRep(pedidoId) {
 }
 
 function escucharNoLeidosP2P(pedidoId) {
-  const chatRef = ref(db, 'chat_p2p/' + pedidoId);
-  _p2pRepBadges[pedidoId] = onValue(chatRef, snap => {
+  const _db = window.db; const _ref = window.ref; const _onValue = window.onValue;
+  if (!_db || !_ref || !_onValue) return;
+  const chatRef = _ref(_db, 'chat_p2p/' + pedidoId);
+  _p2pRepBadges[pedidoId] = _onValue(chatRef, snap => {
     let noLeidos = 0;
     snap.forEach(child => { const m = child.val(); if (m.remitente==='cliente' && !m.leido) noLeidos++; });
     const badge = document.getElementById('badge-chat-' + pedidoId);
@@ -3489,25 +3495,34 @@ function escucharNoLeidosP2P(pedidoId) {
 }
 
 function marcarLeidosP2PRep(pedidoId, remitente) {
-  const chatRef = ref(db, 'chat_p2p/' + pedidoId);
-  get(chatRef).then(snap => {
+  const _db = window.db; const _ref = window.ref; const _get = window.get; const _update = window.update;
+  if (!_db || !_ref || !_get || !_update) return;
+  const chatRef = _ref(_db, 'chat_p2p/' + pedidoId);
+  _get(chatRef).then(snap => {
     snap.forEach(child => {
       const m = child.val();
       if (m.remitente === remitente && !m.leido) {
-        update(ref(db, 'chat_p2p/' + pedidoId + '/' + child.key), { leido: true });
+        _update(_ref(_db, 'chat_p2p/' + pedidoId + '/' + child.key), { leido: true });
       }
     });
   });
 }
 
 window.enviarMensajeP2PRep = function() {
-  if (!_p2pRepPedidoId || !repartidorUID) return;
+  const _db = window.db;
+  const _push = window.push;
+  const _set = window.set;
+  const _ref = window.ref;
+  const _rUID = window.repartidorUID || repartidorUID;
+  const _rNombre = window.repartidorNombre || repartidorNombre || 'Repartidor';
+  if (!_p2pRepPedidoId || !_rUID) { alert('⚠️ No hay pedido activo'); return; }
+  if (!_db || !_push || !_set || !_ref) { alert('⚠️ Firebase no está listo'); return; }
   const inp = document.getElementById('input-chat-p2p-rep');
   const txt = inp.value.trim();
   if (!txt) return;
   inp.value = '';
-  const msgRef = push(ref(db, 'chat_p2p/' + _p2pRepPedidoId));
-  set(msgRef, { tipo:'texto', texto:txt, remitente:'repartidor', ts:Date.now(), leido:false, repartidorNombre: repartidorNombre||'Repartidor' });
+  const msgRef = _push(_ref(_db, 'chat_p2p/' + _p2pRepPedidoId));
+  _set(msgRef, { tipo:'texto', texto:txt, remitente:'repartidor', ts:Date.now(), leido:false, repartidorNombre: _rNombre });
 };
 
 window.abrirGaleriaP2PRep = function() { document.getElementById('foto-input-p2p-rep').click(); };
@@ -3515,16 +3530,22 @@ window.abrirGaleriaP2PRep = function() { document.getElementById('foto-input-p2p
 window.enviarFotoP2PRep = async function(input) {
   if (!input.files[0] || !_p2pRepPedidoId) return;
   const file = input.files[0];
+  const _db = window.db;
+  const _push = window.push;
+  const _set = window.set;
+  const _ref = window.ref;
+  if (!_db || !_push || !_set || !_ref) { alert('⚠️ Firebase no está listo'); return; }
   try {
-    const _sRef = window.storageRef || storageRef;
-    const _stor = window.storage || storage;
-    const _uploadR = window.uploadBytesResumable || uploadBytesResumable;
-    const _getDL = window.getDownloadURL || getDownloadURL;
-    const storRef = _sRef(_stor, 'chat_p2p/' + _p2pRepPedidoId + '/' + Date.now() + '.jpg');
-    await new Promise((res,rej) => { const t = _uploadR(storRef,file); t.on('state_changed',null,rej,()=>res(t.snapshot)); });
-    const url = await _getDL(storRef);
-    const msgRef = push(ref(db, 'chat_p2p/' + _p2pRepPedidoId));
-    set(msgRef, { tipo:'imagen', url, remitente:'repartidor', ts:Date.now(), leido:false });
+    const _sRef = window.storageRef;
+    const _stor = window.storage;
+    const _uploadR = window.uploadBytesResumable;
+    const _getDL = window.getDownloadURL;
+    const sRef = _sRef(_stor, 'chat_p2p/' + _p2pRepPedidoId + '/' + Date.now() + '.jpg');
+    await new Promise((res,rej) => { const t = _uploadR(sRef,file); t.on('state_changed',null,rej,()=>res(t.snapshot)); });
+    const url = await _getDL(sRef);
+    const msgRef = _push(_ref(_db, 'chat_p2p/' + _p2pRepPedidoId));
+    _set(msgRef, { tipo:'imagen', url, remitente:'repartidor', ts:Date.now(), leido:false });
+    alert('✅ Foto enviada');
   } catch(e) { alert('Error al subir foto: ' + e.message); }
   input.value = '';
 };
@@ -3559,17 +3580,23 @@ window.toggleGrabarAudioP2PRep = async function() {
 
 window.enviarAudioP2PRep = async function() {
   if (!_p2pRepAudio?._blob || !_p2pRepPedidoId) return;
+  const _db = window.db;
+  const _push = window.push;
+  const _set = window.set;
+  const _ref = window.ref;
+  if (!_db || !_push || !_set || !_ref) { alert('⚠️ Firebase no está listo'); return; }
   try {
-    const _sRef2 = window.storageRef || storageRef;
-    const _stor2 = window.storage || storage;
-    const _uploadR2 = window.uploadBytesResumable || uploadBytesResumable;
-    const _getDL2 = window.getDownloadURL || getDownloadURL;
-    const sRef = _sRef2(_stor2, 'chat_p2p/' + _p2pRepPedidoId + '/audio_' + Date.now() + '.webm');
-    const snap = await new Promise((res,rej) => { const t = _uploadR2(sRef,_p2pRepAudio._blob); t.on('state_changed',null,rej,()=>res(t.snapshot)); });
-    const url = await _getDL2(sRef);
-    const msgRef = push(ref(db, 'chat_p2p/' + _p2pRepPedidoId));
-    set(msgRef, { tipo:'audio', url, remitente:'repartidor', ts:Date.now(), leido:false });
+    const _sRef = window.storageRef;
+    const _stor = window.storage;
+    const _uploadR = window.uploadBytesResumable;
+    const _getDL = window.getDownloadURL;
+    const sRef = _sRef(_stor, 'chat_p2p/' + _p2pRepPedidoId + '/audio_' + Date.now() + '.webm');
+    await new Promise((res,rej) => { const t = _uploadR(sRef,_p2pRepAudio._blob); t.on('state_changed',null,rej,()=>res(t.snapshot)); });
+    const url = await _getDL(sRef);
+    const msgRef = _push(_ref(_db, 'chat_p2p/' + _p2pRepPedidoId));
+    _set(msgRef, { tipo:'audio', url, remitente:'repartidor', ts:Date.now(), leido:false });
     cancelarAudioP2PRep();
+    alert('✅ Audio enviado');
   } catch(e) { alert('Error al subir audio: ' + e.message); }
 };
 
