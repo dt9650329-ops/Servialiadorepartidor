@@ -240,6 +240,22 @@
         #cancelModalContent button:hover {
             opacity: 0.8;
         }
+        /* === TOOLTIP PERMANENTE LEAFLET (barrio/zona) === */
+        .leaflet-tooltip-barrio {
+            background: rgba(0,0,0,0.85) !important;
+            border: none !important;
+            border-radius: 12px !important;
+            color: #fff !important;
+            font-size: 12px !important;
+            font-weight: bold !important;
+            padding: 4px 10px !important;
+            white-space: nowrap !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
+            pointer-events: none !important;
+        }
+        .leaflet-tooltip-barrio::before {
+            display: none !important;
+        }
         /* === CHAT P2P REPARTIDOR === */
         .chat-p2p-box { height:240px; overflow-y:auto; padding:10px; background:#111; display:flex; flex-direction:column; gap:6px; border-radius:8px; border:1px solid #333; margin-bottom:8px; }
         .chat-p2p-btn { background:#1a3a5c; border:1px solid #4A9EFF; color:#4A9EFF; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:14px; width:100%; margin-top:8px; position:relative; display:flex; align-items:center; justify-content:center; gap:8px; }
@@ -802,6 +818,10 @@
                     <div style="width:20px;height:20px;border-radius:50%;background:#FF9800;display:inline-block;"></div>
                     <span>📦 2º cliente</span>
                 </div>
+                <div>
+                    <div style="width:20px;height:20px;border-radius:50%;background:#e74c3c;display:inline-block;"></div>
+                    <span>🏠 Entrega</span>
+                </div>
             </div>
             <div class="map-info-box">
                 <strong>📊 Distancias a tus destinos</strong>
@@ -974,8 +994,10 @@
     // 🆕 MULTI-CLIENTE: diccionarios por clienteID
     let clientesListeners   = {};   // clienteID → unsubscribe fn
     let marcadoresClientes  = {};   // clienteID → L.marker
+    let marcadoresEntrega   = {};   // clienteID → L.marker (pin de destino)
     let coordsClientes      = {};   // clienteID → {lat,lng}
     let pedidosClientesInfo = {};   // clienteID → {pedidoId, desc, monto}
+    let _geocodificandoBarrio = {}; // clienteID → true (evitar llamadas duplicadas)
     // 🆕 VARIABLE PARA GUARDAR EL PEDIDO ACTIVO Y PERSISTIR UBICACIÓN
     let activePedidoData = null;
     // ========================================
@@ -1375,11 +1397,285 @@
             mapaCliente.removeLayer(marcadoresClientes[clienteID]);
             delete marcadoresClientes[clienteID];
         }
+        // 🆕 Eliminar también el pin de entrega
+        if (marcadoresEntrega[clienteID] && mapaCliente) {
+            mapaCliente.removeLayer(marcadoresEntrega[clienteID]);
+            delete marcadoresEntrega[clienteID];
+        }
+        delete _geocodificandoBarrio[clienteID];
         delete coordsClientes[clienteID];
         delete pedidosClientesInfo[clienteID];
         if (window.currentClienteID === clienteID) window.currentClienteID = null;
         _actualizarPanelDistancias();
         console.log(`🛑 Seguimiento detenido para ${clienteID}`);
+    }
+
+    // Colores por zona
+    const ZONA_COLORES = { 'NORTE': '#2980b9', 'CENTRO': '#8e44ad', 'SUR': '#27ae60' };
+
+    function _buildMarcadorIcon(color, emoji) {
+        return L.divIcon({
+            className: '',
+            html: `<div style="background:${color};width:40px;height:40px;border-radius:50%;border:3px solid white;
+                    box-shadow:0 3px 10px rgba(0,0,0,.5);display:flex;align-items:center;
+                    justify-content:center;font-size:20px;">${emoji}</div>`,
+            iconSize: [40, 40], iconAnchor: [20, 20]
+        });
+    }
+
+    function _tooltipBarrio(barrioRecogida, zonaRecogida, barrioEntrega, zonaEntrega) {
+        const zonaColorR = ZONA_COLORES[(zonaRecogida||'').toUpperCase()] || '#555';
+        const zonaColorE = ZONA_COLORES[(zonaEntrega||'').toUpperCase()] || '#2980b9';
+        let html = '';
+        if (barrioRecogida) {
+            const zR = zonaRecogida ? ` <span style="background:${zonaColorR};border-radius:7px;padding:1px 5px;font-size:9px;color:#fff;">${zonaRecogida}</span>` : '';
+            html += `📦 <b>${barrioRecogida}</b>${zR}`;
+        }
+        if (barrioEntrega) {
+            const zE = zonaEntrega ? ` <span style="background:${zonaColorE};border-radius:7px;padding:1px 5px;font-size:9px;color:#fff;">${zonaEntrega}</span>` : '';
+            html += (html ? '<br>' : '') + `🏠 → <b style="color:#4A9EFF;">${barrioEntrega}</b>${zE}`;
+        }
+        return html || null;
+    }
+
+    // 🗺️ COORDENADAS LOCALES de barrios de Armenia, Quindío (fallback)
+    const BARRIOS_ARMENIA = {
+        'el silencio':                 { lat: 4.5412, lng: -75.6578 },
+        'silencio':                    { lat: 4.5412, lng: -75.6578 },
+        'urbanizacion el silencio':    { lat: 4.5412, lng: -75.6578 },
+        'el silencio i':               { lat: 4.5418, lng: -75.6572 },
+        'el silencio ii':              { lat: 4.5405, lng: -75.6585 },
+        'el silencio 2':               { lat: 4.5405, lng: -75.6585 },
+        'el silencio etapa 1':         { lat: 4.5418, lng: -75.6572 },
+        'el silencio etapa 2':         { lat: 4.5405, lng: -75.6585 },
+        'urbanizacion el silencio ii': { lat: 4.5405, lng: -75.6585 },
+        'urbanizacion el silencio 2':  { lat: 4.5405, lng: -75.6585 },
+        'centenario':                  { lat: 4.5390, lng: -75.6600 },
+        'el bosque':                   { lat: 4.5460, lng: -75.6530 },
+        'san jose':                    { lat: 4.5490, lng: -75.6490 },
+        'pinilla':                     { lat: 4.5510, lng: -75.6460 },
+        'francisco paula santander':   { lat: 4.5470, lng: -75.6440 },
+        'ziruma':                      { lat: 4.5380, lng: -75.6520 },
+        'la alhambra':                 { lat: 4.5370, lng: -75.6590 },
+        'san diego':                   { lat: 4.5440, lng: -75.6480 },
+        'belen':                       { lat: 4.5450, lng: -75.6450 },
+        'santa maria':                 { lat: 4.5350, lng: -75.6470 },
+        'la miranda':                  { lat: 4.5340, lng: -75.6450 },
+        'bosques de pinares':          { lat: 4.5295, lng: -75.6720 },
+        'bosque de pinares':           { lat: 4.5295, lng: -75.6720 },
+        'pinares':                     { lat: 4.5295, lng: -75.6720 },
+        'portal de pinares':           { lat: 4.5280, lng: -75.6735 },
+        'portal pinares':              { lat: 4.5280, lng: -75.6735 },
+        'urbanizacion portal de pinares': { lat: 4.5280, lng: -75.6735 },
+        'villa olimpica':              { lat: 4.5320, lng: -75.6700 },
+        'ciudadela el sol':            { lat: 4.5200, lng: -75.6780 },
+        'ciudadela arco iris':         { lat: 4.5220, lng: -75.6760 },
+        'nueva armenia':               { lat: 4.5230, lng: -75.6750 },
+        'manuela beltran':             { lat: 4.5280, lng: -75.6620 },
+        'el placer':                   { lat: 4.5310, lng: -75.6560 },
+        'casa blanca':                 { lat: 4.5340, lng: -75.6610 },
+        'rufino j cuervo':             { lat: 4.5260, lng: -75.6730 },
+        'lopez':                       { lat: 4.5270, lng: -75.6760 },
+        'alfonso lopez':               { lat: 4.5290, lng: -75.6740 },
+        'san vicente de paul':         { lat: 4.5180, lng: -75.6720 },
+        'el cafe':                     { lat: 4.5620, lng: -75.6700 },
+        'la castellana':               { lat: 4.5600, lng: -75.6680 },
+        'la patria':                   { lat: 4.5580, lng: -75.6720 },
+        'brasilia':                    { lat: 4.5560, lng: -75.6660 },
+        'el prado':                    { lat: 4.5540, lng: -75.6690 },
+        'villa del prado':             { lat: 4.5530, lng: -75.6710 },
+        'la clarita':                  { lat: 4.5570, lng: -75.6640 },
+        'centro':                      { lat: 4.5390, lng: -75.6750 },
+        'el centro':                   { lat: 4.5390, lng: -75.6750 },
+        'santa rosa':                  { lat: 4.5370, lng: -75.6770 },
+        'simon bolivar':               { lat: 4.5410, lng: -75.6770 },
+        'montevideo':                  { lat: 4.5440, lng: -75.6820 },
+        'nuevo montevideo':            { lat: 4.5450, lng: -75.6830 },
+        'quintas de los andes':        { lat: 4.5480, lng: -75.6850 },
+        'villa carolina':              { lat: 4.5460, lng: -75.6840 },
+        'kioscos':                     { lat: 4.5360, lng: -75.6840 },
+        'ciudadela':                   { lat: 4.5220, lng: -75.6760 },
+        'la dorada':                   { lat: 4.5240, lng: -75.6810 },
+        'quintas de villa liliana':    { lat: 4.5430, lng: -75.6870 },
+        'la enea':                     { lat: 4.5500, lng: -75.6880 },
+        'garagoa':                     { lat: 4.5395, lng: -75.6545 },
+        'conjunto residencial garagoa':{ lat: 4.5395, lng: -75.6545 },
+        // ── Barrios adicionales ──
+        'arrayanes':                   { lat: 4.5310, lng: -75.6690 },
+        'bambuza':                     { lat: 4.5330, lng: -75.6670 },
+        'bloques de bosques de pinares':{ lat: 4.5290, lng: -75.6725 },
+        'bosques de pinares bloques':  { lat: 4.5290, lng: -75.6725 },
+        'castilla grande':             { lat: 4.5270, lng: -75.6710 },
+        'ciudadela simon bolivar':     { lat: 4.5215, lng: -75.6770 },
+        'conjunto residencial':        { lat: 4.5390, lng: -75.6600 },
+        'la pradera':                  { lat: 4.5360, lng: -75.6580 },
+        'la floresta':                 { lat: 4.5420, lng: -75.6560 },
+        'los cedros':                  { lat: 4.5350, lng: -75.6640 },
+        'los fundadores':              { lat: 4.5380, lng: -75.6780 },
+        'los quindos':                 { lat: 4.5250, lng: -75.6690 },
+        'miraflores':                  { lat: 4.5430, lng: -75.6800 },
+        'el nogal':                    { lat: 4.5440, lng: -75.6760 },
+        'villa del rio':               { lat: 4.5260, lng: -75.6640 },
+        'popular':                     { lat: 4.5350, lng: -75.6820 },
+        'urbanizacion centenario':     { lat: 4.5390, lng: -75.6600 },
+        'urbanizacion bosques de pinares': { lat: 4.5295, lng: -75.6720 },
+        'sur':                         { lat: 4.5295, lng: -75.6720 },
+        'norte':                       { lat: 4.5500, lng: -75.6500 },
+    };
+
+    // 🔥 CACHÉ de barrios cargados desde Firebase
+    let _barriosFirebaseCache = null;
+    let _barriosFirebaseCargando = false;
+
+    // Cargar barrios desde Firebase /barrios una sola vez y cachear
+    async function _cargarBarriosFirebase() {
+        if (_barriosFirebaseCache) return _barriosFirebaseCache;
+        if (_barriosFirebaseCargando) {
+            // Esperar hasta que termine la carga
+            await new Promise(res => {
+                const check = setInterval(() => {
+                    if (!_barriosFirebaseCargando) { clearInterval(check); res(); }
+                }, 100);
+            });
+            return _barriosFirebaseCache || {};
+        }
+        _barriosFirebaseCargando = true;
+        try {
+            const snap = await get(ref(db, 'barrios'));
+            const resultado = {};
+            if (snap.exists()) {
+                snap.forEach(child => {
+                    const d = child.val();
+                    // Soporta {lat, lng}, {lat, lon}, {coordenadas: {lat,lng}}, {ubicacion: {lat,lng}}
+                    let lat = null, lng = null;
+                    if (d.lat && (d.lng || d.lon)) {
+                        lat = parseFloat(d.lat);
+                        lng = parseFloat(d.lng || d.lon);
+                    } else if (d.coordenadas) {
+                        lat = parseFloat(d.coordenadas.lat);
+                        lng = parseFloat(d.coordenadas.lng || d.coordenadas.lon);
+                    } else if (d.ubicacion) {
+                        lat = parseFloat(d.ubicacion.lat);
+                        lng = parseFloat(d.ubicacion.lng || d.ubicacion.lon);
+                    }
+                    if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                        const nombre = (d.nombre || child.key || '').toLowerCase().trim()
+                            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        resultado[nombre] = { lat, lng };
+                        // También guardar por key de Firebase normalizada
+                        const keyNorm = child.key.toLowerCase().trim()
+                            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                        if (keyNorm !== nombre) resultado[keyNorm] = { lat, lng };
+                    }
+                });
+                console.log('[GEO] 🔥 Barrios cargados desde Firebase:', Object.keys(resultado).length);
+            }
+            _barriosFirebaseCache = resultado;
+        } catch(e) {
+            console.warn('[GEO] No se pudo cargar Firebase /barrios:', e);
+            _barriosFirebaseCache = {};
+        }
+        _barriosFirebaseCargando = false;
+        return _barriosFirebaseCache;
+    }
+
+    // Pre-cargar barrios de Firebase al iniciar
+    setTimeout(() => _cargarBarriosFirebase(), 2000);
+
+    // 🆕 GEOCODIFICAR barrio - 4 estrategias: Firebase → diccionario local → Nominatim → fallo silencioso
+    async function _geocodificarBarrio(nombreBarrio) {
+        // Normalizar: minúsculas, sin tildes
+        const norm = (s) => s.toLowerCase().trim()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const clave = norm(nombreBarrio);
+
+        // ── Estrategia 1: Firebase /barrios (coordenadas exactas subidas por el admin) ──
+        try {
+            const barriosDB = await _cargarBarriosFirebase();
+            for (const [key, coords] of Object.entries(barriosDB)) {
+                if (clave === key || clave.includes(key) || key.includes(clave)) {
+                    console.log('[GEO] 🔥 Firebase:', key);
+                    return coords;
+                }
+            }
+        } catch(e) { console.warn('[GEO] Error Firebase:', e); }
+
+        // ── Estrategia 2: diccionario local (instantáneo) ──
+        for (const [key, coords] of Object.entries(BARRIOS_ARMENIA)) {
+            const keyN = norm(key);
+            if (clave === keyN || clave.includes(keyN) || keyN.includes(clave)) {
+                console.log('[GEO] Diccionario local:', key);
+                return coords;
+            }
+        }
+
+        // ── Estrategia 3: Nominatim con variantes del nombre ──
+        const variantes = [
+            nombreBarrio + ', Armenia, Quindio, Colombia',
+            nombreBarrio.replace(/urbanizaci[oó]n|conjunto residencial|etapa \d+| ii| i$/gi, '').trim() + ', Armenia, Colombia',
+            nombreBarrio + ', Armenia, Colombia',
+        ];
+        for (const q of variantes) {
+            try {
+                const url = 'https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=co&q=' + encodeURIComponent(q);
+                const r = await fetch(url, { headers: { 'Accept-Language': 'es' } });
+                const d = await r.json();
+                if (d && d.length > 0) {
+                    console.log('[GEO] Nominatim OK:', q);
+                    return { lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon) };
+                }
+            } catch(e) { console.warn('[GEO] Nominatim error:', e); }
+            await new Promise(res => setTimeout(res, 350));
+        }
+        console.warn('[GEO] No encontrado:', nombreBarrio);
+        return null;
+    }
+
+    // 🆕 COLOCAR PIN ROJO de entrega en el mapa para un clienteID
+    async function _colocarPinEntrega(clienteID) {
+        if (!mapaCliente) return;
+        if (_geocodificandoBarrio[clienteID]) return; // ya está en proceso
+        const info = pedidosClientesInfo[clienteID] || {};
+        const barrioEntrega = info.barrio || '';
+        const zonaEntrega   = info.zona   || '';
+        if (!barrioEntrega) return;
+        // Si ya existe el pin y el barrio no cambió, no hacer nada
+        if (marcadoresEntrega[clienteID] && marcadoresEntrega[clienteID]._barrioEntregaKey === barrioEntrega) return;
+        _geocodificandoBarrio[clienteID] = true;
+        console.log(`[MAPA] 🔍 Geocodificando barrio de entrega: "${barrioEntrega}"`);
+        const coords = await _geocodificarBarrio(barrioEntrega);
+        _geocodificandoBarrio[clienteID] = false;
+        if (!coords || !mapaCliente) return;
+        // Eliminar pin anterior si existía
+        if (marcadoresEntrega[clienteID]) {
+            mapaCliente.removeLayer(marcadoresEntrega[clienteID]);
+        }
+        const zonaColor = ZONA_COLORES[(zonaEntrega||'').toUpperCase()] || '#2980b9';
+        const iconEntrega = L.divIcon({
+            className: '',
+            html: `<div style="background:#e74c3c;width:44px;height:44px;border-radius:50%;border:4px solid white;
+                    box-shadow:0 4px 15px rgba(231,76,60,0.7);display:flex;align-items:center;
+                    justify-content:center;font-size:22px;">🏠</div>`,
+            iconSize: [44, 44], iconAnchor: [22, 22]
+        });
+        const pinEntrega = L.marker([coords.lat, coords.lng], { icon: iconEntrega, zIndexOffset: 900 }).addTo(mapaCliente);
+        pinEntrega._barrioEntregaKey = barrioEntrega;
+        // Tooltip permanente visible siempre
+        const zonaSpan = zonaEntrega
+            ? ` <span style="background:${zonaColor};border-radius:7px;padding:1px 5px;font-size:9px;color:#fff;">${zonaEntrega}</span>`
+            : '';
+        pinEntrega.bindTooltip(
+            `🏠 <b style="color:#4A9EFF;">${barrioEntrega}</b>${zonaSpan}<br><span style="font-size:10px;color:#ccc;">Destino de entrega</span>`,
+            { permanent: true, direction: 'top', offset: [0, -22], className: 'leaflet-tooltip-barrio' }
+        );
+        // Popup al tocar
+        pinEntrega.bindPopup(
+            `<b>🏠 Destino de entrega</b><br><b style="color:#4A9EFF;">${barrioEntrega}</b>`
+            + (zonaEntrega ? ` <span style="background:${zonaColor};color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;">${zonaEntrega}</span>` : '')
+        );
+        marcadoresEntrega[clienteID] = pinEntrega;
+        console.log(`[MAPA] ✅ Pin de entrega colocado en: ${coords.lat}, ${coords.lng} (${barrioEntrega})`);
+        _ajustarZoomTodos();
     }
 
     // Agregar o mover marcador de un cliente en el mapa
@@ -1393,33 +1689,71 @@
         const emoji = EMOJIS_CLIENTES[idx];
         const info  = pedidosClientesInfo[clienteID] || {};
         const label = info.desc || `Cliente ${idx+1}`;
+        const barrio         = info.barrio         || '';   // barrioEntrega (destino)
+        const zona           = info.zona           || '';   // zonaEntrega
+        const barrioRecogida = info.barrioRecogida || '';   // punto de recogida
+        const zonaRecogida   = info.zonaRecogida   || '';
+        const zonaColor = ZONA_COLORES[(zona||'').toUpperCase()] || '#555';
+        const tooltipContent = _tooltipBarrio(barrioRecogida, zonaRecogida, barrio, zona);
+        // 🔍 DEBUG: log pedido info for diagnosis
+        console.log(`[MAPA] clienteID=${clienteID} barrioRecogida="${barrioRecogida}" barrioEntrega="${barrio}" zona="${zona}" info=`, JSON.stringify(info));
 
         if (marcadoresClientes[clienteID]) {
             marcadoresClientes[clienteID].setLatLng([coords.lat, coords.lng]);
+            // Actualizar tooltip si cambió barrio/zona
+            if (marcadoresClientes[clienteID]._barrioKey !== barrioRecogida + barrio + zona) {
+                marcadoresClientes[clienteID]._barrioKey = barrioRecogida + barrio + zona;
+                if (tooltipContent) {
+                    if (marcadoresClientes[clienteID].getTooltip()) {
+                        marcadoresClientes[clienteID].setTooltipContent(tooltipContent);
+                    } else {
+                        marcadoresClientes[clienteID].bindTooltip(tooltipContent, {
+                            permanent: true, direction: 'top', offset: [0, -20],
+                            className: 'leaflet-tooltip-barrio'
+                        });
+                    }
+                }
+            }
         } else {
-            const icon = L.divIcon({
-                className: '',
-                html: `<div style="background:${color};width:40px;height:40px;border-radius:50%;border:3px solid white;
-                        box-shadow:0 3px 10px rgba(0,0,0,.5);display:flex;align-items:center;
-                        justify-content:center;font-size:20px;">${emoji}</div>`,
-                iconSize: [40, 40], iconAnchor: [20, 20]
-            });
+            const icon = _buildMarcadorIcon(color, emoji);
             const marker = L.marker([coords.lat, coords.lng], { icon, zIndexOffset: 1000 }).addTo(mapaCliente);
-            marker.bindPopup(`<b>${emoji} ${label}</b><br>${info.monto || ''}`);
+            marker._barrioKey = barrioRecogida + barrio + zona;
+            // Tooltip permanente con barrio recogida → entrega (visible siempre, sin clic)
+            if (tooltipContent) {
+                marker.bindTooltip(tooltipContent, {
+                    permanent: true, direction: 'top', offset: [0, -20],
+                    className: 'leaflet-tooltip-barrio'
+                });
+            }
+            // Popup con más detalle al tocar el marcador
+            marker.bindPopup(
+                `<b>${emoji} ${label}</b>`
+                + (barrioRecogida ? `<br>📦 Recoge: <b>${barrioRecogida}</b>` + (zonaRecogida ? ` <span style="background:${ZONA_COLORES[(zonaRecogida).toUpperCase()]||'#555'};color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;">${zonaRecogida}</span>` : '') : '')
+                + (barrio ? `<br>🏠 Entrega: <b style="color:#4A9EFF;">${barrio}</b>` + (zona ? ` <span style="background:${zonaColor};color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;">${zona}</span>` : '') : '')
+                + (info.monto ? `<br>💵 ${info.monto}` : '')
+            );
             marcadoresClientes[clienteID] = marker;
         }
         // Compat. legacy
         if (clienteID === window.currentClienteID) marcadorCliente = marcadoresClientes[clienteID];
 
+        // 🆕 Colocar pin rojo en el barrio de ENTREGA (geocodificación automática)
+        _colocarPinEntrega(clienteID);
+
         _ajustarZoomTodos();
     }
 
-    // Ajustar zoom para ver repartidor + todos los clientes
+    // Ajustar zoom para ver repartidor + todos los clientes + pins de entrega
     function _ajustarZoomTodos() {
         if (!mapaCliente) return;
         const puntos = [];
         if (repartidorCoords) puntos.push([repartidorCoords.lat, repartidorCoords.lng]);
         Object.values(coordsClientes).forEach(c => puntos.push([c.lat, c.lng]));
+        // 🆕 Incluir los pins de entrega en el zoom
+        Object.values(marcadoresEntrega).forEach(m => {
+            const ll = m.getLatLng();
+            if (ll) puntos.push([ll.lat, ll.lng]);
+        });
         if (puntos.length === 0) return;
         if (puntos.length === 1) { mapaCliente.setView(puntos[0], 15); return; }
         mapaCliente.fitBounds(L.latLngBounds(puntos), { padding: [50, 50] });
@@ -2637,6 +2971,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
     // ── Renderizador unificado ──
     async function renderizarTodosLosPedidos() {
+        console.log('🔄 renderizarTodosLosPedidos — repartidorUID:', repartidorUID);
         const listaPendientes = document.getElementById('pedidosList');
         const listaAsignados  = document.getElementById('pedidosAsignadosList');
         listaPendientes.innerHTML = '';
@@ -2701,7 +3036,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             iniciarSeguimientoCliente(pedido.clienteUID, {
                                 pedidoId,
                                 desc: pedido.producto || pedido.descripcion || `Pedido #${pedidoId.slice(-6)}`,
-                                monto: pedido.precio || pedido.total || ''
+                                monto: pedido.precio || pedido.total || '',
+                                barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
+                                zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
+                                barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
+                                zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
                             });
                         }
                     }
@@ -2716,6 +3055,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 histSnap.forEach(child => {
                     if (pedidosYaMostrados.has(child.key)) return; // 🔧 FIX: saltar duplicados
                     const p = child.val();
+                    console.log('📋 historial pedido:', child.key.slice(-6), '— estado:', p.estado, '— uid match:', p.repartidorUID === repartidorUID);
                     if (p.repartidorUID === repartidorUID &&
                         (p.estado === 'Aceptado' || p.estado === 'Esperando' || p.estado === 'En Camino' ||
                          p.estado === 'aceptado' || p.estado === 'esperando' || p.estado === 'en_camino')) {
@@ -2730,14 +3070,18 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                                 iniciarSeguimientoCliente(cId, {
                                     pedidoId: child.key,
                                     desc: p.producto || p.descripcion || `Pedido #${child.key.slice(-6)}`,
-                                    monto: p.precio || p.total || ''
+                                    monto: p.precio || p.total || '',
+                                    barrio: p.barrioEntrega || p.barrio_entrega || p.barrioDestino || '',
+                                    zona: p.zonaEntrega || p.zona_entrega || p.zona || '',
+                                    barrioRecogida: p.barrioRecogida || p.barrio_recogida || p.barrioOrigen || '',
+                                    zonaRecogida: p.zonaRecogida || p.zona_recogida || ''
                                 });
                             }
                         }
                     }
                 });
             }
-        } catch(e) {}
+        } catch(e) { console.error('❌ Error cargando historial asignados:', e); }
 
         // ── Actualizar contadores ──
         if (contadorPendientes === 0) {
@@ -2893,7 +3237,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         iniciarSeguimientoCliente(clienteUID, {
                             pedidoId,
                             desc: pedido.descripcion || pedido.producto || `Pedido #${pedidoId.slice(-6)}`,
-                            monto: pedido.precio || pedido.total || ''
+                            monto: pedido.precio || pedido.total || '',
+                            barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
+                            zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
+                            barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
+                            zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
                         });
                         iniciarEnvioUbicacionRepartidor();
                     }, 500);
@@ -2958,7 +3306,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         iniciarSeguimientoCliente(clienteId, {
                             pedidoId,
                             desc: pedido.descripcion || `De ${pedido.zonaRecogida||'?'} a ${pedido.zonaEntrega||'?'}`,
-                            monto: `$${Number(pedido.montoTotal||0).toLocaleString('es-CO')}`
+                            monto: `$${Number(pedido.montoTotal||0).toLocaleString('es-CO')}`,
+                            barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
+                            zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
+                            barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
+                            zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
                         });
                         iniciarEnvioUbicacionRepartidor();
                     }, 500);
@@ -3199,7 +3551,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             iniciarSeguimientoCliente(clienteId, {
                                 pedidoId,
                                 desc: pedido.producto || pedido.descripcion || `Pedido #${pedidoId.slice(-6)}`,
-                                monto: pedido.precio || pedido.total || ''
+                                monto: pedido.precio || pedido.total || '',
+                                barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
+                                zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
+                                barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
+                                zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
                             });
                         });
                         iniciarEnvioUbicacionRepartidor();
@@ -3324,6 +3680,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             });
             repartidorNombre = nombre;
             window.currentRepartidorNombre = nombre;
+            window.repartidorNombre = nombre;
             document.getElementById('loginContainer').style.display = 'none';
             document.getElementById('appContainer').style.display = 'block';
             document.getElementById('repartidorName').textContent = nombre;
@@ -3381,6 +3738,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         if (user) {
             repartidorUID = user.uid;
             window.currentRepartidorUID = user.uid;
+            window.repartidorUID = user.uid;
             console.log('👤 Usuario autenticado:', user.uid);
             const repRef = ref(db, `repartidores_info/${user.uid}`);
             const snapshot = await get(repRef);
@@ -3388,6 +3746,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 const data = snapshot.val();
                 repartidorNombre = data.nombre || 'Repartidor';
                 window.currentRepartidorNombre = repartidorNombre;
+                window.repartidorNombre = repartidorNombre;
                 document.getElementById('loginContainer').style.display = 'none';
                 document.getElementById('appContainer').style.display = 'block';
                 document.getElementById('repartidorName').textContent = repartidorNombre;
@@ -3405,6 +3764,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         } else {
             repartidorUID = null;
             window.currentRepartidorUID = null;
+            window.repartidorUID = null;
+            window.repartidorNombre = null;
             window.currentRepartidorNombre = null;
             detenerTrackingGPS();
             detenerEnvioUbicacionRepartidor();
@@ -3545,7 +3906,6 @@ window.enviarFotoP2PRep = async function(input) {
     const url = await _getDL(sRef);
     const msgRef = _push(_ref(_db, 'chat_p2p/' + _p2pRepPedidoId));
     _set(msgRef, { tipo:'imagen', url, remitente:'repartidor', ts:Date.now(), leido:false });
-    alert('✅ Foto enviada');
   } catch(e) { alert('Error al subir foto: ' + e.message); }
   input.value = '';
 };
@@ -3596,7 +3956,6 @@ window.enviarAudioP2PRep = async function() {
     const msgRef = _push(_ref(_db, 'chat_p2p/' + _p2pRepPedidoId));
     _set(msgRef, { tipo:'audio', url, remitente:'repartidor', ts:Date.now(), leido:false });
     cancelarAudioP2PRep();
-    alert('✅ Audio enviado');
   } catch(e) { alert('Error al subir audio: ' + e.message); }
 };
 
