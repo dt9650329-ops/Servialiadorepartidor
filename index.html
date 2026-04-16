@@ -1379,6 +1379,7 @@
     let mapaCliente = null;
     let marcadorCliente = null;       // compat. legacy
     let marcadorRepartidor = null;
+    let mapaYaAjustado = false; // Evita recentrar el mapa tras el primer ajuste
     let clienteUbicacionListener = null;  // compat. legacy
     let repartidorCoords = null;
     let clienteCoordsRepartidorApp = null;
@@ -1476,6 +1477,7 @@
         mapaCliente = null;
         marcadorCliente = null;
         marcadorRepartidor = null;
+        mapaYaAjustado = false; // Permitir reajuste al iniciar nuevo pedido
     }
     
     try {
@@ -1587,8 +1589,10 @@
                 
                 logDebugCliente('✅ Marcador del cliente agregado exitosamente');
                 
-                // Centrar mapa en el cliente
-                mapaCliente.setView([lat, lon], 16);
+                // Centrar mapa en el cliente solo la primera vez
+                if (!mapaYaAjustado) {
+                    mapaCliente.setView([lat, lon], 16);
+                }
             }
             
             // Actualizar panel multi-cliente
@@ -1732,12 +1736,13 @@
             document.getElementById('direccion-cliente').textContent = 
                 `🧭 Dirección: ${direccion}`;
             logDebugMapa(`📊 Distancia: ${distanciaKm} km, Dirección: ${direccion}`);
-            // Ajustar zoom del mapa para mostrar ambos marcadores
-            if (mapaCliente && marcadorCliente && marcadorRepartidor) {
+            // Ajustar zoom solo la primera vez
+            if (mapaCliente && marcadorCliente && marcadorRepartidor && !mapaYaAjustado) {
                 const bounds = L.latLngBounds([
                     [clienteCoordsRepartidorApp.lat, clienteCoordsRepartidorApp.lng],
                     [repartidorCoords.lat, repartidorCoords.lng]
                 ]);
+                mapaYaAjustado = true;
                 mapaCliente.fitBounds(bounds, { padding: [50, 50] });
             }
         } catch (error) {
@@ -2168,6 +2173,7 @@
     // Ajustar zoom para ver repartidor + todos los clientes + pins de entrega
     function _ajustarZoomTodos() {
         if (!mapaCliente) return;
+        if (mapaYaAjustado) return; // No resetear si el usuario ya movió/hizo zoom
         const puntos = [];
         if (repartidorCoords) puntos.push([repartidorCoords.lat, repartidorCoords.lng]);
         Object.values(coordsClientes).forEach(c => puntos.push([c.lat, c.lng]));
@@ -2177,6 +2183,7 @@
             if (ll) puntos.push([ll.lat, ll.lng]);
         });
         if (puntos.length === 0) return;
+        mapaYaAjustado = true; // Marcar como ajustado para no volver a hacerlo
         if (puntos.length === 1) { mapaCliente.setView(puntos[0], 15); return; }
         mapaCliente.fitBounds(L.latLngBounds(puntos), { padding: [50, 50] });
     }
