@@ -1,4 +1,75 @@
 <!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════╗
+║         SERVI ALIADOS — APP REPARTIDOR                          ║
+║         ÍNDICE MAESTRO DE SECCIONES                             ║
+╠══════════════════════════════════════════════════════════════════╣
+║  BUSCA CADA SECCIÓN CON CTRL+F Y EL CÓDIGO EXACTO               ║
+╠══════════════════════════════════════════════════════════════════╣
+║                                                                  ║
+║  ▶ CSS ──────────────────────────────────────────────────────    ║
+║    [CSS-01] VARIABLES GLOBALES (:root)                           ║
+║    [CSS-02] BODY + ESTILOS GENERALES                             ║
+║    [CSS-03] NAVEGACIÓN (nav-buttons, badges)                     ║
+║    [CSS-04] PEDIDOS LIST (tarjetas, estados, timers)             ║
+║    [CSS-05] MAPA CLIENTE (contenedor, leyenda, info-box)         ║
+║    [CSS-06] TOOLTIP LEAFLET (barrio/zona)                        ║
+║    [CSS-07] CHAT P2P REPARTIDOR ↔ CLIENTE                        ║
+║    [CSS-08] CHAT ADMIN (box, mensajes, input)                    ║
+║    [CSS-09] MULTIMEDIA (grabación, audio, imagen, progreso)      ║
+║    [CSS-10] GPS INDICATOR + CONNECTION STATUS                    ║
+║    [CSS-11] LOGIN + REGISTRO                                     ║
+║    [CSS-12] MODAL CANCELAR + MODAL IMAGEN                        ║
+║    [CSS-13] PERMISOS MODAL                                       ║
+║    [CSS-14] BOTONES PERMISOS (btn-permitir, btn-omitir)          ║
+║                                                                  ║
+║  ▶ HTML ─────────────────────────────────────────────────────    ║
+║    [HTML-01] INDICADORES (connectionStatus, gpsIndicator)        ║
+║    [HTML-02] MODAL: PERMISOS (GPS, cámara, micrófono)            ║
+║    [HTML-03] LOGIN + REGISTRO                                    ║
+║    [HTML-04] APP CONTAINER (header, bienvenida, botones)         ║
+║    [HTML-05] SECCIÓN: CHAT ADMIN                                 ║
+║    [HTML-06] SECCIÓN: PEDIDOS PENDIENTES                         ║
+║    [HTML-07] SECCIÓN: ASIGNADOS (mapa + lista + chat P2P)        ║
+║    [HTML-08] CHAT P2P CON CLIENTE                                ║
+║    [HTML-09] SECCIÓN: HISTORIAL                                  ║
+║    [HTML-10] MODAL: CANCELAR PEDIDO                              ║
+║    [HTML-11] MODAL: IMAGEN AMPLIADA                              ║
+║    [HTML-12] AUDIO DE NOTIFICACIÓN                               ║
+║                                                                  ║
+║  ▶ JS (type="module") ──────────────────────────────────────     ║
+║    [JS-01] IMPORTS DE FIREBASE                                   ║
+║    [JS-02] CONFIGURACIÓN FIREBASE                                ║
+║    [JS-03] SEGURIDAD (sanitizar, llamarBackend)                  ║
+║    [JS-04] VARIABLES DEL MAPA (MULTI-CLIENTE)                    ║
+║    [JS-05] PERSISTIR UBICACIÓN DEL CLIENTE                       ║
+║    [JS-06] FUNCIONES DE DEBUGGING                                ║
+║    [JS-07] INICIALIZAR MAPA (Leaflet)                            ║
+║    [JS-08] AGREGAR MARCADOR DEL CLIENTE                          ║
+║    [JS-09] AGREGAR MARCADOR DEL REPARTIDOR                       ║
+║    [JS-10] CALCULAR DISTANCIA Y DIRECCIÓN                        ║
+║    [JS-11] SEGUIMIENTO MULTI-CLIENTE (todos los clientes activos)║
+║    [JS-12] COORDENADAS LOCALES DE BARRIOS (fallback)             ║
+║    [JS-13] CACHÉ DE BARRIOS (Firebase)                           ║
+║    [JS-14] SISTEMA DE PERMISOS MULTIMEDIA                        ║
+║    [JS-15] SISTEMA DE HEARTBEAT                                  ║
+║    [JS-16] ASIGNACIÓN AUTOMÁTICA DE PEDIDOS PENDIENTES           ║
+║    [JS-17] ENVÍO DIRECTO DE UBICACIÓN AL MAPA                    ║
+║    [JS-18] SISTEMA GPS OPTIMIZADO (15 SEGUNDOS)                  ║
+║    [JS-19] WAKE LOCK API                                         ║
+║    [JS-20] MANEJO DE VISIBILIDAD DE PÁGINA                       ║
+║    [JS-21] MANEJO DE CIERRE DE APP/NAVEGADOR                     ║
+║    [JS-22] SISTEMA DE MULTIMEDIA (FOTOS/AUDIOS)                  ║
+║    [JS-23] CHAT ADMIN                                            ║
+║    [JS-24] PEDIDOS (renderizado, aceptar, completar, cancelar)   ║
+║    [JS-25] NAVEGACIÓN (tabs: chat/pendientes/asignados/historial)║
+║    [JS-26] AUTENTICACIÓN (login, registro, logout, onAuthChanged)║
+║                                                                  ║
+║  ▶ JS (script normal) ──────────────────────────────────────     ║
+║    [JS-27] CHAT P2P REPARTIDOR ↔ CLIENTE                         ║
+║    [JS-28] GUARDAR DATOS LIVIANOS DEL PEDIDO (ANALÍTICA)         ║
+╚══════════════════════════════════════════════════════════════════╝
+-->
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -25,21 +96,32 @@
     -->
     <title>Panel Repartidor - v1.8.0 OPTIMIZADO</title>
     <style>
+        /* ┌─────────────────────────────────────────────────────────┐
+   │ [CSS-01] VARIABLES GLOBALES (:root)                     │
+   └─────────────────────────────────────────────────────────┘ */
         :root {
-            --color-primary: #FFC300;
-            --color-secondary: #D7D7D7;
-            --color-background: #111111;
+            --color-primary: #E8820C;
+            --color-primary-light: #F5A030;
+            --color-secondary: #E8E8E8;
+            --color-background: #0D1B2A;
+            --color-background-2: #112233;
             --color-accent-danger: #C0392B;
             --color-waiting: #E67E22;
             --color-delivery: #2980B9;
-            --color-card: #222222;
+            --color-card: #1A2E42;
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+           │ [CSS-02] BODY + ESTILOS GENERALES                       │
+           └─────────────────────────────────────────────────────────┘ */
         body { 
             margin: 0; 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             background: var(--color-background);
             color: var(--color-secondary);
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+           │ [CSS-11] LOGIN + REGISTRO                               │
+           └─────────────────────────────────────────────────────────┘ */
         #loginContainer {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             background: var(--color-background);
@@ -47,31 +129,45 @@
             justify-content: center; align-items: center; flex-direction: column;
         }
         #loginContainer > div {
-            background: #222222;
+            background: var(--color-card);
             padding: 30px; border-radius: 10px; 
-            box-shadow: 0 0 20px rgba(255,195,0,0.3);
-            width: 90%; max-width: 350px;
+            box-shadow: 0 0 30px rgba(232,130,12,0.25);
+            width: 90%; max-width: 380px;
         }
         #loginContainer input {
-            background: #333;
+            background: #1e3a52;
             color: white;
-            border: 1px solid #444;
+            border: 1px solid #2a4a65;
             width: 100%; padding: 10px; margin-bottom: 10px; border-radius: 4px; box-sizing: border-box;
         }
         #loginContainer button {
-            width: 100%; padding: 12px; margin-top: 5px; margin-bottom: 10px; border-radius: 4px; box-sizing: border-box;
+            width: 100%; padding: 12px; margin-top: 5px; margin-bottom: 10px; border-radius: 6px; box-sizing: border-box;
             background: var(--color-primary);
-            color: var(--color-background);
+            color: white;
             border: none; font-weight: bold; cursor: pointer;
             transition: background-color 0.2s;
         }
         #loginContainer button:hover {
-            background: #e6b200;
+            background: var(--color-primary-light);
         }
         #loginContainer button:disabled {
             opacity: 0.6;
             cursor: not-allowed;
         }
+        /* Botón Google */
+        .btn-google {
+            background: #ffffff !important;
+            color: #333 !important;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 15px;
+            border: 1px solid #ccc !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+        }
+        .btn-google:hover { background: #f0f0f0 !important; }
+        .btn-google img { width: 22px; height: 22px; }
         #registrationForm h3, #registrationForm p {
             color: var(--color-primary);
             text-align: center;
@@ -82,30 +178,166 @@
         }
         #quickLoginArea {
             margin-top: 15px; 
-            border-top: 1px solid #444; 
+            border-top: 1px solid #2a4a65; 
             padding-top: 10px; 
             text-align: center;
         }
-        #appContainer { display: none; max-width: 900px; margin: 20px auto; padding: 20px; }
+        #appContainer { display: none; max-width: 900px; margin: 0 auto; padding: 0 0 80px 0; }
         h2, h3 { color: var(--color-secondary); }
-        .nav-buttons {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); 
-            gap: 10px;
-            margin: 20px 0;
+        /* ┌─────────────────────────────────────────────────────────┐
+   │ APP HEADER con menú hamburguesa                         │
+   └─────────────────────────────────────────────────────────┘ */
+        #appHeader {
+            background: var(--color-background-2);
+            border-bottom: 2px solid var(--color-primary);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 500;
         }
-        .nav-buttons button {
-            padding: 10px 5px; 
-            border: none; 
-            color: var(--color-background);
-            border-radius: 5px; 
-            font-weight: bold;
-            position: relative;
+        #appHeader h2 { margin: 0; font-size: 1em; color: var(--color-secondary); }
+        #appHeader h2 span { color: var(--color-primary); }
+        .hamburger-btn {
+            background: var(--color-primary);
+            border: none;
+            border-radius: 8px;
+            width: 44px;
+            height: 44px;
             cursor: pointer;
-            transition: opacity 0.2s;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+            flex-shrink: 0;
         }
-        .nav-buttons button:hover {
-            opacity: 0.9;
+        .hamburger-btn span {
+            display: block;
+            width: 22px;
+            height: 3px;
+            background: white;
+            border-radius: 2px;
+        }
+        /* Menú lateral */
+        #sideMenu {
+            position: fixed;
+            top: 0; left: -280px;
+            width: 280px;
+            height: 100%;
+            background: var(--color-background-2);
+            z-index: 2500;
+            transition: left 0.3s ease;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+        }
+        #sideMenu.open { left: 0; }
+        #sideMenuOverlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 2400;
+        }
+        #sideMenuOverlay.open { display: block; }
+        .side-menu-header {
+            background: var(--color-primary);
+            padding: 20px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .side-menu-header .menu-title { color: white; font-weight: bold; font-size: 1.1em; }
+        .side-menu-header .close-btn {
+            background: rgba(0,0,0,0.2);
+            border: none;
+            color: white;
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .side-menu-section { padding: 12px 0; border-bottom: 1px solid #1e3a52; }
+        .side-menu-section-title {
+            font-size: 0.75em;
+            color: #7a9abf;
+            padding: 4px 20px 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .side-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 20px;
+            cursor: pointer;
+            color: var(--color-secondary);
+            font-size: 0.95em;
+            font-weight: 500;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            transition: background 0.2s;
+            position: relative;
+        }
+        .side-menu-item:hover { background: rgba(232,130,12,0.12); }
+        .side-menu-item .item-icon { font-size: 1.3em; width: 26px; text-align: center; }
+        .side-menu-item .item-badge {
+            background: var(--color-accent-danger);
+            color: white;
+            border-radius: 10px;
+            padding: 2px 7px;
+            font-size: 0.75em;
+            margin-left: auto;
+        }
+        .side-menu-item.active { background: rgba(232,130,12,0.2); color: var(--color-primary); }
+        .side-menu-footer { margin-top: auto; padding: 16px; }
+        .side-menu-footer button {
+            width: 100%;
+            padding: 12px;
+            background: var(--color-accent-danger);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        /* Chats por pedido en el menú */
+        .side-chat-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            cursor: pointer;
+            color: var(--color-secondary);
+            font-size: 0.9em;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+            transition: background 0.2s;
+        }
+        .side-chat-item:hover { background: rgba(74,158,255,0.15); }
+        .side-chat-item .chat-icon { font-size: 1.2em; }
+        .side-chat-item .chat-badge {
+            background: #e74c3c;
+            color: white;
+            border-radius: 10px;
+            padding: 2px 6px;
+            font-size: 0.72em;
+            margin-left: auto;
+        }
+        /* ┌─────────────────────────────────────────────────────────┐
+   │ [CSS-03] NAVEGACIÓN                                     │
+   └─────────────────────────────────────────────────────────┘ */
+        .nav-buttons {
+            display: none; /* ocultos — ahora todo va en el menú */
         }
         .notification-badge {
             position: absolute;
@@ -119,28 +351,31 @@
             line-height: 1;
             display: none; 
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+   │ [CSS-04] PEDIDOS LIST                                   │
+   └─────────────────────────────────────────────────────────┘ */
         .pedidos-list {
-            background: #222222;
+            background: var(--color-card);
             padding: 15px; border-radius: 10px; 
             box-shadow: 0 0 10px rgba(0,0,0,0.5); 
-            margin-top: 20px;
+            margin: 12px 16px;
         }
         .pedido-item {
-            padding: 10px; border-bottom: 1px solid #333; margin-bottom: 10px;
-            background: #333333; 
+            padding: 10px; border-bottom: 1px solid #1e3a52; margin-bottom: 10px;
+            background: #1e3a52; 
             border-left: 5px solid var(--color-accent-danger);
             color: var(--color-secondary);
             position: relative; 
             border-radius: 4px;
         }
-        .pedido-item.asignado { border-left: 5px solid var(--color-primary); background: #444444; }
+        .pedido-item.asignado { border-left: 5px solid var(--color-primary); background: #1e3550; }
         .pedido-item.esperando { border-left: 5px solid var(--color-waiting); }
         .pedido-item.en-camino { border-left: 5px solid var(--color-delivery); }
         .pedido-item strong { color: var(--color-primary); }
         @keyframes pedidoNuevo {
-            0% { background: #333333; }
-            50% { background: #4a3800; border-left-color: #FFC300; box-shadow: 0 0 15px rgba(255,195,0,0.5); }
-            100% { background: #333333; }
+            0% { background: #1e3a52; }
+            50% { background: #3a2800; border-left-color: var(--color-primary); box-shadow: 0 0 15px rgba(232,130,12,0.5); }
+            100% { background: #1e3a52; }
         }
         .pedido-item button { 
             border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; margin-top: 5px; 
@@ -154,8 +389,11 @@
             font-size: 1.2em; font-weight: bold; color: var(--color-primary);
             margin-top: 5px; display: block;
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+   │ [CSS-05] MAPA CLIENTE                                   │
+   └─────────────────────────────────────────────────────────┘ */
         #mapa-cliente-container {
-            margin-top: 20px;
+            margin: 12px 16px;
             background: var(--color-card);
             padding: 15px;
             border-radius: 10px;
@@ -193,7 +431,7 @@
             justify-content: space-around;
             margin: 10px 0;
             padding: 10px;
-            background: #2a2a2a;
+            background: #112233;
             border-radius: 8px;
         }
         .map-legend > div {
@@ -218,12 +456,15 @@
             margin: 5px 0;
             font-size: 0.9em;
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+           │ [CSS-12] MODAL CANCELAR + MODAL IMAGEN                  │
+           └─────────────────────────────────────────────────────────┘ */
         #cancelModal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 3000;
             display: none; justify-content: center; align-items: center;
         }
         #cancelModalContent {
-            background: #222222; 
+            background: var(--color-card); 
             color: var(--color-secondary);
             padding: 20px; border-radius: 8px; width: 90%; max-width: 300px; text-align: center;
         }
@@ -241,6 +482,9 @@
             opacity: 0.8;
         }
         /* === TOOLTIP PERMANENTE LEAFLET (barrio/zona) === */
+        /* ┌─────────────────────────────────────────────────────────┐
+   │ [CSS-06] TOOLTIP PERMANENTE LEAFLET (barrio/zona)       │
+   └─────────────────────────────────────────────────────────┘ */
         .leaflet-tooltip-barrio {
             background: rgba(0,0,0,0.85) !important;
             border: none !important;
@@ -256,6 +500,9 @@
         .leaflet-tooltip-barrio::before {
             display: none !important;
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+   │ [CSS-07] CHAT P2P REPARTIDOR ↔ CLIENTE                  │
+   └─────────────────────────────────────────────────────────┘ */
         /* === CHAT P2P REPARTIDOR === */
         .chat-p2p-box { height:240px; overflow-y:auto; padding:10px; background:#111; display:flex; flex-direction:column; gap:6px; border-radius:8px; border:1px solid #333; margin-bottom:8px; }
         .chat-p2p-btn { background:#1a3a5c; border:1px solid #4A9EFF; color:#4A9EFF; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:bold; font-size:14px; width:100%; margin-top:8px; position:relative; display:flex; align-items:center; justify-content:center; gap:8px; }
@@ -263,15 +510,18 @@
         .badge-p2p { background:#e74c3c; color:#fff; border-radius:10px; padding:2px 7px; font-size:11px; font-weight:bold; min-width:18px; text-align:center; }
         /* === FIN CHAT P2P === */
         .chat-box {
-             background: #222222; padding: 15px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.5); margin-top: 20px;
+             background: var(--color-card); padding: 15px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.5); margin: 12px 16px;
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+   │ [CSS-08] CHAT ADMIN                                     │
+   └─────────────────────────────────────────────────────────┘ */
         .mensajes-area { 
             max-height: 400px; 
             overflow-y: auto; 
             padding: 10px; 
-            border: 1px solid #444; 
+            border: 1px solid #1e3a52; 
             border-radius: 5px; 
-            background: #1a1a1a;
+            background: #0a1520;
         }
         .mensaje { 
             padding: 8px 12px; 
@@ -342,6 +592,9 @@
         .media-controls input[type="file"] {
             display: none;
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+   │ [CSS-09] MULTIMEDIA                                     │
+   └─────────────────────────────────────────────────────────┘ */
         .recording-indicator {
             display: none;
             align-items: center;
@@ -448,6 +701,9 @@
             width: 0%;
             transition: width 0.3s;
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+   │ [CSS-10] GPS INDICATOR + CONNECTION STATUS              │
+   └─────────────────────────────────────────────────────────┘ */
         .gps-indicator {
             position: fixed;
             bottom: 20px;
@@ -464,6 +720,9 @@
             gap: 8px;
             box-shadow: 0 4px 15px rgba(39, 174, 96, 0.5);
             animation: pulse-gps 2s infinite;
+            /* OCULTO ESTÉTICAMENTE */
+            opacity: 0;
+            pointer-events: none;
         }
         .gps-indicator.active {
             display: flex;
@@ -499,6 +758,9 @@
             gap: 8px;
             box-shadow: 0 4px 15px rgba(33, 150, 243, 0.5);
             animation: pulse-gps 2s infinite;
+            /* OCULTO ESTÉTICAMENTE */
+            opacity: 0;
+            pointer-events: none;
         }
         .gps-indicator-repartidor.active {
             display: flex;
@@ -517,6 +779,9 @@
             display: none;
             align-items: center;
             gap: 8px;
+            /* OCULTO ESTÉTICAMENTE */
+            opacity: 0;
+            pointer-events: none;
         }
         .connection-status.active {
             display: flex;
@@ -531,6 +796,9 @@
             border-radius: 50%;
             animation: blink 1.5s infinite;
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+           │ [CSS-13] PERMISOS MODAL                                 │
+           └─────────────────────────────────────────────────────────┘ */
         #permisosModal {
             position: fixed;
             top: 0;
@@ -549,13 +817,13 @@
             display: flex;
         }
         .permisos-content {
-            background: #222;
+            background: var(--color-card);
             padding: 30px;
             border-radius: 15px;
             max-width: 450px;
             width: 100%;
             text-align: center;
-            box-shadow: 0 10px 40px rgba(255, 195, 0, 0.3);
+            box-shadow: 0 10px 40px rgba(232, 130, 12, 0.3);
         }
         .permisos-content h2 {
             color: var(--color-primary);
@@ -570,7 +838,7 @@
             text-align: left;
             margin: 20px 0;
             padding: 15px;
-            background: #333;
+            background: #1e3a52;
             border-radius: 10px;
         }
         .permiso-item {
@@ -579,7 +847,7 @@
             gap: 15px;
             margin: 15px 0;
             padding: 10px;
-            background: #444;
+            background: #0d1b2a;
             border-radius: 8px;
         }
         .permiso-icon {
@@ -623,6 +891,9 @@
             cursor: pointer;
             transition: all 0.3s;
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+           │ [CSS-14] BOTONES PERMISOS                               │
+           └─────────────────────────────────────────────────────────┘ */
         .btn-permitir {
             background: var(--color-primary);
             color: var(--color-background);
@@ -641,6 +912,9 @@
     </style>
 </head>
 <body>
+<!-- ╔═══════════════════════════════════════════════════════╗
+     ║ [HTML-01] INDICADORES FLOTANTES                       ║
+     ╚═══════════════════════════════════════════════════════╝ -->
 <div id="connectionStatus" class="connection-status">
     <div class="status-dot"></div>
     <span id="connectionText">🟢 Online</span>
@@ -653,6 +927,9 @@
     <div class="gps-dot"></div>
     <span>🏍️ GPS Activo (20s)</span>
 </div>
+<!-- ╔═══════════════════════════════════════════════════════╗
+     ║ [HTML-02] MODAL: PERMISOS                             ║
+     ╚═══════════════════════════════════════════════════════╝ -->
 <div id="permisosModal">
     <div class="permisos-content">
         <h2>🔐 Permisos Necesarios</h2>
@@ -693,26 +970,37 @@
         </div>
     </div>
 </div>
+<!-- ╔═══════════════════════════════════════════════════════╗
+     ║ [HTML-03] LOGIN + REGISTRO                            ║
+     ╚═══════════════════════════════════════════════════════╝ -->
 <div id="loginContainer">
     <div id="manualLoginForm">
-        <h3 style="text-align: center; color: var(--color-primary);">Bienvenido</h3>
-        <p style="text-align: center; font-size: 0.9em; margin-bottom: 20px;">
-            Inicia sesión o regístrate con tu correo y contraseña:
-        </p>
+        <div style="text-align:center; margin-bottom:20px;">
+            <div style="font-size:2.5em; margin-bottom:8px;">🏍️</div>
+            <h3 style="text-align: center; color: var(--color-primary); margin:0 0 6px;">Panel Repartidor</h3>
+            <p style="text-align: center; font-size: 0.85em; margin: 0; color: #7a9abf;">Servi Aliados — Armenia</p>
+        </div>
+        <!-- Botón Google -->
+        <button id="googleSignInBtn" class="btn-google">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
+            Continuar con Google
+        </button>
+        <div style="display:flex; align-items:center; margin: 14px 0; gap:10px;">
+            <div style="flex:1; height:1px; background:#1e3a52;"></div>
+            <span style="color:#7a9abf; font-size:0.82em;">o con correo</span>
+            <div style="flex:1; height:1px; background:#1e3a52;"></div>
+        </div>
         <label style="font-size: 0.8em; display: block; margin-bottom: 5px; color: var(--color-secondary);">Correo Electrónico:</label>
         <input type="email" id="loginEmail" placeholder="tu.correo@ejemplo.com">
         <label style="font-size: 0.8em; display: block; margin-bottom: 5px; color: var(--color-secondary);">Contraseña:</label>
         <input type="password" id="loginPassword" placeholder="Contraseña (Mín. 6 caracteres)">
-        <button id="registerBtn">
-            Registrarse (Crear Cuenta)
-        </button>
-        <button id="loginBtn" style="background: var(--color-primary); color: var(--color-background);">
+        <button id="loginBtn" style="background: var(--color-primary); color: white;">
             Iniciar Sesión
         </button>
         <p id="loginError" style="color: var(--color-accent-danger); margin-top: 10px; text-align: center;"></p>
         <div id="quickLoginArea" style="display: none;">
             <p id="quickLoginMessage" style="margin-bottom: 5px; font-size: 0.9em; color: var(--color-primary);"></p>
-            <button id="quickLoginBtn" style="background: var(--color-primary); color: var(--color-background); border: none;">Entrar Rápido (Un Clic)</button>
+            <button id="quickLoginBtn" style="background: var(--color-primary); color: white; border: none;">Entrar Rápido (Un Clic)</button>
         </div>
     </div>
     <div id="registrationForm" style="display:none;">
@@ -730,35 +1018,82 @@
         <input type="text" id="regSecondaryPhone" placeholder="Otro Número de Contacto">
         <label>Dirección de residencia: *</label>
         <input type="text" id="regAddress" placeholder="Dirección de tu Residencia">
-        <button id="completeRegBtn" style="background: var(--color-primary); color: var(--color-background); margin-top: 20px;">Guardar y Continuar</button>
+        <button id="completeRegBtn" style="background: var(--color-primary); color: white; margin-top: 20px;">Guardar y Continuar</button>
         <button id="regLogoutBtn" style="background: #555555; color: white;">Cerrar Sesión</button>
     </div>
 </div>
-<div id="appContainer">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
-        <h2 style="color: var(--color-secondary); margin: 0;">Bienvenido, <span id="repartidorName"></span>!</h2>
-        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <span id="appVersionDisplay" style="background: #27ae60; color: white; padding: 5px 12px; border-radius: 15px; font-size: 0.85em; font-weight: bold;">
-                v1.8.0
-            </span>
-            <button id="verMapaBtn" style="padding: 8px 15px; background: #2196F3; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer;">
-                🗺️ Ver Mapa Cliente
-            </button>
-            <button id="logoutBtn" style="padding: 8px 15px; background: var(--color-accent-danger); color: white; border: none; border-radius: 5px; font-weight: bold;">
-                Cerrar Sesión
-            </button>
-        </div>
+<!-- ╔═══════════════════════════════════════════════════════╗
+     ║ [HTML-04] APP CONTAINER                               ║
+     ╚═══════════════════════════════════════════════════════╝ -->
+<!-- Overlay menú lateral -->
+<div id="sideMenuOverlay" onclick="cerrarMenu()"></div>
+<!-- Menú lateral -->
+<div id="sideMenu">
+    <div class="side-menu-header">
+        <span class="menu-title">🏍️ Servi Aliados</span>
+        <button class="close-btn" onclick="cerrarMenu()">✕</button>
     </div>
-    <div class="nav-buttons">
-        <button id="showChatBtn" style="background: var(--color-primary);">💬 Chat</button>
-        <button id="showPendientesBtn" style="background: var(--color-accent-danger);">
-            📦 Pendientes <span id="pendientesBadge" class="notification-badge">!</span>
+    <div class="side-menu-section">
+        <div class="side-menu-section-title">📍 Navegación</div>
+        <button class="side-menu-item" id="menuChatBtn" onclick="navegarA('chat')">
+            <span class="item-icon">💬</span> Chat Admin
+            <span class="item-badge" id="menuChatBadge" style="display:none;">!</span>
         </button>
-        <button id="showAsignadosBtn" style="background: var(--color-primary);">🚚 Asignados (<span id="asignadosCount">0</span>)</button>
-        <button id="showHistorialBtn" style="background: var(--color-secondary); color: var(--color-background);">📜 Historial</button>
+        <button class="side-menu-item" id="menuPendientesBtn" onclick="navegarA('pendientes')">
+            <span class="item-icon">📦</span> Pedidos Pendientes
+            <span class="item-badge" id="menuPendientesBadge" style="display:none;">!</span>
+        </button>
+        <button class="side-menu-item" id="menuAsignadosBtn" onclick="navegarA('asignados')">
+            <span class="item-icon">🚚</span> Asignados (<span id="menuAsignadosCount">0</span>)
+        </button>
+        <button class="side-menu-item" id="menuMapaBtn" onclick="navegarA('asignados'); setTimeout(()=>document.getElementById('mapa-cliente-container').style.display='block',200); cerrarMenu();">
+            <span class="item-icon">🗺️</span> Ver Mapa
+        </button>
+        <button class="side-menu-item" id="menuHistorialBtn" onclick="navegarA('historial')">
+            <span class="item-icon">📜</span> Historial
+        </button>
     </div>
+    <!-- Sección chats con clientes (se rellena dinámicamente) -->
+    <div class="side-menu-section" id="menuChatsSection" style="display:none;">
+        <div class="side-menu-section-title">💬 Chats con Clientes</div>
+        <div id="menuChatsList"></div>
+    </div>
+    <div class="side-menu-section">
+        <div class="side-menu-section-title">⚙️ Ajustes</div>
+        <button class="side-menu-item" onclick="mostrarModalPermisos(); cerrarMenu();">
+            <span class="item-icon">🔐</span> Permisos GPS/Cam
+        </button>
+        <button class="side-menu-item" id="menuVersionItem">
+            <span class="item-icon">ℹ️</span> Versión <span id="menuVersionText" style="margin-left:auto;color:#7a9abf;font-size:0.85em;"></span>
+        </button>
+    </div>
+    <div class="side-menu-footer">
+        <button id="menuLogoutBtn">🚪 Cerrar Sesión</button>
+    </div>
+</div>
+<div id="appContainer">
+    <!-- Header con hamburguesa -->
+    <div id="appHeader">
+        <button class="hamburger-btn" onclick="abrirMenu()" aria-label="Menú">
+            <span></span><span></span><span></span>
+        </button>
+        <h2>Bienvenido, <span id="repartidorName" style="color:var(--color-primary);"></span></h2>
+        <span id="appVersionDisplay" style="background: #27ae60; color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.78em; font-weight: bold;">v1.8.0</span>
+    </div>
+    <!-- Botones nav ocultos (solo para compatibilidad JS) -->
+    <div class="nav-buttons" style="display:none;">
+        <button id="showChatBtn">💬 Chat</button>
+        <button id="showPendientesBtn">📦 Pendientes <span id="pendientesBadge" class="notification-badge">!</span></button>
+        <button id="showAsignadosBtn">🚚 Asignados (<span id="asignadosCount">0</span>)</button>
+        <button id="showHistorialBtn">📜 Historial</button>
+        <button id="verMapaBtn">🗺️ Mapa</button>
+        <button id="logoutBtn">Cerrar Sesión</button>
+    </div>
+        <!-- ╔═══════════════════════════════════════════════════════╗
+         ║ [HTML-05] SECCIÓN: CHAT ADMIN                         ║
+         ╚═══════════════════════════════════════════════════════╝ -->
     <div id="chatSection">
-        <h3 style="color: var(--color-secondary);">💬 Chat con Administrador</h3>
+        <h3 style="color: var(--color-secondary); padding: 16px 16px 4px;">💬 Chat con Administrador</h3>
         <div class="chat-box">
             <div class="mensajes-area" id="chatBox">Esperando mensaje del Admin...</div>
             <div class="media-controls">
@@ -766,8 +1101,8 @@
                 <button id="recordAudioBtn" title="Grabar audio">🎤 Grabar Audio</button>
                 <input type="file" id="galleryInput" accept="image/*" style="display: none;">
             </div>
-            <div class="audio-preview" id="audioPreview" style="display: none; margin-top: 10px; padding: 10px; background: #333; border-radius: 5px;">
-                <p style="color: #FFC300; margin: 0 0 5px 0;">🎤 Audio grabado:</p>
+            <div class="audio-preview" id="audioPreview" style="display: none; margin-top: 10px; padding: 10px; background: #1e3a52; border-radius: 5px;">
+                <p style="color: var(--color-primary); margin: 0 0 5px 0;">🎤 Audio grabado:</p>
                 <audio id="previewAudio" controls style="width: 100%; max-width: 300px;"></audio>
                 <div style="display: flex; gap: 10px; margin-top: 10px;">
                     <button id="sendAudioFileBtn" style="background: #27ae60; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; flex: 1;">✅ Enviar Audio</button>
@@ -791,19 +1126,25 @@
                 <p id="progressText">0%</p>
             </div>
             <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <input type="text" id="mensajeInput" placeholder="Escribe un mensaje..." style="flex-grow: 1; background: #333; color: white; border: 1px solid #555; padding: 10px; border-radius: 5px;">
+                <input type="text" id="mensajeInput" placeholder="Escribe un mensaje..." style="flex-grow: 1; background: #1e3a52; color: white; border: 1px solid #2a4a65; padding: 10px; border-radius: 5px;">
                 <button id="enviarBtn" style="background: var(--color-primary); color: var(--color-background); border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">Enviar</button>
             </div>
         </div>
     </div>
+        <!-- ╔═══════════════════════════════════════════════════════╗
+         ║ [HTML-06] SECCIÓN: PEDIDOS PENDIENTES                 ║
+         ╚═══════════════════════════════════════════════════════╝ -->
     <div id="pendientesSection" style="display:none;">
-        <h3 style="color: var(--color-secondary);">📦 Nuevos Pedidos (Pendientes)</h3>
+        <h3 style="color: var(--color-secondary); padding: 16px 16px 4px;">📦 Nuevos Pedidos (Pendientes)</h3>
         <div class="pedidos-list" id="pedidosList">Cargando pedidos pendientes...</div>
     </div>
+        <!-- ╔═══════════════════════════════════════════════════════╗
+         ║ [HTML-07] SECCIÓN: ASIGNADOS                          ║
+         ╚═══════════════════════════════════════════════════════╝ -->
     <div id="asignadosSection" style="display:none;">
-        <h3 style="color: var(--color-secondary);">🚚 Mis Pedidos Asignados</h3>
+        <h3 style="color: var(--color-secondary); padding: 16px 16px 4px;">🚚 Mis Pedidos Asignados</h3>
         <div id="mapa-cliente-container" style="display: none;">
-            <h4 style="color: var(--color-primary); margin-top: 20px;">🗺️ Ubicación del Cliente</h4>
+            <h4 style="color: var(--color-primary); margin-top: 0;" id="mapaTitle">🗺️ Ubicaciones de Pedidos Asignados</h4>
             <div id="mapa-cliente"></div>
             <div class="map-legend">
                 <div>
@@ -831,22 +1172,25 @@
         </div>
         <div class="pedidos-list" id="pedidosAsignadosList">No tienes pedidos asignados actualmente.</div>
 
+            <!-- ╔═══════════════════════════════════════════════════════╗
+             ║ [HTML-08] CHAT P2P CON CLIENTE                        ║
+             ╚═══════════════════════════════════════════════════════╝ -->
         <!-- === CHAT P2P CON CLIENTE === -->
-        <div id="chat-p2p-rep-container" style="display:none; margin-top:16px; background:#1a1a2e; border:1px solid #4A9EFF; border-radius:12px; overflow:hidden;">
-          <div style="background:#16213e; padding:10px 14px; display:flex; align-items:center; justify-content:space-between;">
+        <div id="chat-p2p-rep-container" style="display:none; margin:12px 16px; background:#0d2040; border:1px solid var(--color-primary); border-radius:12px; overflow:hidden;">
+          <div style="background:#112233; padding:12px 14px; display:flex; align-items:center; justify-content:space-between;">
             <div>
-              <div style="color:#4A9EFF; font-weight:bold; font-size:14px;">💬 Chat con el Cliente</div>
+              <div style="color:var(--color-primary); font-weight:bold; font-size:14px;">💬 Chat con el Cliente</div>
               <div id="chat-p2p-cliente-info" style="margin-top:3px;"></div>
             </div>
             <span id="badge-p2p-rep" style="display:none; background:#e74c3c; color:#fff; border-radius:10px; padding:2px 8px; font-size:11px; font-weight:bold;"></span>
           </div>
           <div id="chat-p2p-rep-box" class="chat-p2p-box"></div>
-          <div style="padding:10px; background:#1a1a2e; border-top:1px solid #333;">
+          <div style="padding:10px; background:#0d2040; border-top:1px solid #1e3a52;">
             <div style="display:flex; gap:6px; margin-bottom:6px;">
-              <button onclick="abrirGaleriaP2PRep()" style="background:#333; border:none; color:#ddd; padding:7px 10px; border-radius:6px; cursor:pointer; font-size:13px;">🖼️ Foto</button>
-              <button id="btn-audio-p2p-rep" onclick="toggleGrabarAudioP2PRep()" style="background:#333; border:none; color:#ddd; padding:7px 10px; border-radius:6px; cursor:pointer; font-size:13px;">🎤 Audio</button>
+              <button onclick="abrirGaleriaP2PRep()" style="background:#1e3a52; border:none; color:#ddd; padding:7px 10px; border-radius:6px; cursor:pointer; font-size:13px;">🖼️ Foto</button>
+              <button id="btn-audio-p2p-rep" onclick="toggleGrabarAudioP2PRep()" style="background:#1e3a52; border:none; color:#ddd; padding:7px 10px; border-radius:6px; cursor:pointer; font-size:13px;">🎤 Audio</button>
             </div>
-            <div id="audio-preview-p2p-rep" style="display:none; background:#222; border-radius:6px; padding:8px; margin-bottom:6px;">
+            <div id="audio-preview-p2p-rep" style="display:none; background:#1e3a52; border-radius:6px; padding:8px; margin-bottom:6px;">
               <audio id="preview-audio-p2p-rep" controls style="width:100%; max-width:280px;"></audio>
               <div style="display:flex; gap:6px; margin-top:6px;">
                 <button onclick="enviarAudioP2PRep()" style="flex:1; background:#27ae60; color:#fff; border:none; padding:7px; border-radius:6px; cursor:pointer; font-size:12px;">✅ Enviar</button>
@@ -855,18 +1199,24 @@
             </div>
             <input type="file" id="foto-input-p2p-rep" accept="image/*" style="display:none" onchange="enviarFotoP2PRep(this)" />
             <div style="display:flex; gap:6px;">
-              <input type="text" id="input-chat-p2p-rep" placeholder="Mensaje al cliente..." style="flex:1; background:#222; border:1px solid #444; color:#fff; padding:8px 12px; border-radius:8px; font-size:14px;" onkeypress="if(event.key==='Enter') enviarMensajeP2PRep()" />
-              <button onclick="enviarMensajeP2PRep()" style="background:#4A9EFF; color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold;">➤</button>
+              <input type="text" id="input-chat-p2p-rep" placeholder="Mensaje al cliente..." style="flex:1; background:#1e3a52; border:1px solid #2a4a65; color:#fff; padding:8px 12px; border-radius:8px; font-size:14px;" onkeypress="if(event.key==='Enter') enviarMensajeP2PRep()" />
+              <button onclick="enviarMensajeP2PRep()" style="background:var(--color-primary); color:#fff; border:none; padding:8px 14px; border-radius:8px; cursor:pointer; font-weight:bold;">➤</button>
             </div>
           </div>
         </div>
         <!-- === FIN CHAT P2P === -->
     </div>
+        <!-- ╔═══════════════════════════════════════════════════════╗
+         ║ [HTML-09] SECCIÓN: HISTORIAL                          ║
+         ╚═══════════════════════════════════════════════════════╝ -->
     <div id="historialSection" style="display:none;">
-        <h3 style="color: var(--color-secondary);">📜 Historial de Domicilios Completados/Cancelados</h3>
+        <h3 style="color: var(--color-secondary); padding: 16px 16px 4px;">📜 Historial de Domicilios Completados/Cancelados</h3>
         <div class="pedidos-list" id="pedidosHistorialList">Cargando historial...</div>
     </div>
 </div>
+<!-- ╔═══════════════════════════════════════════════════════╗
+     ║ [HTML-10] MODAL: CANCELAR PEDIDO                      ║
+     ╚═══════════════════════════════════════════════════════╝ -->
 <div id="cancelModal">
     <div id="cancelModalContent">
         <h4>¿Por qué deseas cancelar este domicilio?</h4>
@@ -879,17 +1229,29 @@
         <button onclick="document.getElementById('cancelModal').style.display='none';" style="background: #555555; width: 100%; margin-top: 15px; color: white;">Cerrar</button>
     </div>
 </div>
+<!-- ╔═══════════════════════════════════════════════════════╗
+     ║ [HTML-11] MODAL: IMAGEN AMPLIADA                      ║
+     ╚═══════════════════════════════════════════════════════╝ -->
 <div id="imageModal">
     <button onclick="document.getElementById('imageModal').classList.remove('active');">✕ Cerrar</button>
     <img id="modalImage" src="" alt="Imagen completa">
 </div>
+<!-- ╔═══════════════════════════════════════════════════════╗
+     ║ [HTML-12] AUDIO DE NOTIFICACIÓN                       ║
+     ╚═══════════════════════════════════════════════════════╝ -->
 <audio id="notificationSound" src="https://github.com/dt9650329-ops/Chat-administrador-/raw/f67a159f93aed6be1d6f7f02709384111cd84b7e/%E2%9C%A8Monedas%20Cayendo%20__%20Efectos%20De%20Sonidos(MP3_160K).mp3" preload="auto"></audio>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module">
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-01] IMPORTS DE FIREBASE                             │
+    // └─────────────────────────────────────────────────────────┘
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-02] CONFIGURACIÓN FIREBASE                          │
+    // └─────────────────────────────────────────────────────────┘
     const firebaseConfig = {
       apiKey: "AIzaSyAZX7Q5B29Xti4YtV9wXuiREVdkgcclv9U",
       authDomain: "domicilios-1cd74.firebaseapp.com",
@@ -917,6 +1279,9 @@
     window.off = off;
     const APP_VERSION = "1.8.0";
 
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-03] SEGURIDAD (sanitizar, llamarBackend)            │
+    // └─────────────────────────────────────────────────────────┘
     // ✅ SEGURIDAD: URL del backend
     const BACKEND_URL = 'https://tu-backend.onrender.com'; // ← Cambiar cuando despliegues en Render
 
@@ -943,12 +1308,39 @@
         if (!res.ok) throw new Error(json.error || 'Error del servidor');
         return json;
     }
+    // ── SINCRONIZAR VERSION EN MENÚ ──
     window.addEventListener('DOMContentLoaded', () => {
         const versionDisplay = document.getElementById('appVersionDisplay');
-        if (versionDisplay) {
-            versionDisplay.textContent = `v${APP_VERSION}`;
-        }
+        const menuVer = document.getElementById('menuVersionText');
+        if (versionDisplay) versionDisplay.textContent = `v${APP_VERSION}`;
+        if (menuVer) menuVer.textContent = `v${APP_VERSION}`;
     });
+
+    // ── FUNCIÓN CENTRAL DE NAVEGACIÓN ──
+    window.navegarA = function(seccion) {
+        const secciones = ['chatSection','pendientesSection','asignadosSection','historialSection'];
+        secciones.forEach(s => {
+            const el = document.getElementById(s);
+            if (el) el.style.display = 'none';
+        });
+        const mapa = { chat:'chatSection', pendientes:'pendientesSection', asignados:'asignadosSection', historial:'historialSection' };
+        const target = document.getElementById(mapa[seccion]);
+        if (target) target.style.display = 'block';
+        // Marcar activo en menú
+        document.querySelectorAll('.side-menu-item').forEach(b => b.classList.remove('active'));
+        const btnMap = { chat:'menuChatBtn', pendientes:'menuPendientesBtn', asignados:'menuAsignadosBtn', historial:'menuHistorialBtn' };
+        const activeBtn = document.getElementById(btnMap[seccion]);
+        if (activeBtn) activeBtn.classList.add('active');
+        // Si es asignados, disparar el listener original
+        if (seccion === 'asignados') {
+            const orig = document.getElementById('showAsignadosBtn');
+            if (orig) orig.dispatchEvent(new MouseEvent('click', {bubbles:true}));
+        } else if (seccion === 'historial') {
+            window.detenerSeguimiento && window.detenerSeguimiento();
+        }
+        cerrarMenu();
+    };
+
     let repartidorUID = null;
     let repartidorNombre = "Repartidor";
     let timerInterval = null; 
@@ -980,6 +1372,9 @@
     let permisosCamaraOtorgado = false;
     let permisosMicrofonoOtorgado = false;
     let permisosUbicacionOtorgado = false;
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-04] VARIABLES DEL MAPA (MULTI-CLIENTE)              │
+    // └─────────────────────────────────────────────────────────┘
     // 🔥 VARIABLES DEL MAPA (MULTI-CLIENTE)
     let mapaCliente = null;
     let marcadorCliente = null;       // compat. legacy
@@ -1001,6 +1396,9 @@
     // 🆕 VARIABLE PARA GUARDAR EL PEDIDO ACTIVO Y PERSISTIR UBICACIÓN
     let activePedidoData = null;
     // ========================================
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-05] PERSISTIR UBICACIÓN DEL CLIENTE                 │
+    // └─────────────────────────────────────────────────────────┘
     // 🆕 FUNCIONES PARA PERSISTIR UBICACIÓN DEL CLIENTE
     // ========================================
     function guardarUbicacionClienteEnStorage(clienteID, coords) {
@@ -1037,6 +1435,9 @@
             console.error('❌ Error al limpiar ubicación de localStorage:', error);
         }
     }
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-06] FUNCIONES DE DEBUGGING                          │
+    // └─────────────────────────────────────────────────────────┘
     // ========================================
     // FUNCIONES DE DEBUGGING MEJORADAS
     // ========================================
@@ -1049,6 +1450,9 @@
     function logDebugMapa(mensaje, datos = null) {
         console.log(`🗺️ [MAPA] ${mensaje}`, datos || '');
     }
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-07] INICIALIZAR MAPA (Leaflet)                      │
+    // └─────────────────────────────────────────────────────────┘
     // ========================================
     // INICIALIZAR MAPA
     // ========================================
@@ -1113,6 +1517,9 @@
         return false;
     }
 }
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-08] AGREGAR MARCADOR DEL CLIENTE                    │
+    // └─────────────────────────────────────────────────────────┘
     // ========================================
     // 🔥 AGREGAR MARCADOR DEL CLIENTE (CORREGIDO CON "lon")
     // ========================================
@@ -1197,6 +1604,9 @@
             return false;
         }
     }
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-09] AGREGAR MARCADOR DEL REPARTIDOR                 │
+    // └─────────────────────────────────────────────────────────┘
     // ========================================
     // AGREGAR MARCADOR DEL REPARTIDOR
     // ========================================
@@ -1271,6 +1681,9 @@
             return false;
         }
     }
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-10] CALCULAR DISTANCIA Y DIRECCIÓN                  │
+    // └─────────────────────────────────────────────────────────┘
     // ========================================
     // CALCULAR DISTANCIA Y DIRECCIÓN
     // ========================================
@@ -1331,6 +1744,9 @@
             console.error('❌ Error al calcular distancia/dirección:', error);
         }
     }
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-11] SEGUIMIENTO MULTI-CLIENTE                       │
+    // └─────────────────────────────────────────────────────────┘
     // ======================================================================
     // 🗺️ SEGUIMIENTO MULTI-CLIENTE — muestra TODOS los clientes activos
     // ======================================================================
@@ -1438,6 +1854,9 @@
         return html || null;
     }
 
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-12] COORDENADAS LOCALES DE BARRIOS (fallback)       │
+    // └─────────────────────────────────────────────────────────┘
     // 🗺️ COORDENADAS LOCALES de barrios de Armenia, Quindío (fallback)
     const BARRIOS_ARMENIA = {
         'el silencio':                 { lat: 4.5412, lng: -75.6578 },
@@ -1523,6 +1942,9 @@
         'norte':                       { lat: 4.5500, lng: -75.6500 },
     };
 
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-13] CACHÉ DE BARRIOS (Firebase)                     │
+    // └─────────────────────────────────────────────────────────┘
     // 🔥 CACHÉ de barrios cargados desde Firebase
     let _barriosFirebaseCache = null;
     let _barriosFirebaseCargando = false;
@@ -1814,6 +2236,9 @@
         repartidorCoords = null;
         logDebugMapa('✅ Seguimiento detenido completamente');
     }
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-14] SISTEMA DE PERMISOS MULTIMEDIA                  │
+    // └─────────────────────────────────────────────────────────┘
     // ========================================
     // SISTEMA DE PERMISOS MULTIMEDIA
     // ========================================
@@ -1900,6 +2325,10 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         const modal = document.getElementById('permisosModal');
         modal.classList.add('show');
     }
+    window.mostrarModalPermisos = mostrarModalPermisos;
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-15] SISTEMA DE HEARTBEAT                            │
+    // └─────────────────────────────────────────────────────────┘
     // ========================================
     // SISTEMA DE HEARTBEAT SIMPLIFICADO
     // ========================================
@@ -2003,6 +2432,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
     
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-16] ASIGNACIÓN AUTOMÁTICA DE PEDIDOS PENDIENTES     │
+    // └─────────────────────────────────────────────────────────┘
     // ========================================
     // 🆕 ASIGNACIÓN AUTOMÁTICA DE PEDIDOS PENDIENTES
     // ========================================
@@ -2107,6 +2539,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             console.error(`❌ Error al asignar pedido ${pedidoId}:`, error);
         }
     }
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-17] ENVÍO DIRECTO DE UBICACIÓN AL MAPA              │
+    // └─────────────────────────────────────────────────────────┘
     // ========================================
     // ENVÍO DIRECTO DE UBICACIÓN DEL REPARTIDOR AL MAPA
     // ========================================
@@ -2154,6 +2589,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         console.log('🛑 Envío de ubicación del repartidor detenido');
     }
 
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-18] SISTEMA GPS OPTIMIZADO (15 SEGUNDOS)            │
+    // └─────────────────────────────────────────────────────────┘
     // ========================================
     // 🔥 SISTEMA GPS OPTIMIZADO (15 SEGUNDOS)
     // ========================================
@@ -2404,6 +2842,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
     // ========================================
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-19] WAKE LOCK API                                   │
+    // └─────────────────────────────────────────────────────────┘
     // WAKE LOCK API
     // ========================================
     async function solicitarWakeLock() {
@@ -2435,6 +2876,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
     // ========================================
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-20] MANEJO DE VISIBILIDAD DE PÁGINA                 │
+    // └─────────────────────────────────────────────────────────┘
     // MANEJO DE VISIBILIDAD DE PÁGINA
     // ========================================
     document.addEventListener('visibilitychange', async () => {
@@ -2462,6 +2906,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     });
     // ========================================
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-21] MANEJO DE CIERRE DE APP/NAVEGADOR               │
+    // └─────────────────────────────────────────────────────────┘
     // MANEJO DE CIERRE DE APP/NAVEGADOR
     // ========================================
     window.addEventListener('beforeunload', async (event) => {
@@ -2490,6 +2937,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     });
     // ========================================
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-22] SISTEMA DE MULTIMEDIA (FOTOS/AUDIOS)            │
+    // └─────────────────────────────────────────────────────────┘
     // SISTEMA DE MULTIMEDIA (FOTOS/AUDIOS)
     // ========================================
     document.getElementById('sendGalleryBtn').addEventListener('click', () => {
@@ -2605,6 +3055,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         tipo: 'audio',
                         audioUrl: downloadURL,
                         remitente: 'repartidor',
+                        rol_remitente: 'Repartidor',
                         timestamp: Date.now(),
                         repartidorNombre: repartidorNombre
                     });
@@ -2668,6 +3119,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         tipo: 'imagen',
                         imagenUrl: downloadURL,
                         remitente: 'repartidor',
+                        rol_remitente: 'Repartidor',
                         timestamp: Date.now(),
                         repartidorNombre: repartidorNombre
                     });
@@ -2690,6 +3142,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             await set(messageRef, {
                 mensaje: mensaje,
                 remitente: 'repartidor',
+                rol_remitente: 'Repartidor',
                 timestamp: Date.now(),
                 repartidorNombre: repartidorNombre
             });
@@ -2700,6 +3153,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
     // ========================================
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-23] CHAT ADMIN                                      │
+    // └─────────────────────────────────────────────────────────┘
     // CHAT
     // ========================================
     function escucharChat() {
@@ -2812,6 +3268,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     }
 }
     // ========================================
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-24] PEDIDOS (renderizado, aceptar, completar, cancelar) │
+    // └─────────────────────────────────────────────────────────┘
     // PEDIDOS
     // ========================================
 
@@ -3055,7 +3514,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 histSnap.forEach(child => {
                     if (pedidosYaMostrados.has(child.key)) return; // 🔧 FIX: saltar duplicados
                     const p = child.val();
-                    console.log('📋 historial pedido:', child.key.slice(-6), '— estado:', p.estado, '— uid match:', p.repartidorUID === repartidorUID);
+                    console.log('?? historial pedido:', child.key.slice(-6), '— estado:', p.estado, '— uid match:', p.repartidorUID === repartidorUID);
                     if (p.repartidorUID === repartidorUID &&
                         (p.estado === 'Aceptado' || p.estado === 'Esperando' || p.estado === 'En Camino' ||
                          p.estado === 'aceptado' || p.estado === 'esperando' || p.estado === 'en_camino')) {
@@ -3092,10 +3551,37 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             document.getElementById('pendientesBadge').textContent = contadorPendientes;
         }
         if (contadorAsignados === 0) {
-            listaAsignados.innerHTML = '<p style="color: #999;">No tienes pedidos asignados.</p>';
+            listaAsignados.innerHTML = '<p style="color: #999; padding: 10px 0;">No tienes pedidos asignados.</p>';
             activePedidoData = null;
+            // Mostrar el mapa igual con la ubicación del repartidor
+            const mapaTitle = document.getElementById('mapaTitle');
+            if (mapaTitle) mapaTitle.textContent = '🗺️ Tu ubicación actual';
+            document.getElementById('mapa-cliente-container').style.display = 'block';
+            if (!mapaCliente) inicializarMapaCliente();
+            setTimeout(() => { if (mapaCliente) { mapaCliente.invalidateSize(); iniciarEnvioUbicacionRepartidor(); } }, 400);
+        } else {
+            const mapaTitle = document.getElementById('mapaTitle');
+            if (mapaTitle) mapaTitle.textContent = '🗺️ Ubicaciones de Pedidos Asignados';
         }
         document.getElementById('asignadosCount').textContent = contadorAsignados;
+        // Sync menú lateral
+        const menuAsCnt = document.getElementById('menuAsignadosCount');
+        if (menuAsCnt) menuAsCnt.textContent = contadorAsignados;
+        const menuPBadge = document.getElementById('menuPendientesBadge');
+        if (menuPBadge) { menuPBadge.style.display = contadorPendientes > 0 ? 'inline' : 'none'; menuPBadge.textContent = contadorPendientes; }
+        // Actualizar chats en menú lateral — recolectar de todos los pedidos asignados renderizados
+        if (window._actualizarMenuChats) {
+            const chatItems = [];
+            listaAsignados.querySelectorAll('.pedido-item').forEach(div => {
+                const btnChat = div.querySelector('.chat-p2p-btn');
+                if (btnChat) {
+                    const onclickStr = btnChat.getAttribute('onclick') || '';
+                    const m = onclickStr.match(/abrirChatP2PRep\('([^']*)',\s*'([^']*)',\s*'([^']*)',\s*'([^']*)'\)/);
+                    if (m) chatItems.push({ pedidoId: m[1], clienteId: m[2], nombreCliente: m[3] || 'Cliente', telCliente: m[4] });
+                }
+            });
+            window._actualizarMenuChats(chatItems);
+        }
         initialLoad = false;
         if (repartidorUID) {
             update(ref(db, `repartidores_info/${repartidorUID}`), {
@@ -3478,6 +3964,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         audio.play().catch(err => console.warn('No se pudo reproducir notificación:', err));
     }
     // ========================================
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-25] NAVEGACIÓN (tabs: chat/pendientes/asignados/historial) │
+    // └─────────────────────────────────────────────────────────┘
     // NAVEGACIÓN
     // ========================================
     document.getElementById('showChatBtn').addEventListener('click', () => {
@@ -3568,6 +4057,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         iniciarSeguimientoCliente(activePedidoData.clienteUID);
                         iniciarEnvioUbicacionRepartidor();
                     }, 500);
+                } else {
+                    // Sin pedidos: igual mostrar mapa con ubicación del repartidor
+                    document.getElementById('mapa-cliente-container').style.display = 'block';
+                    if (!mapaCliente) inicializarMapaCliente();
+                    setTimeout(() => { if (mapaCliente) { mapaCliente.invalidateSize(); iniciarEnvioUbicacionRepartidor(); } }, 500);
                 }
             } catch(e) {
                 console.warn('⚠️ Error restaurando seguimiento:', e);
@@ -3585,36 +4079,30 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         document.getElementById('showAsignadosBtn').click();
     });
     // ========================================
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-26] AUTENTICACIÓN (login, registro, logout, onAuthChanged) │
+    // └─────────────────────────────────────────────────────────┘
     // AUTENTICACIÓN
     // ========================================
-    document.getElementById('registerBtn').addEventListener('click', async () => {
-        const email = document.getElementById('loginEmail').value.trim();
-        const password = document.getElementById('loginPassword').value;
-        if (!email || !password) {
-            document.getElementById('loginError').textContent = 'Por favor completa todos los campos';
-            return;
-        }
-        if (password.length < 6) {
-            document.getElementById('loginError').textContent = 'La contraseña debe tener al menos 6 caracteres';
-            return;
-        }
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-26] AUTENTICACIÓN (login, registro, logout, onAuthChanged) │
+    // └─────────────────────────────────────────────────────────┘
+    // AUTENTICACIÓN
+    // ========================================
+
+    // — Google Sign-In —
+    document.getElementById('googleSignInBtn').addEventListener('click', async () => {
+        const provider = new GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: 'select_account' });
         try {
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const uid = userCredential.user.uid;
-            localStorage.setItem('lastRepartidorEmail', email);
-            localStorage.setItem('lastRepartidorPassword', password);
-            console.log('✅ Usuario registrado:', uid);
+            await signInWithPopup(auth, provider);
+            console.log('✅ Inicio de sesión con Google exitoso');
         } catch (error) {
-            console.error('❌ Error al registrar:', error);
-            if (error.code === 'auth/email-already-in-use') {
-                document.getElementById('loginError').textContent = 'Este correo ya está registrado. Usa "Iniciar Sesión".';
-            } else if (error.code === 'auth/invalid-email') {
-                document.getElementById('loginError').textContent = 'Correo electrónico inválido';
-            } else if (error.code === 'auth/weak-password') {
-                document.getElementById('loginError').textContent = 'La contraseña es muy débil';
-            } else {
-                document.getElementById('loginError').textContent = 'Error: ' + error.message;
-            }
+            console.error('❌ Error Google Sign-In:', error);
+            let msg = 'Error al iniciar con Google';
+            if (error.code === 'auth/popup-closed-by-user') msg = 'Ventana cerrada. Intenta de nuevo.';
+            else if (error.code === 'auth/popup-blocked') msg = 'Popup bloqueado. Permite popups para este sitio.';
+            document.getElementById('loginError').textContent = msg;
         }
     });
     document.getElementById('loginBtn').addEventListener('click', async () => {
@@ -3703,7 +4191,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             console.error('❌ Error al cerrar sesión:', error);
         }
     });
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
+    async function _doLogout() {
         const confirmacion = confirm('¿Seguro que deseas cerrar sesión?');
         if (!confirmacion) return;
         try {
@@ -3718,7 +4206,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         } catch (error) {
             console.error('❌ Error al cerrar sesión:', error);
         }
-    });
+    }
+    document.getElementById('logoutBtn').addEventListener('click', _doLogout);
+    document.getElementById('menuLogoutBtn').addEventListener('click', _doLogout);
     const lastEmail = localStorage.getItem('lastRepartidorEmail');
     const lastPassword = localStorage.getItem('lastRepartidorPassword');
     if (lastEmail && lastPassword) {
@@ -3759,7 +4249,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             } else {
                 document.getElementById('manualLoginForm').style.display = 'none';
                 document.getElementById('registrationForm').style.display = 'block';
-                document.getElementById('regEmailDisplay').value = user.email;
+                document.getElementById('regEmailDisplay').value = user.email || '';
+                // Pre-llenar nombre si vino de Google
+                if (user.displayName) {
+                    const regName = document.getElementById('regName');
+                    if (regName && !regName.value) regName.value = user.displayName;
+                }
             }
         } else {
             repartidorUID = null;
@@ -3783,9 +4278,56 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
 <script>
 // ============================================================
+// MENÚ HAMBURGUESA
+// ============================================================
+function abrirMenu() {
+    document.getElementById('sideMenu').classList.add('open');
+    document.getElementById('sideMenuOverlay').classList.add('open');
+}
+function cerrarMenu() {
+    document.getElementById('sideMenu').classList.remove('open');
+    document.getElementById('sideMenuOverlay').classList.remove('open');
+}
+
+// ── ACTUALIZAR CHATS EN EL MENÚ LATERAL ──
+// Se llama desde abrirChatP2PRep y desde renderAsignados
+window._actualizarMenuChats = function(pedidosAsignados) {
+    // pedidosAsignados: array de { pedidoId, nombreCliente, telCliente, clienteId }
+    const section = document.getElementById('menuChatsSection');
+    const list = document.getElementById('menuChatsList');
+    if (!section || !list) return;
+    if (!pedidosAsignados || pedidosAsignados.length === 0) {
+        section.style.display = 'none';
+        list.innerHTML = '';
+        return;
+    }
+    section.style.display = 'block';
+    list.innerHTML = '';
+    pedidosAsignados.forEach(p => {
+        const btn = document.createElement('button');
+        btn.className = 'side-chat-item';
+        btn.id = 'menu-chat-' + p.pedidoId;
+        btn.innerHTML = '<span class="chat-icon">💬</span>'
+            + '<span>' + (p.nombreCliente || 'Cliente') + '</span>'
+            + '<span class="chat-badge" id="badge-chat-' + p.pedidoId + '" style="display:none;"></span>';
+        btn.onclick = function() {
+            // Navegar a asignados y abrir chat
+            if (window.navegarA) window.navegarA('asignados');
+            setTimeout(() => {
+                if (window.abrirChatP2PRep) window.abrirChatP2PRep(p.pedidoId, p.clienteId, p.nombreCliente, p.telCliente);
+            }, 300);
+        };
+        list.appendChild(btn);
+    });
+};
+
+// ============================================================
 // MÓDULO REPARTIDOR: CHAT P2P + UBICACIÓN GUARDADA
 // ============================================================
 
+// ┌─────────────────────────────────────────────────────────┐
+// │ [JS-27] CHAT P2P REPARTIDOR ↔ CLIENTE                  │
+// └─────────────────────────────────────────────────────────┘
 // ── CHAT P2P REPARTIDOR ↔ CLIENTE ──────────────────────────
 let _p2pRepPedidoId = null;
 let _p2pRepClienteId = null;
@@ -3979,6 +4521,9 @@ if (_origAceptar) {
   };
 }
 
+// ┌─────────────────────────────────────────────────────────┐
+// │ [JS-28] GUARDAR DATOS LIVIANOS DEL PEDIDO (ANALÍTICA)   │
+// └─────────────────────────────────────────────────────────┘
 // ── GUARDAR DATOS LIVIANOS DEL PEDIDO (ANALÍTICA) ──────────
 window._guardarDatosPedidoLigero = function(pedidoId, barrioA, barrioB, zonaA, zonaB) {
   if (!pedidoId || !db) return;
