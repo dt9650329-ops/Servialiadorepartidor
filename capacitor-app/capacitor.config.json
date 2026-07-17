@@ -1,0 +1,6 @@
+{
+  "appId": "com.servialiados.repartidor",
+  "appName": "Servi Aliados Repartidor",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
