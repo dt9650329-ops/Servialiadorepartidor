@@ -1557,6 +1557,9 @@
         <button class="side-menu-item" id="menuPerfilBtn" onclick="navegarA('perfil')">
             <span class="item-icon">👤</span> Mi Perfil
         </button>
+        <button class="side-menu-item" id="menuEstadoCuentaBtn" onclick="navegarA('estadoCuenta')">
+            <span class="item-icon">💰</span> Mi Estado de Cuenta
+        </button>
     </div>
     <!-- SOS -->
     <div class="side-menu-section">
@@ -1852,6 +1855,38 @@
             </div>
         </div>
     </div>
+
+    <!-- ╔═══════════════════════════════════════════════════════╗
+         ║ [HTML-09c] SECCIÓN: MI ESTADO DE CUENTA              ║
+         ╚═══════════════════════════════════════════════════════╝ -->
+    <div id="estadoCuentaSection" style="display:none; padding: 16px;">
+        <h3 style="color: var(--color-secondary); margin: 0 0 4px;">💰 Mi Estado de Cuenta</h3>
+        <p style="color:#7a9abf; font-size:0.8em; margin:0 0 16px;">
+            Cálculo automático según tus horas trabajadas. El valor del día completo (8h) lo define el admin.
+        </p>
+
+        <div id="estadoCuentaSinConfigurar" style="display:none; background:var(--color-card); border:1px solid var(--color-primary); border-radius:10px; padding:16px; text-align:center; color:#ddd; font-size:0.9em;">
+            ⚠️ El admin aún no ha configurado el valor de tu día trabajado. Contáctalo para activar tu estado de cuenta.
+        </div>
+
+        <div id="estadoCuentaContenido" style="display:none;">
+            <!-- Resumen: total pendiente por pagar -->
+            <div class="perfil-stat-card" style="grid-column:1/-1; background:linear-gradient(135deg,#1a3a1a,#0d2010); border-color:#27ae60; margin-bottom:16px;">
+                <div class="perfil-stat-icon">💵</div>
+                <div class="perfil-stat-value" style="color:#27ae60; font-size:1.8em;" id="estadoCuentaTotalPendiente">$0</div>
+                <div class="perfil-stat-label">Pendiente por pagar/consignar</div>
+            </div>
+
+            <div style="color:#7a9abf; font-size:0.78em; margin-bottom:8px;" id="estadoCuentaValorDiaInfo">Valor del día completo: —</div>
+
+            <!-- Detalle día por día -->
+            <div class="historial-sesiones-card">
+                <h4>📅 Detalle por día</h4>
+                <div id="estadoCuentaCargando">Cargando...</div>
+                <div id="estadoCuentaLista" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
 <!-- ╔═══════════════════════════════════════════════════════╗
      ║ [HTML-10b] MODAL: CAMBIO DE RUTA                      ║
      ╚═══════════════════════════════════════════════════════╝ -->
@@ -2089,17 +2124,17 @@ function _fechaHoyColombia() {
 
     // ── FUNCIÓN CENTRAL DE NAVEGACIÓN ──
     window.navegarA = function(seccion) {
-        const secciones = ['chatSection','pendientesSection','asignadosSection','historialSection','perfilSection'];
+        const secciones = ['chatSection','pendientesSection','asignadosSection','historialSection','perfilSection','estadoCuentaSection'];
         secciones.forEach(s => {
             const el = document.getElementById(s);
             if (el) el.style.display = 'none';
         });
-        const mapa = { chat:'chatSection', pendientes:'pendientesSection', asignados:'asignadosSection', historial:'historialSection', perfil:'perfilSection' };
+        const mapa = { chat:'chatSection', pendientes:'pendientesSection', asignados:'asignadosSection', historial:'historialSection', perfil:'perfilSection', estadoCuenta:'estadoCuentaSection' };
         const target = document.getElementById(mapa[seccion]);
         if (target) target.style.display = 'block';
         // Marcar activo en menú
         document.querySelectorAll('.side-menu-item').forEach(b => b.classList.remove('active'));
-        const btnMap = { chat:'menuChatBtn', pendientes:'menuPendientesBtn', asignados:'menuAsignadosBtn', historial:'menuHistorialBtn', perfil:'menuPerfilBtn' };
+        const btnMap = { chat:'menuChatBtn', pendientes:'menuPendientesBtn', asignados:'menuAsignadosBtn', historial:'menuHistorialBtn', perfil:'menuPerfilBtn', estadoCuenta:'menuEstadoCuentaBtn' };
         const activeBtn = document.getElementById(btnMap[seccion]);
         if (activeBtn) activeBtn.classList.add('active');
         // Si es asignados, disparar el listener original
@@ -2111,6 +2146,9 @@ function _fechaHoyColombia() {
         } else if (seccion === 'perfil') {
             window.detenerSeguimiento && window.detenerSeguimiento();
             window.cargarPerfil && window.cargarPerfil();
+        } else if (seccion === 'estadoCuenta') {
+            window.detenerSeguimiento && window.detenerSeguimiento();
+            window._cargarEstadoCuenta && window._cargarEstadoCuenta();
         }
         cerrarMenu();
     };
@@ -5673,6 +5711,114 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
     window._cargarHistorialSesiones = _cargarHistorialSesiones;
+
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-28d] MI ESTADO DE CUENTA (créditos según horas)      │
+    // └─────────────────────────────────────────────────────────┘
+    // Calcula, por cada día trabajado, cuánto se le debe al repartidor
+    // según el tiempo conectado ese día, prorrateado sobre una jornada
+    // de 8 horas y el valor del día que configura el admin.
+    // Solo cuenta como "pendiente" lo posterior a repartidores_info/{uid}/pagadoHasta
+    // (fecha que el admin actualiza cuando ya liquidó).
+    const JORNADA_COMPLETA_MS = 8 * 3600000; // 8 horas
+
+    async function _cargarEstadoCuenta() {
+        const contenidoEl   = document.getElementById('estadoCuentaContenido');
+        const sinConfigEl   = document.getElementById('estadoCuentaSinConfigurar');
+        const cargandoEl    = document.getElementById('estadoCuentaCargando');
+        const listaEl       = document.getElementById('estadoCuentaLista');
+        const totalEl       = document.getElementById('estadoCuentaTotalPendiente');
+        const valorDiaInfoEl= document.getElementById('estadoCuentaValorDiaInfo');
+        if (!contenidoEl || !repartidorUID) return;
+
+        contenidoEl.style.display = 'none';
+        sinConfigEl.style.display = 'none';
+        cargandoEl.style.display  = 'block';
+        listaEl.style.display     = 'none';
+
+        try {
+            const snapPerfil = await get(ref(db, `repartidores_info/${repartidorUID}`));
+            const perfil = snapPerfil.exists() ? snapPerfil.val() : {};
+            const valorDia   = Number(perfil.valorDiaTrabajo) || 0;
+            const pagadoHasta = perfil.pagadoHasta || ''; // 'YYYY-MM-DD', días <= esta fecha ya se liquidaron
+
+            if (!valorDia) {
+                sinConfigEl.style.display = 'block';
+                cargandoEl.style.display = 'none';
+                return;
+            }
+
+            // Reusar el mismo histórico de conexión que usa el perfil
+            const snapHist = await get(ref(db, `repartidores_info/${repartidorUID}/historialConexion`));
+            const hoyStr = _fechaHoyColombia();
+            const tiempoHoyActual = _tiempoConexionAcumulado +
+                (_perfilTiempoInicioSesion ? (Date.now() - _perfilTiempoInicioSesion) : 0);
+
+            const mapa = {};
+            if (snapHist.exists()) {
+                snapHist.forEach(child => {
+                    const d = child.val();
+                    if (d.fecha && d.tiempoTotalMs) mapa[d.fecha] = d.tiempoTotalMs;
+                });
+            }
+            if (tiempoHoyActual > 0) {
+                mapa[hoyStr] = Math.max(mapa[hoyStr] || 0, tiempoHoyActual);
+            }
+
+            const fechas = Object.keys(mapa).sort((a, b) => b.localeCompare(a));
+
+            function _fmtFecha(fechaStr) {
+                const [anio, mes, dia] = fechaStr.split('-').map(Number);
+                const d = new Date(anio, mes - 1, dia);
+                return d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
+            }
+            function _fmtPesos(n) {
+                return '$' + Math.round(n).toLocaleString('es-CO');
+            }
+            function _msAHoras(ms) {
+                const h = ms / 3600000;
+                return h.toFixed(1) + 'h';
+            }
+
+            let totalPendiente = 0;
+            let html = '';
+            fechas.forEach(f => {
+                const ms = mapa[f] || 0;
+                // Prorrateo: proporción de la jornada de 8h trabajada ese día, tope 100%
+                const proporcion = Math.min(1, ms / JORNADA_COMPLETA_MS);
+                const monto = proporcion * valorDia;
+                const yaLiquidado = pagadoHasta && f <= pagadoHasta;
+                if (!yaLiquidado) totalPendiente += monto;
+
+                html += `
+                    <div class="historial-sesion-row" style="${yaLiquidado ? 'opacity:0.45;' : ''}">
+                        <span class="historial-sesion-fecha">
+                            ${_fmtFecha(f)} ${f === hoyStr ? '<span class="historial-sesion-hoy">HOY</span>' : ''}
+                            <br><span style="color:#7a9abf; font-size:0.75em;">${_msAHoras(ms)} trabajadas${yaLiquidado ? ' · ✅ liquidado' : ''}</span>
+                        </span>
+                        <span class="historial-sesion-tiempo" style="color:${yaLiquidado ? '#7a9abf' : '#27ae60'};">${_fmtPesos(monto)}</span>
+                    </div>`;
+            });
+
+            if (fechas.length === 0) {
+                listaEl.innerHTML = '<div style="color:#7a9abf;text-align:center;padding:10px 0;font-size:0.85em;">Sin registros aún</div>';
+            } else {
+                listaEl.innerHTML = html;
+            }
+
+            valorDiaInfoEl.textContent = `Valor del día completo (8h): ${_fmtPesos(valorDia)}`;
+            totalEl.textContent = _fmtPesos(totalPendiente);
+
+            listaEl.style.display    = 'block';
+            cargandoEl.style.display = 'none';
+            contenidoEl.style.display = 'block';
+
+        } catch(e) {
+            console.warn('⚠️ Error cargando estado de cuenta:', e);
+            cargandoEl.textContent = 'Error cargando estado de cuenta';
+        }
+    }
+    window._cargarEstadoCuenta = _cargarEstadoCuenta;
 
     // Arrancar cronómetro en cuanto el usuario se autentique
     // Carga el tiempo acumulado del día desde Firebase y arranca el tick
