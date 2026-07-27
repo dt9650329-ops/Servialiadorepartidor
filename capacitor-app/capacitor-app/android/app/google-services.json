@@ -28,7 +28,9 @@
         }
       ],
       "api_key": [
-        { "current_key": "AIzaSyAZX7Q5B29Xti4YtV9wXuiREVdkgcclv9U" }
+        {
+          "current_key": "AIzaSyAZX7Q5B29Xti4YtV9wXuiREVdkgcclv9U"
+        }
       ],
       "services": {
         "appinvite_service": {
@@ -63,7 +65,46 @@
         }
       ],
       "api_key": [
-        { "current_key": "AIzaSyAZX7Q5B29Xti4YtV9wXuiREVdkgcclv9U" }
+        {
+          "current_key": "AIzaSyAZX7Q5B29Xti4YtV9wXuiREVdkgcclv9U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "771819437001-0i1u711ju6tak23fctp7oorni51hk8qf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:771819437001:android:98915057e4b62573c10618",
+        "android_client_info": {
+          "package_name": "com.servialiados.repartidor"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "771819437001-191qon6t4qtf3vcrq4p61qc0istpq24g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.servialiados.repartidor",
+            "certificate_hash": "b422c28518d78968d3d18890ce86e4c69e59b81e"
+          }
+        },
+        {
+          "client_id": "771819437001-kin5e0gqmq0ukmdb8n0eh0nrdkqn8u7c.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZX7Q5B29Xti4YtV9wXuiREVdkgcclv9U"
+        }
       ],
       "services": {
         "appinvite_service": {
