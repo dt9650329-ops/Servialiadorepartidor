@@ -2022,7 +2022,7 @@
     // └─────────────────────────────────────────────────────────┘
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithRedirect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-02] CONFIGURACIÓN FIREBASE                          │
@@ -6469,18 +6469,80 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
     // — Google Sign-In —
     document.getElementById('googleSignInBtn').addEventListener('click', async () => {
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
+      const errDiv = document.getElementById('loginError');
+      const esCapacitor = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+      if (esCapacitor) {
         try {
-            await signInWithPopup(auth, provider);
-            console.log('✅ Inicio de sesión con Google exitoso');
+          const FirebaseAuthentication = window.Capacitor?.Plugins?.FirebaseAuthentication;
+          if (!FirebaseAuthentication) {
+            const pluginsDisponibles = Object.keys(window.Capacitor?.Plugins || {}).join(', ') || 'ninguno';
+            throw new Error('Plugin no cargado. Plugins detectados: [' + pluginsDisponibles + ']');
+          }
+          const result = await FirebaseAuthentication.signInWithGoogle();
+          const idToken = result?.credential?.idToken;
+          if (!idToken) throw new Error('No se recibió idToken de Google');
+          const credential = GoogleAuthProvider.credential(idToken);
+          await signInWithCredential(auth, credential);
+          console.log('✅Inicio de sesión con Google exitoso');
         } catch (error) {
-            console.error('❌ Error Google Sign-In:', error);
-            let msg = 'Error al iniciar con Google';
-            if (error.code === 'auth/popup-closed-by-user') msg = 'Ventana cerrada. Intenta de nuevo.';
-            else if (error.code === 'auth/popup-blocked') msg = 'Popup bloqueado. Permite popups para este sitio.';
-            document.getElementById('loginError').textContent = msg;
+          console.error('❌Error Google Sign-In (nativo/Capacitor):', error);
+          if (errDiv) errDiv.textContent = 'Error: ' + (error.message || error.code);
         }
+        return;
+      }
+      const provider = new GoogleAuthProvider();
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      provider.setCustomParameters({ prompt: 'select_account' });
+      try {
+        if (isSafari) {
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        await signInWithPopup(auth, provider);
+        console.log('✅Inicio de sesión con Google exitoso');
+      } catch (error) {
+        console.error('❌Error Google Sign-In:', error);
+        if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        let msg = 'Error al iniciar con Google';
+        if (error.code === 'auth/popup-closed-by-user') msg = 'Ventana cerrada. Intenta de nuevo.';
+        else if (error.code === 'auth/popup-blocked') msg = 'Popup bloqueado. Permite popups para este sitio.';
+        if (errDiv) errDiv.textContent = msg;
+      }
+    });
+          const credential = GoogleAuthProvider.credential(idToken);
+          await signInWithCredential(auth, credential);
+          console.log('✅Inicio de sesión con Google exitoso');
+        } catch (error) {
+          console.error('❌Error Google Sign-In (nativo/Capacitor):', error);
+          if (errDiv) errDiv.textContent = 'Error: ' + (error.message || error.code);
+        }
+        return;
+      }
+      const provider = new GoogleAuthProvider();
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      provider.setCustomParameters({ prompt: 'select_account' });
+      try {
+        if (isSafari) {
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        await signInWithPopup(auth, provider);
+        console.log('✅Inicio de sesión con Google exitoso');
+      } catch (error) {
+        console.error('❌Error Google Sign-In:', error);
+        if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
+          await signInWithRedirect(auth, provider);
+          return;
+        }
+        let msg = 'Error al iniciar con Google';
+        if (error.code === 'auth/popup-closed-by-user') msg = 'Ventana cerrada. Intenta de nuevo.';
+        else if (error.code === 'auth/popup-blocked') msg = 'Popup bloqueado. Permite popups para este sitio.';
+        if (errDiv) errDiv.textContent = msg;
+      }
+    });
     });
     document.getElementById('loginBtn').addEventListener('click', async () => {
         const email = document.getElementById('loginEmail').value.trim();
