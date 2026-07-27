@@ -39,10 +39,12 @@ jobs:
             -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
             -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
             -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
+
       - name: List APK files
         run: find android/app/build/outputs -name *.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: capacitor-app/android/app/build/outputs/apk/release/app-release.ap
+          path: capacitor-app/android/app/build/outputs/apk/release/app-release.apk
