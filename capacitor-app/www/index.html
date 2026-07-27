@@ -1481,23 +1481,18 @@
             <h3 style="text-align: center; color: var(--color-primary); margin:0 0 6px;">Panel Repartidor</h3>
             <p style="text-align: center; font-size: 0.85em; margin: 0; color: #7a9abf;">Servi Aliados — Armenia</p>
         </div>
-        <!-- Botón Google -->
-        <button id="googleSignInBtn" class="btn-google">
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" />
-            Continuar con Google
-        </button>
-        <div style="display:flex; align-items:center; margin: 14px 0; gap:10px;">
-            <div style="flex:1; height:1px; background:#1e3a52;"></div>
-            <span style="color:#7a9abf; font-size:0.82em;">o con correo</span>
-            <div style="flex:1; height:1px; background:#1e3a52;"></div>
-        </div>
         <label style="font-size: 0.8em; display: block; margin-bottom: 5px; color: var(--color-secondary);">Correo Electrónico:</label>
         <input type="email" id="loginEmail" placeholder="tu.correo@ejemplo.com">
         <label style="font-size: 0.8em; display: block; margin-bottom: 5px; color: var(--color-secondary);">Contraseña:</label>
         <input type="password" id="loginPassword" placeholder="Contraseña (Mín. 6 caracteres)">
-        <button id="loginBtn" style="background: var(--color-primary); color: white;">
-            Iniciar Sesión
-        </button>
+        <div style="display:flex; gap:10px; margin-top:6px;">
+            <button id="registerBtn" style="flex:1; background: #2a4a63; color: white;">
+                Registrarse
+            </button>
+            <button id="loginBtn" style="flex:1; background: var(--color-primary); color: white;">
+                Iniciar Sesión
+            </button>
+        </div>
         <p id="loginError" style="color: var(--color-accent-danger); margin-top: 10px; text-align: center;"></p>
         <div id="quickLoginArea" style="display: none;">
             <p id="quickLoginMessage" style="margin-bottom: 5px; font-size: 0.9em; color: var(--color-primary);"></p>
@@ -6484,49 +6479,34 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // AUTENTICACIÓN
     // ========================================
 
-    // — Google Sign-In —
-    document.getElementById('googleSignInBtn').addEventListener('click', async () => {
-        document.getElementById('loginError').textContent = '';
-
-        // App empaquetada con Capacitor: Google bloquea el login OAuth dentro de
-        // WebViews embebidos (error disallowed_useragent / missing initial state),
-        // así que acá usamos el plugin nativo en vez de popup/redirect.
-        const esCapacitor = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-
-        if (esCapacitor) {
-            try {
-                const FirebaseAuthentication = window.Capacitor?.Plugins?.FirebaseAuthentication;
-                if (!FirebaseAuthentication) {
-                    const pluginsDisponibles = Object.keys(window.Capacitor?.Plugins || {}).join(', ') || 'ninguno';
-                    throw new Error('Plugin no cargado. Plugins detectados: [' + pluginsDisponibles + ']');
-                }
-                const result = await FirebaseAuthentication.signInWithGoogle();
-                const idToken = result?.credential?.idToken;
-                if (!idToken) throw new Error('No se recibió idToken de Google');
-
-                const credential = GoogleAuthProvider.credential(idToken);
-                await signInWithCredential(auth, credential);
-
-                console.log('✅ Inicio de sesión con Google exitoso (nativo/Capacitor)');
-            } catch (error) {
-                console.error('❌ Error Google Sign-In (nativo/Capacitor):', error);
-                document.getElementById('loginError').textContent = 'Error: ' + (error.message || error.code);
-            }
+    document.getElementById('registerBtn').addEventListener('click', async () => {
+        const email = document.getElementById('loginEmail').value.trim();
+        const password = document.getElementById('loginPassword').value;
+        if (!email || !password) {
+            document.getElementById('loginError').textContent = 'Por favor completa todos los campos';
             return;
         }
-
-        // ---- Flujo web normal (navegador, no Capacitor) ----
-        const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
+        if (password.length < 6) {
+            document.getElementById('loginError').textContent = 'La contraseña debe tener mínimo 6 caracteres';
+            return;
+        }
+        document.getElementById('loginError').textContent = '';
         try {
-            await signInWithPopup(auth, provider);
-            console.log('✅ Inicio de sesión con Google exitoso');
+            await createUserWithEmailAndPassword(auth, email, password);
+            localStorage.setItem('lastRepartidorEmail', email);
+            localStorage.setItem('lastRepartidorPassword', password);
+            console.log('✅ Registro exitoso');
         } catch (error) {
-            console.error('❌ Error Google Sign-In:', error);
-            let msg = 'Error al iniciar con Google';
-            if (error.code === 'auth/popup-closed-by-user') msg = 'Ventana cerrada. Intenta de nuevo.';
-            else if (error.code === 'auth/popup-blocked') msg = 'Popup bloqueado. Permite popups para este sitio.';
-            document.getElementById('loginError').textContent = msg;
+            console.error('❌ Error al registrarse:', error);
+            if (error.code === 'auth/email-already-in-use') {
+                document.getElementById('loginError').textContent = 'Este correo ya está registrado. Inicia sesión.';
+            } else if (error.code === 'auth/invalid-email') {
+                document.getElementById('loginError').textContent = 'Correo electrónico inválido';
+            } else if (error.code === 'auth/weak-password') {
+                document.getElementById('loginError').textContent = 'La contraseña es muy débil';
+            } else {
+                document.getElementById('loginError').textContent = 'Error: ' + error.message;
+            }
         }
     });
     document.getElementById('loginBtn').addEventListener('click', async () => {
