@@ -1,4 +1,4 @@
-package com.servialiados.cliente;
+package com.servialiados.repartidor;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
