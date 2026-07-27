@@ -40,7 +40,7 @@ jobs:
             -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
             -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
       - name: List APK files
-        run: find android/app/build/outputs -iname "*.apk
+        run: find android/app/build/outputs -name *.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
