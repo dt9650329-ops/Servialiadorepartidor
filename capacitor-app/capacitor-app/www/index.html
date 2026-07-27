@@ -6512,38 +6512,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         if (errDiv) errDiv.textContent = msg;
       }
     });
-          const credential = GoogleAuthProvider.credential(idToken);
-          await signInWithCredential(auth, credential);
-          console.log('✅Inicio de sesión con Google exitoso');
-        } catch (error) {
-          console.error('❌Error Google Sign-In (nativo/Capacitor):', error);
-          if (errDiv) errDiv.textContent = 'Error: ' + (error.message || error.code);
-        }
-        return;
-      }
-      const provider = new GoogleAuthProvider();
-      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-      provider.setCustomParameters({ prompt: 'select_account' });
-      try {
-        if (isSafari) {
-          await signInWithRedirect(auth, provider);
-          return;
-        }
-        await signInWithPopup(auth, provider);
-        console.log('✅Inicio de sesión con Google exitoso');
-      } catch (error) {
-        console.error('❌Error Google Sign-In:', error);
-        if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
-          await signInWithRedirect(auth, provider);
-          return;
-        }
-        let msg = 'Error al iniciar con Google';
-        if (error.code === 'auth/popup-closed-by-user') msg = 'Ventana cerrada. Intenta de nuevo.';
-        else if (error.code === 'auth/popup-blocked') msg = 'Popup bloqueado. Permite popups para este sitio.';
-        if (errDiv) errDiv.textContent = msg;
-      }
-    });
-    });
     document.getElementById('loginBtn').addEventListener('click', async () => {
         const email = document.getElementById('loginEmail').value.trim();
         const password = document.getElementById('loginPassword').value;
