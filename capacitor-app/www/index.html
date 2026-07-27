@@ -2022,7 +2022,7 @@
     // └─────────────────────────────────────────────────────────┘
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithCredential } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-02] CONFIGURACIÓN FIREBASE                          │
@@ -6486,6 +6486,36 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
     // — Google Sign-In —
     document.getElementById('googleSignInBtn').addEventListener('click', async () => {
+        document.getElementById('loginError').textContent = '';
+
+        // App empaquetada con Capacitor: Google bloquea el login OAuth dentro de
+        // WebViews embebidos (error disallowed_useragent / missing initial state),
+        // así que acá usamos el plugin nativo en vez de popup/redirect.
+        const esCapacitor = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+
+        if (esCapacitor) {
+            try {
+                const FirebaseAuthentication = window.Capacitor?.Plugins?.FirebaseAuthentication;
+                if (!FirebaseAuthentication) {
+                    const pluginsDisponibles = Object.keys(window.Capacitor?.Plugins || {}).join(', ') || 'ninguno';
+                    throw new Error('Plugin no cargado. Plugins detectados: [' + pluginsDisponibles + ']');
+                }
+                const result = await FirebaseAuthentication.signInWithGoogle();
+                const idToken = result?.credential?.idToken;
+                if (!idToken) throw new Error('No se recibió idToken de Google');
+
+                const credential = GoogleAuthProvider.credential(idToken);
+                await signInWithCredential(auth, credential);
+
+                console.log('✅ Inicio de sesión con Google exitoso (nativo/Capacitor)');
+            } catch (error) {
+                console.error('❌ Error Google Sign-In (nativo/Capacitor):', error);
+                document.getElementById('loginError').textContent = 'Error: ' + (error.message || error.code);
+            }
+            return;
+        }
+
+        // ---- Flujo web normal (navegador, no Capacitor) ----
         const provider = new GoogleAuthProvider();
         provider.setCustomParameters({ prompt: 'select_account' });
         try {
