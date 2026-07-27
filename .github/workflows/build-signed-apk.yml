@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: capacitor-app/capacitor-app
+        working-directory: capacitor-app
 
     steps:
       - uses: actions/checkout@v4
@@ -44,4 +44,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-release
-          path: capacitor-app/capacitor-app/android/app/build/outputs/apk/release/app-release.apk
+          path: capacitor-app/android/app/build/outputs/apk/release/app-release.apk
