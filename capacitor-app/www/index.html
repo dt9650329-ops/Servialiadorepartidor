@@ -1,5 +1,4 @@
-cd ~
-keytool -printcert -jarfile *.apke<!DOCTYPE html>
+<!DOCTYPE html>
 <!--
 ╔══════════════════════════════════════════════════════════════════╗
 ║         SERVI ALIADOS — APP REPARTIDOR                          ║
@@ -3778,7 +3777,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // ========================================
     // 🔥 SISTEMA GPS OPTIMIZADO (15 SEGUNDOS)
     // ========================================
-
     let bgGeoWatcherId = null;
     async function iniciarBackgroundGeolocation() {
         try {
@@ -3799,7 +3797,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     backgroundTitle: "Repartidor activo",
                     requestPermissions: true,
                     stale: false,
-                    distanceFilter: 0 // 🧪 PRUEBA: reporta constantemente sin importar movimiento
+                    distanceFilter: 20
                 },
                 (location, error) => {
                     if (error) {
@@ -3884,6 +3882,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         await iniciarTrackingGPS();
         iniciarBackgroundGeolocation();
         pedirPermisoNotificaciones();
+        document.getElementById('gpsIndicator').classList.add('active');
     }
     function iniciarTrackingGPS() {
         if (!navigator.geolocation) {
@@ -4104,10 +4103,28 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // MANEJO DE CIERRE DE APP/NAVEGADOR
     // ========================================
     window.addEventListener('beforeunload', async (event) => {
-        console.log('⚠️ Evento beforeunload (puede dispararse al minimizar) - NO se detiene el GPS aqui, eso solo pasa con logout explicito');
+        console.log('⚠️ Cerrando aplicación...');
+        detenerTrackingGPS();
+        detenerEnvioUbicacionRepartidor();
+        detenerBackgroundGeolocation();
+        detenerHeartbeat();
+        await liberarWakeLock();
+        if (repartidorUID) {
+            try {
+                await marcarComoOffline();
+            } catch (error) {
+                console.error('❌ Error al marcar offline:', error);
+            }
+        }
     });
-    window.addEventListener('pagehide', async () => {
-        console.log('📴 App minimizada o pantalla apagada - GPS sigue activo en segundo plano');
+    window.addEventListener('pagehide', () => {
+        // 🔧 FIX: 'pagehide' se dispara en Android también al minimizar o apagar
+        // la pantalla, NO solo al cerrar la app de verdad. Antes esto llamaba a
+        // marcarComoOffline() y apagaba el tracking apenas el repartidor guardaba
+        // el celular. La desconexión real ya la detecta onDisconnect() (arriba,
+        // configurado contra Firebase), así que aquí NO debemos marcar offline:
+        // solo dejamos constancia en consola para debug.
+        console.log('📴 Página oculta (background) — tracking sigue activo, onDisconnect() maneja la desconexión real');
     });
     // ========================================
     // ┌─────────────────────────────────────────────────────────┐
