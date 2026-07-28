@@ -3755,6 +3755,28 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // ========================================
     // 🔥 SISTEMA GPS OPTIMIZADO (15 SEGUNDOS)
     // ========================================
+    // ========================================
+    // 🔔 PERMISO DE NOTIFICACIONES NATIVAS
+    // ========================================
+    async function pedirPermisoNotificaciones() {
+        try {
+            const { LocalNotifications } = window.Capacitor?.Plugins || {};
+            if (!LocalNotifications) {
+                console.warn('⚠️ Plugin LocalNotifications no disponible (¿estás en navegador web?)');
+                return;
+            }
+            const estado = await LocalNotifications.checkPermissions();
+            if (estado.display !== 'granted') {
+                const resultado = await LocalNotifications.requestPermissions();
+                console.log('🔔 Permiso de notificaciones:', resultado.display);
+            } else {
+                console.log('🔔 Permiso de notificaciones ya concedido');
+            }
+        } catch (error) {
+            console.error('❌ Error pidiendo permiso de notificaciones:', error);
+        }
+    }
+
     let bgGeoWatcherId = null;
     async function iniciarBackgroundGeolocation() {
         try {
@@ -3859,6 +3881,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         await solicitarWakeLock();
         await iniciarTrackingGPS();
         iniciarBackgroundGeolocation();
+        pedirPermisoNotificaciones();
         document.getElementById('gpsIndicator').classList.add('active');
     }
     function iniciarTrackingGPS() {
