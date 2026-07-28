@@ -40,7 +40,6 @@
             android:foregroundServiceType="location" />
 
     </application>
-</application>
 
     <!-- Permissions -->
 
