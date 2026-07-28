@@ -40,6 +40,16 @@ jobs:
             -PRELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }} \
             -PRELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
 
+      - name: Debug signing
+        run: |
+          cd android
+          echo "--- Verificando keystore ---"
+          ls -la app/servi-aliados-repartidor.keystore
+          echo "--- Contenido del keystore (con password de secrets) ---"
+          keytool -list -v -keystore app/servi-aliados-repartidor.keystore -storepass "${{ secrets.KEYSTORE_PASSWORD }}" -alias "${{ secrets.KEY_ALIAS }}" || echo "FALLO AL LEER KEYSTORE CON ESA PASSWORD/ALIAS"
+          echo "--- Verificando APK generado ---"
+          keytool -printcert -jarfile app/build/outputs/apk/release/app-release.apk || echo "APK NO FIRMADO"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
