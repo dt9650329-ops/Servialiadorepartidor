@@ -35,10 +35,10 @@ jobs:
         run: |
           cd android
           ./gradlew --no-daemon assembleRelease \
-            -Pandroid.injected.signing.store.file=$(pwd)/app/servi-aliados-repartidor.keystore \
-            -Pandroid.injected.signing.store.password=${{ secrets.KEYSTORE_PASSWORD }} \
-            -Pandroid.injected.signing.key.alias=${{ secrets.KEY_ALIAS }} \
-            -Pandroid.injected.signing.key.password=${{ secrets.KEY_PASSWORD }}
+            -PRELEASE_STORE_FILE=$(pwd)/app/servi-aliados-repartidor.keystore \
+            -PRELEASE_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }} \
+            -PRELEASE_KEY_ALIAS=${{ secrets.KEY_ALIAS }} \
+            -PRELEASE_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
