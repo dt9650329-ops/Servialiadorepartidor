@@ -4,6 +4,13 @@ android {
     signingConfigs {
         release {
             println "DEBUG hasProperty RELEASE_STORE_FILE = ${project.hasProperty('RELEASE_STORE_FILE')}"
+            if (project.hasProperty("RELEASE_STORE_FILE")) {
+                def sf = file(RELEASE_STORE_FILE)
+                println "DEBUG storeFile path=${sf} exists=${sf.exists()}"
+                println "DEBUG storePassword length=${RELEASE_STORE_PASSWORD.length()}"
+                println "DEBUG keyAlias=[${RELEASE_KEY_ALIAS}] length=${RELEASE_KEY_ALIAS.length()}"
+                println "DEBUG keyPassword length=${RELEASE_KEY_PASSWORD.length()}"
+            }
             if (project.hasProperty('RELEASE_STORE_FILE')) {
                 storeFile file(RELEASE_STORE_FILE)
                 storePassword RELEASE_STORE_PASSWORD
