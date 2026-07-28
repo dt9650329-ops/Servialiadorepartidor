@@ -3799,7 +3799,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     backgroundTitle: "Repartidor activo",
                     requestPermissions: true,
                     stale: false,
-                    distanceFilter: 20
+                    distanceFilter: 0 // 🧪 PRUEBA: reporta constantemente sin importar movimiento
                 },
                 (location, error) => {
                     if (error) {
