@@ -3757,64 +3757,64 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // ========================================
     // 🔥 SISTEMA GPS OPTIMIZADO (15 SEGUNDOS)
     // ========================================
-    function iniciarBackgroundGeolocation() {
-        if (backgroundGeoInterval) {
-            clearInterval(backgroundGeoInterval);
-        }
-        // 🔥 OPTIMIZACIÓN: De 3s a 15s
-        backgroundGeoInterval = setInterval(async () => {
-            if (!repartidorUID) return;
-            try {
-                const position = await new Promise((resolve, reject) => {
-                    navigator.geolocation.getCurrentPosition(
-                        resolve,
-                        reject,
-                        {
-                            enableHighAccuracy: true,
-                            timeout: 8000,
-                            maximumAge: 0
-                        }
-                    );
-                });
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
-                const accuracy = position.coords.accuracy;
-                const speed = position.coords.speed || 0;
-                const heading = position.coords.heading || 0;
-                const timestamp = Date.now();
-                const googleMapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
-                const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
-                await update(userStatusRef, {
-                    ubicacion: {
-                        lat: parseFloat(lat.toFixed(6)),
-                        lng: parseFloat(lon.toFixed(6))
-                    },
-                    ubicacionActual: {
-                        lat: parseFloat(lat.toFixed(6)),
-                        lng: parseFloat(lon.toFixed(6)),
-                        accuracy: Math.round(accuracy),
-                        speed: Math.round(speed * 3.6),
-                        heading: Math.round(heading),
-                        timestamp: timestamp
-                    },
-                    ubicacionUrl: googleMapsUrl,
-                    trackingActivo: true,
-                    lastSeen: timestamp,
-                    online: true,
-                    backgroundMode: isBackgroundMode
-                });
-                console.log(`📍 BG GPS: ${lat.toFixed(6)}, ${lon.toFixed(6)} [${isBackgroundMode ? 'BACKGROUND' : 'FOREGROUND'}] [15s]`);
-            } catch (error) {
-                console.warn('⚠️ Error en background GPS:', error.message);
+    let bgGeoWatcherId = null;
+    async function iniciarBackgroundGeolocation() {
+        try {
+            const BackgroundGeolocation = window.Capacitor && window.Capacitor.Plugins
+                ? window.Capacitor.Plugins.BackgroundGeolocation
+                : null;
+            if (!BackgroundGeolocation) {
+                console.warn('⚠️ Plugin BackgroundGeolocation no disponible (¿estás en navegador web?)');
+                return;
             }
-        }, 20000); // 🔥 20 SEGUNDOS (optimizado)
-        console.log('✅ Background Geolocation iniciado (cada 20s - optimizado)');
+            if (bgGeoWatcherId) {
+                console.log('⚠️ Background Geolocation nativo ya está activo');
+                return;
+            }
+            bgGeoWatcherId = await BackgroundGeolocation.addWatcher(
+                {
+                    backgroundMessage: "Servi Aliados está siguiendo tu ubicación",
+                    backgroundTitle: "Repartidor activo",
+                    requestPermissions: true,
+                    stale: false,
+                    distanceFilter: 20
+                },
+                (location, error) => {
+                    if (error) {
+                        console.warn('⚠️ Error en background GPS nativo:', error.message);
+                        if (error.code === 'NOT_AUTHORIZED') {
+                            detenerBackgroundGeolocation();
+                        }
+                        return;
+                    }
+                    if (!location || !repartidorUID) return;
+                    const lat = location.latitude;
+                    const lon = location.longitude;
+                    const accuracy = location.accuracy || 0;
+                    const speed = location.speed || 0;
+                    const heading = location.bearing || 0;
+                    console.log(`📍 BG GPS nativo: ${lat.toFixed(6)}, ${lon.toFixed(6)} [${isBackgroundMode ? 'BACKGROUND' : 'FOREGROUND'}]`);
+                    enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading);
+                    enviarUbicacionDirecta(lat, lon, accuracy, speed, heading);
+                }
+            );
+            console.log('✅ Background Geolocation nativo iniciado (sobrevive app cerrada/minimizada)');
+        } catch (error) {
+            console.error('❌ Error iniciando Background Geolocation nativo:', error);
+        }
     }
-    function detenerBackgroundGeolocation() {
-        if (backgroundGeoInterval) {
-            clearInterval(backgroundGeoInterval);
-            backgroundGeoInterval = null;
-            console.log('🛑 Background Geolocation detenido');
+    async function detenerBackgroundGeolocation() {
+        try {
+            const BackgroundGeolocation = window.Capacitor && window.Capacitor.Plugins
+                ? window.Capacitor.Plugins.BackgroundGeolocation
+                : null;
+            if (BackgroundGeolocation && bgGeoWatcherId) {
+                await BackgroundGeolocation.removeWatcher({ id: bgGeoWatcherId });
+                bgGeoWatcherId = null;
+                console.log('🛑 Background Geolocation nativo detenido');
+            }
+        } catch (error) {
+            console.warn('⚠️ Error deteniendo Background Geolocation nativo:', error);
         }
     }
     function iniciarEnvioUbicacionPeriodicoDirecto() {
@@ -6470,7 +6470,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // — Google Sign-In —
     document.getElementById('googleSignInBtn').addEventListener('click', async () => {
       const errDiv = document.getElementById('loginError');
-      const esCapacitor = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+      const esCapacitor = !!(window.Capacitor);
       if (esCapacitor) {
         try {
           const FirebaseAuthentication = window.Capacitor?.Plugins?.FirebaseAuthentication;
@@ -6486,8 +6486,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
           console.log('✅Inicio de sesión con Google exitoso');
         } catch (error) {
           console.error('❌Error Google Sign-In (nativo/Capacitor):', error);
-          if (errDiv) errDiv.textContent = 'Error: ' + (error.message || error.code);
+          if (errDiv) errDiv.textContent = 'Error al iniciar con Google: ' + (error.message || error.code);
         }
+        // 🔒 IMPORTANTE: dentro de Capacitor/APK NUNCA se intenta el flujo web
+        // (signInWithPopup/signInWithRedirect), porque Google lo bloquea dentro
+        // de WebViews embebidos y provoca la pantalla en blanco / crash.
         return;
       }
       const provider = new GoogleAuthProvider();
