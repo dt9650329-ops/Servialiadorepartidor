@@ -49,18 +49,6 @@ jobs:
           keytool -list -v -keystore app/servi-aliados-repartidor.keystore -storepass "${{ secrets.KEYSTORE_PASSWORD }}" -alias "${{ secrets.KEY_ALIAS }}" || echo "FALLO AL LEER KEYSTORE CON ESA PASSWORD/ALIAS"
           echo "--- Verificando APK generado ---"
           keytool -printcert -jarfile app/build/outputs/apk/release/app-release.apk || echo "APK NO FIRMADO"
-          echo "--- Verificando firma v2/v3 (esquema moderno) ---"
-          APKSIGNER=$(find $ANDROID_HOME -name "apksigner" 2>/dev/null | head -1)
-          if [ -n "$APKSIGNER" ]; then
-            echo "Usando apksigner: $APKSIGNER"
-            "$APKSIGNER" verify --print-certs app/build/outputs/apk/release/app-release.apk || echo "APKSIGNER: NO VERIFICO"
-          else
-            echo "apksigner no encontrado, buscando bloque de firma v2 manualmente"
-            python3 -c "
-          data = open('app/build/outputs/apk/release/app-release.apk','rb').read()
-          print('APK Sig Block 42 encontrado:', b'APK Sig Block 42' in data[-2000000:])
-"
-          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
