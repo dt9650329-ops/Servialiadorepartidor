@@ -57,8 +57,8 @@ jobs:
           else
             echo "apksigner no encontrado, buscando bloque de firma v2 manualmente"
             python3 -c "
-data = open('app/build/outputs/apk/release/app-release.apk','rb').read()
-print('APK Sig Block 42 encontrado:', b'APK Sig Block 42' in data[-2000000:])
+          data = open('app/build/outputs/apk/release/app-release.apk','rb').read()
+          print('APK Sig Block 42 encontrado:', b'APK Sig Block 42' in data[-2000000:])
 "
           fi
 
