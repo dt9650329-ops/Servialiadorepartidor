@@ -3315,6 +3315,12 @@ function _fechaHoyColombia() {
         modal.classList.remove('show');
         let todosOtorgados = true;
         // Permiso de UBICACIÓN
+        // 🔧 FIX: navigator.geolocation (API web) NO es confiable para reflejar
+        // el permiso real de Android dentro de un WebView de Capacitor, y NUNCA
+        // puede confirmar el permiso de background ("todo el tiempo"). Por eso
+        // ya no bloqueamos el arranque del GPS si este chequeo falla: dejamos
+        // que sea el plugin nativo BackgroundGeolocation (que sí sabe pedir el
+        // permiso real de Android) el que decida, dentro de iniciarBackgroundGeolocation().
         try {
             const position = await new Promise((resolve, reject) => {
                 navigator.geolocation.getCurrentPosition(
@@ -3328,19 +3334,11 @@ function _fechaHoyColombia() {
                 );
             });
             permisosUbicacionOtorgado = true;
-            console.log('✅ Permiso de UBICACIÓN concedido');
+            console.log('✅ Permiso de UBICACIÓN concedido (chequeo web)');
             console.log(`📍 Ubicación: ${position.coords.latitude}, ${position.coords.longitude}`);
         } catch (error) {
-            todosOtorgados = false;
-            permisosUbicacionOtorgado = false;
-            console.error('❌ Permiso de UBICACIÓN denegado:', error);
-            alert('⚠️ IMPORTANTE: Permiso de ubicación denegado.\n\n' +
-                  'Sin este permiso NO podrás recibir pedidos.\n\n' +
-                  'Para activarlo:\n' +
-                  '1. Ve a Configuración de Android\n' +
-                  '2. Aplicaciones → Servi Aliados\n' +
-                  '3. Permisos → Ubicación\n' +
-                  '4. Selecciona "Permitir TODO EL TIEMPO"');
+            console.warn('⚠️ Chequeo web de ubicación no concluyente, se intentará con el plugin nativo:', error.message);
+            permisosUbicacionOtorgado = true; // optimista: el plugin nativo decide de verdad
         }
         // Permiso de CÁMARA
         try {
@@ -3783,6 +3781,14 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     if (error) {
                         console.warn('⚠️ Error en background GPS nativo:', error.message);
                         if (error.code === 'NOT_AUTHORIZED') {
+                            permisosUbicacionOtorgado = false;
+                            alert('⚠️ IMPORTANTE: Permiso de ubicación denegado.\n\n' +
+                                  'Sin este permiso NO podrás recibir pedidos.\n\n' +
+                                  'Para activarlo:\n' +
+                                  '1. Ve a Configuración de Android\n' +
+                                  '2. Aplicaciones → Servi Aliados\n' +
+                                  '3. Permisos → Ubicación\n' +
+                                  '4. Selecciona "Permitir TODO EL TIEMPO"');
                             detenerBackgroundGeolocation();
                         }
                         return;
