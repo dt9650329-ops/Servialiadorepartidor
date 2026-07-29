@@ -1541,6 +1541,9 @@
             <span class="item-icon">💬</span> Chat Admin
             <span class="item-badge" id="menuChatBadge" style="display:none;">!</span>
         </button>
+        <button class="side-menu-item" id="menuServibotBtn" onclick="navegarA('servibot')">
+            <span class="item-icon">🤖</span> ServiBot
+        </button>
         <button class="side-menu-item" id="menuPendientesBtn" onclick="navegarA('pendientes')">
             <span class="item-icon">📦</span> Pedidos Pendientes
             <span class="item-badge" id="menuPendientesBadge" style="display:none;">!</span>
@@ -1673,6 +1676,19 @@
             <div style="display: flex; gap: 10px; margin-top: 10px;">
                 <input type="text" id="mensajeInput" placeholder="Escribe un mensaje..." style="flex-grow: 1; background: #1e3a52; color: white; border: 1px solid #2a4a65; padding: 10px; border-radius: 5px;">
                 <button id="enviarBtn" style="background: var(--color-primary); color: var(--color-background); border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">Enviar</button>
+            </div>
+        </div>
+    </div>
+        <!-- ╔═══════════════════════════════════════════════════════╗
+         ║ SECCIÓN: SERVIBOT (asistente IA del repartidor)          ║
+         ╚═══════════════════════════════════════════════════════╝ -->
+    <div id="servibotSection" style="display:none;">
+        <h3 style="color: var(--color-secondary); padding: 16px 16px 4px;">🤖 ServiBot</h3>
+        <div class="chat-box">
+            <div class="mensajes-area" id="servibotBox">¡Hola! Soy ServiBot 🤖 ¿En qué te ayudo?</div>
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <input type="text" id="servibotInput" placeholder="Escribe tu mensaje..." style="flex-grow: 1; background: #1e3a52; color: white; border: 1px solid #2a4a65; padding: 10px; border-radius: 5px;">
+                <button id="servibotSendBtn" style="background: var(--color-primary); color: var(--color-background); border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold;">Enviar</button>
             </div>
         </div>
     </div>
@@ -2024,6 +2040,7 @@
     import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithRedirect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-02] CONFIGURACIÓN FIREBASE                          │
     // └─────────────────────────────────────────────────────────┘
@@ -2038,6 +2055,8 @@
     };
     const app = initializeApp(firebaseConfig, 'servi-repartidor');
     const db = getDatabase(app);
+    const functionsInstance = getFunctions(app);
+    const repartidorBotChatFn = httpsCallable(functionsInstance, 'repartidorBotChat');
 
 // ─────────────────────────────────────────────────────────────
 // Fecha local Colombia (UTC-5). Reemplaza toISOString().slice(0,10)
@@ -2124,17 +2143,17 @@ function _fechaHoyColombia() {
 
     // ── FUNCIÓN CENTRAL DE NAVEGACIÓN ──
     window.navegarA = function(seccion) {
-        const secciones = ['chatSection','pendientesSection','asignadosSection','historialSection','perfilSection','estadoCuentaSection'];
+        const secciones = ['chatSection','pendientesSection','asignadosSection','historialSection','perfilSection','estadoCuentaSection','servibotSection'];
         secciones.forEach(s => {
             const el = document.getElementById(s);
             if (el) el.style.display = 'none';
         });
-        const mapa = { chat:'chatSection', pendientes:'pendientesSection', asignados:'asignadosSection', historial:'historialSection', perfil:'perfilSection', estadoCuenta:'estadoCuentaSection' };
+        const mapa = { chat:'chatSection', pendientes:'pendientesSection', asignados:'asignadosSection', historial:'historialSection', perfil:'perfilSection', estadoCuenta:'estadoCuentaSection', servibot:'servibotSection' };
         const target = document.getElementById(mapa[seccion]);
         if (target) target.style.display = 'block';
         // Marcar activo en menú
         document.querySelectorAll('.side-menu-item').forEach(b => b.classList.remove('active'));
-        const btnMap = { chat:'menuChatBtn', pendientes:'menuPendientesBtn', asignados:'menuAsignadosBtn', historial:'menuHistorialBtn', perfil:'menuPerfilBtn', estadoCuenta:'menuEstadoCuentaBtn' };
+        const btnMap = { chat:'menuChatBtn', pendientes:'menuPendientesBtn', asignados:'menuAsignadosBtn', historial:'menuHistorialBtn', perfil:'menuPerfilBtn', estadoCuenta:'menuEstadoCuentaBtn', servibot:'menuServibotBtn' };
         const activeBtn = document.getElementById(btnMap[seccion]);
         if (activeBtn) activeBtn.classList.add('active');
         // Si es asignados, disparar el listener original
@@ -7864,6 +7883,64 @@ window.repEscucharNotificaciones = function(uid) {
     } catch(e) { console.warn('No se pudo retomar escucha de fin de apoyo', e); }
   })();
 };
+
+// ── SERVIBOT DEL REPARTIDOR ──
+let servibotHistorial = [];
+let servibotEnviando = false;
+
+function servibotRenderMensaje(texto, rol) {
+    const box = document.getElementById('servibotBox');
+    if (!box) return;
+    const p = document.createElement('div');
+    p.style.margin = '8px 0';
+    p.style.padding = '8px 12px';
+    p.style.borderRadius = '10px';
+    p.style.maxWidth = '85%';
+    p.style.whiteSpace = 'pre-wrap';
+    if (rol === 'user') {
+        p.style.background = 'var(--color-primary)';
+        p.style.color = 'var(--color-background)';
+        p.style.marginLeft = 'auto';
+        p.style.fontWeight = 'bold';
+    } else {
+        p.style.background = '#1e3a52';
+        p.style.color = 'white';
+    }
+    p.textContent = texto;
+    box.appendChild(p);
+    box.scrollTop = box.scrollHeight;
+}
+
+async function servibotEnviarMensaje() {
+    const input = document.getElementById('servibotInput');
+    const mensaje = (input?.value || '').trim();
+    if (!mensaje || servibotEnviando) return;
+    input.value = '';
+    servibotRenderMensaje(mensaje, 'user');
+    servibotEnviando = true;
+    try {
+        const resp = await repartidorBotChatFn({ mensaje, historial: servibotHistorial });
+        const respuesta = resp.data?.respuesta || 'No pude responder, intenta de nuevo.';
+        servibotRenderMensaje(respuesta, 'model');
+        servibotHistorial.push({ role: 'user', content: mensaje });
+        servibotHistorial.push({ role: 'model', content: respuesta });
+        if (servibotHistorial.length > 20) servibotHistorial = servibotHistorial.slice(-20);
+    } catch (e) {
+        console.error('Error ServiBot repartidor:', e);
+        servibotRenderMensaje('Hubo un error al conectar con ServiBot. Intenta de nuevo.', 'model');
+    } finally {
+        servibotEnviando = false;
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('servibotSendBtn');
+    const input = document.getElementById('servibotInput');
+    if (btn) btn.addEventListener('click', servibotEnviarMensaje);
+    if (input) input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') servibotEnviarMensaje();
+    });
+});
 </script>
 </body>
 </html>
