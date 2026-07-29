@@ -19,6 +19,5 @@
     "@capacitor/core": "^8.4.2",
     "@capacitor/local-notifications": "^8.0.0",
     "@capgo/capacitor-audio-recorder": "^8.2.1"
-    "@capacitor-community/background-geolocation": "^0.3.10"
   }
 }
