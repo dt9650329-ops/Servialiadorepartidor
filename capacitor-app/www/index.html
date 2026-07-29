@@ -2057,6 +2057,10 @@
     const db = getDatabase(app);
     const functionsInstance = getFunctions(app);
     const repartidorBotChatFn = httpsCallable(functionsInstance, 'repartidorBotChat');
+    // Expuesta en window porque este <script type="module"> tiene scope aislado
+    // y servibotEnviarMensaje() vive en un <script> normal más abajo que no
+    // puede ver variables `const`/`let` declaradas dentro de un módulo.
+    window.repartidorBotChatFn = repartidorBotChatFn;
 
 // ─────────────────────────────────────────────────────────────
 // Fecha local Colombia (UTC-5). Reemplaza toISOString().slice(0,10)
@@ -7919,7 +7923,7 @@ async function servibotEnviarMensaje() {
     servibotRenderMensaje(mensaje, 'user');
     servibotEnviando = true;
     try {
-        const resp = await repartidorBotChatFn({ mensaje, historial: servibotHistorial });
+        const resp = await window.repartidorBotChatFn({ mensaje, historial: servibotHistorial });
         const respuesta = resp.data?.respuesta || 'No pude responder, intenta de nuevo.';
         servibotRenderMensaje(respuesta, 'model');
         servibotHistorial.push({ role: 'user', content: mensaje });
