@@ -2116,10 +2116,17 @@ function _fechaHoyColombia() {
                 <p style="color:#aaa;font-size:11px;margin:4px 0 0;">📷 El cliente envió estos datos como foto — toca para ampliar</p>
             </div>`;
         }
+        // FIX UBICACIÓN GPS: si el pedido trae coordenadas exactas de entrega
+        // (marcadas por el cliente en el mapeador/GPS), mostrar un enlace directo
+        // a Google Maps en vez de dejar solo el texto "GPS: lat,lng" sin acción.
+        const gpsDestino = pedido.gpsDestino || null;
+        const linkMapa = (gpsDestino && gpsDestino.lat && gpsDestino.lng)
+            ? `<br><a href="https://www.google.com/maps?q=${gpsDestino.lat},${gpsDestino.lng}" target="_blank" style="color:#4A9EFF;font-size:11px;">🗺️ Abrir ubicación exacta en Google Maps</a>`
+            : '';
         return `
             👤 ${sanitizarHTML(nombre || '—')}<br>
             📍 ${sanitizarHTML(direccion || '—')}<br>
-            📞 ${sanitizarHTML(telefono || '—')}`;
+            📞 ${sanitizarHTML(telefono || '—')}${linkMapa}`;
     }
 
     // ✅ SEGURIDAD: Llamar al backend con autenticación
@@ -2969,11 +2976,23 @@ function _fechaHoyColombia() {
         if (_geocodificandoBarrio[pedidoId]) return;
         const barrioEntrega = info.barrio || info.barrioEntrega || '';
         const zonaEntrega   = info.zona   || info.zonaEntrega   || '';
-        if (!barrioEntrega) return;
-        if (marcadoresEntregaPedido[pedidoId] && marcadoresEntregaPedido[pedidoId]._barrioKey === barrioEntrega) return;
-        _geocodificandoBarrio[pedidoId] = true;
-        const coords = await _geocodificarBarrio(barrioEntrega);
-        _geocodificandoBarrio[pedidoId] = false;
+        // FIX UBICACIÓN GPS: si el cliente marcó el punto en el mapeador (o usó GPS),
+        // el pedido trae gpsDestino {lat,lng} aunque no haya barrio de texto. Antes
+        // esta función se salía aquí mismo y nunca se colocaba el pin.
+        const gpsDestino = info.gpsDestino || null;
+        const etiquetaEntrega = barrioEntrega || (gpsDestino ? 'Ubicación GPS del cliente' : '');
+        if (!barrioEntrega && !gpsDestino) return;
+        const claveActual = barrioEntrega || `gps:${gpsDestino.lat.toFixed(5)},${gpsDestino.lng.toFixed(5)}`;
+        if (marcadoresEntregaPedido[pedidoId] && marcadoresEntregaPedido[pedidoId]._barrioKey === claveActual) return;
+        let coords = null;
+        if (gpsDestino && gpsDestino.lat && gpsDestino.lng) {
+            // Coordenadas exactas del cliente: no hace falta geocodificar
+            coords = { lat: parseFloat(gpsDestino.lat), lng: parseFloat(gpsDestino.lng) };
+        } else {
+            _geocodificandoBarrio[pedidoId] = true;
+            coords = await _geocodificarBarrio(barrioEntrega);
+            _geocodificandoBarrio[pedidoId] = false;
+        }
         if (!coords || !mapaCliente) return;
         if (marcadoresEntregaPedido[pedidoId]) mapaCliente.removeLayer(marcadoresEntregaPedido[pedidoId]);
         const zonaColor = ZONA_COLORES[(zonaEntrega||'').toUpperCase()] || '#2980b9';
@@ -2989,21 +3008,22 @@ function _fechaHoyColombia() {
             }),
             zIndexOffset: 900
         }).addTo(mapaCliente);
-        pinEnt._barrioKey = barrioEntrega;
+        pinEnt._barrioKey = claveActual;
         pinEnt.bindTooltip(
-            `🏠 <b style="color:#4A9EFF;">${barrioEntrega}</b>${zonaSpan}<br><span style="font-size:10px;color:#ccc;">Destino de entrega</span>`,
+            `🏠 <b style="color:#4A9EFF;">${etiquetaEntrega}</b>${zonaSpan}<br><span style="font-size:10px;color:#ccc;">Destino de entrega</span>`,
             { permanent: true, direction: 'top', offset: [0, -22], className: 'leaflet-tooltip-barrio' }
         );
         pinEnt.bindPopup(
-            `<b>🏠 Destino de entrega</b><br><b style="color:#4A9EFF;">${barrioEntrega}</b>`
+            `<b>🏠 Destino de entrega</b><br><b style="color:#4A9EFF;">${etiquetaEntrega}</b>`
             + (zonaEntrega ? ` <span style="background:${zonaColor};color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;">${zonaEntrega}</span>` : '')
             + (info.desc ? `<br><span style="font-size:11px;color:#aaa;">${info.desc}</span>` : '')
+            + `<br><a href="https://www.google.com/maps?q=${coords.lat},${coords.lng}" target="_blank" style="color:#4A9EFF;font-size:11px;">📍 Ver en Google Maps</a>`
         );
         marcadoresEntregaPedido[pedidoId] = pinEnt;
         // Compat. legacy: primer pin también va al dict por clienteID
         const cid = info.clienteID;
         if (cid && !marcadoresEntrega[cid]) marcadoresEntrega[cid] = pinEnt;
-        console.log(`[MAPA] ✅ Pin entrega (pid=${pedidoId.slice(-6)}) en ${coords.lat},${coords.lng} (${barrioEntrega})`);
+        console.log(`[MAPA] ✅ Pin entrega (pid=${pedidoId.slice(-6)}) en ${coords.lat},${coords.lng} (${etiquetaEntrega})`);
         _ajustarZoomTodos();
     }
 
@@ -3013,11 +3033,21 @@ function _fechaHoyColombia() {
         if (_geocodificandoRecogida[pedidoId]) return;
         const barrioRecogida = info.barrioRecogida || '';
         const zonaRecogida   = info.zonaRecogida   || '';
-        if (!barrioRecogida) return;
-        if (marcadoresRecogidaPedido[pedidoId] && marcadoresRecogidaPedido[pedidoId]._barrioKey === barrioRecogida) return;
-        _geocodificandoRecogida[pedidoId] = true;
-        const coords = await _geocodificarBarrio(barrioRecogida);
-        _geocodificandoRecogida[pedidoId] = false;
+        // FIX UBICACIÓN GPS: usar coordenadas exactas si el cliente marcó el punto
+        // de recogida en el mapeador/GPS (antes se salía aquí y no se colocaba pin).
+        const gpsRecogida = info.gpsRecogida || null;
+        const etiquetaRecogida = barrioRecogida || (gpsRecogida ? 'Ubicación GPS del cliente' : '');
+        if (!barrioRecogida && !gpsRecogida) return;
+        const claveActual = barrioRecogida || `gps:${gpsRecogida.lat.toFixed(5)},${gpsRecogida.lng.toFixed(5)}`;
+        if (marcadoresRecogidaPedido[pedidoId] && marcadoresRecogidaPedido[pedidoId]._barrioKey === claveActual) return;
+        let coords = null;
+        if (gpsRecogida && gpsRecogida.lat && gpsRecogida.lng) {
+            coords = { lat: parseFloat(gpsRecogida.lat), lng: parseFloat(gpsRecogida.lng) };
+        } else {
+            _geocodificandoRecogida[pedidoId] = true;
+            coords = await _geocodificarBarrio(barrioRecogida);
+            _geocodificandoRecogida[pedidoId] = false;
+        }
         if (!coords || !mapaCliente) return;
         if (marcadoresRecogidaPedido[pedidoId]) mapaCliente.removeLayer(marcadoresRecogidaPedido[pedidoId]);
         const zonaColor = ZONA_COLORES[(zonaRecogida||'').toUpperCase()] || '#E08B00';
@@ -3033,21 +3063,22 @@ function _fechaHoyColombia() {
             }),
             zIndexOffset: 850
         }).addTo(mapaCliente);
-        pinRec._barrioKey = barrioRecogida;
+        pinRec._barrioKey = claveActual;
         pinRec.bindTooltip(
-            `📦 <b style="color:#F59E0B;">${barrioRecogida}</b>${zonaSpan}<br><span style="font-size:10px;color:#ccc;">Punto de recogida</span>`,
+            `📦 <b style="color:#F59E0B;">${etiquetaRecogida}</b>${zonaSpan}<br><span style="font-size:10px;color:#ccc;">Punto de recogida</span>`,
             { permanent: true, direction: 'top', offset: [0, -22], className: 'leaflet-tooltip-barrio' }
         );
         pinRec.bindPopup(
-            `<b>📦 Punto de recogida</b><br><b style="color:#F59E0B;">${barrioRecogida}</b>`
+            `<b>📦 Punto de recogida</b><br><b style="color:#F59E0B;">${etiquetaRecogida}</b>`
             + (zonaRecogida ? ` <span style="background:${zonaColor};color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;">${zonaRecogida}</span>` : '')
             + (info.desc ? `<br><span style="font-size:11px;color:#aaa;">${info.desc}</span>` : '')
+            + `<br><a href="https://www.google.com/maps?q=${coords.lat},${coords.lng}" target="_blank" style="color:#F59E0B;font-size:11px;">📍 Ver en Google Maps</a>`
         );
         marcadoresRecogidaPedido[pedidoId] = pinRec;
         // Compat. legacy
         const cid = info.clienteID;
         if (cid && !marcadoresRecogida[cid]) marcadoresRecogida[cid] = pinRec;
-        console.log(`[MAPA] ✅ Pin recogida (pid=${pedidoId.slice(-6)}) en ${coords.lat},${coords.lng} (${barrioRecogida})`);
+        console.log(`[MAPA] ✅ Pin recogida (pid=${pedidoId.slice(-6)}) en ${coords.lat},${coords.lng} (${etiquetaRecogida})`);
         _ajustarZoomTodos();
     }
 
@@ -4726,7 +4757,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                                 barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
                                 zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                                 barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
-                                zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
+                                zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                                gpsDestino: pedido.gpsDestino || null,
+                                gpsRecogida: pedido.gpsRecogida || null
                             });
                         }
                     }
@@ -4763,7 +4796,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                                     barrio: p.barrioEntrega || p.barrio_entrega || p.barrioDestino || '',
                                     zona: p.zonaEntrega || p.zona_entrega || p.zona || '',
                                     barrioRecogida: p.barrioRecogida || p.barrio_recogida || p.barrioOrigen || '',
-                                    zonaRecogida: p.zonaRecogida || p.zona_recogida || ''
+                                    zonaRecogida: p.zonaRecogida || p.zona_recogida || '',
+                                    gpsDestino: p.gpsDestino || null,
+                                    gpsRecogida: p.gpsRecogida || null
                                 });
                             }
                         }
@@ -5028,7 +5063,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
                             zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                             barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
-                            zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
+                            zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                            gpsDestino: pedido.gpsDestino || null,
+                            gpsRecogida: pedido.gpsRecogida || null
                         });
                         iniciarEnvioUbicacionRepartidor();
                     }, 500);
@@ -5114,7 +5151,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
                             zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                             barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
-                            zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
+                            zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                            gpsDestino: pedido.gpsDestino || null,
+                            gpsRecogida: pedido.gpsRecogida || null
                         });
                         iniciarEnvioUbicacionRepartidor();
                     }, 500);
@@ -6472,7 +6511,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                                 barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
                                 zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                                 barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
-                                zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
+                                zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                                gpsDestino: pedido.gpsDestino || null,
+                                gpsRecogida: pedido.gpsRecogida || null
                             });
                         });
                         iniciarEnvioUbicacionRepartidor();
