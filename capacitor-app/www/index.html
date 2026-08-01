@@ -2222,6 +2222,13 @@ function _fechaHoyColombia() {
     let marcadorCliente = null;       // compat. legacy
     let marcadorRepartidor = null;
     let mapaYaAjustado = false; // Evita recentrar el mapa tras el primer ajuste
+ // FIX SEGUNDO PEDIDO SIN MOSTRAR: antes, una vez el mapa se ajustaba la
+ // primera vez, quedaba bloqueado para siempre — si aceptabas un segundo
+ // pedido después de eso, su pin SÍ se colocaba, pero la vista nunca se
+ // reajustaba para incluirlo (podía quedar fuera de lo que ves en pantalla).
+ // Este set guarda qué pedidos ya se tuvieron en cuenta en algún ajuste de
+ // zoom, para poder reabrir el ajuste solo cuando llega uno nuevo.
+ let _pedidosIncluidosEnZoom = new Set();
     let clienteUbicacionListener = null;  // compat. legacy
     let repartidorCoords = null;
     let clienteCoordsRepartidorApp = null;
@@ -2325,6 +2332,7 @@ function _fechaHoyColombia() {
         marcadorCliente = null;
         marcadorRepartidor = null;
         mapaYaAjustado = false; // Permitir reajuste al iniciar nuevo pedido
+        _pedidosIncluidosEnZoom = new Set();
     }
     
     try {
@@ -3164,7 +3172,16 @@ function _fechaHoyColombia() {
     // Ajustar zoom para ver repartidor + todos los clientes + pins de entrega
     function _ajustarZoomTodos() {
         if (!mapaCliente) return;
-        if (mapaYaAjustado) return; // No resetear si el usuario ya movió/hizo zoom
+
+        // ¿Hay algún pedido con pin en el mapa que todavía no se haya tenido en
+        // cuenta en un ajuste de zoom anterior? Si sí, forzamos un reajuste aunque
+        // el mapa ya se hubiera ajustado antes por otro pedido.
+        const idsConPin = new Set([...Object.keys(marcadoresEntregaPedido), ...Object.keys(marcadoresRecogidaPedido)]);
+        let hayPedidoNuevo = false;
+        idsConPin.forEach(pid => { if (!_pedidosIncluidosEnZoom.has(pid)) hayPedidoNuevo = true; });
+
+        if (mapaYaAjustado && !hayPedidoNuevo) return; // No resetear si el usuario ya movió/hizo zoom y no hay nada nuevo
+
         const puntos = [];
         if (repartidorCoords) puntos.push([repartidorCoords.lat, repartidorCoords.lng]);
         Object.values(coordsClientes).forEach(c => puntos.push([c.lat, c.lng]));
@@ -3176,6 +3193,7 @@ function _fechaHoyColombia() {
         Object.values(marcadoresRecogida).forEach(m => { const ll = m.getLatLng(); if (ll) puntos.push([ll.lat, ll.lng]); });
         if (puntos.length === 0) return;
         mapaYaAjustado = true;
+        idsConPin.forEach(pid => _pedidosIncluidosEnZoom.add(pid));
         if (puntos.length === 1) { mapaCliente.setView(puntos[0], 15); return; }
         mapaCliente.fitBounds(L.latLngBounds(puntos), { padding: [50, 50] });
     }
@@ -4746,10 +4764,18 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     mostrarPedidoAsignado(pedido, pedidoId, listaAsignados);
                     repEscucharChatCliente(pedidoId); // 🔔 Notificar mensajes del cliente
                     // 🔧 FIX: Iniciar seguimiento para TODOS los pedidos (sin filtro de listener)
-                    if (pedido.clienteUID) {
-                        if (!activePedidoData) activePedidoData = { pedidoId, clienteUID: pedido.clienteUID, estado: pedido.estado };
+                    // FIX MAPA/DISTANCIAS SEGÚN ORIGEN: los pedidos creados por ServiBot
+                    // ("pedido para tercero") guardan el ID del cliente como
+                    // clienteIdAsignado, no como clienteUID. Antes esta rama solo
+                    // miraba clienteUID, así que esos pedidos se mostraban en la
+                    // lista pero nunca activaban el mapa/seguimiento — y como ya
+                    // quedaban marcados como procesados, tampoco los recogía la
+                    // otra rama (la de pedidos_historial) que sí tenía el respaldo.
+                    const _cIdPend = pedido.clienteUID || pedido.clienteIdAsignado;
+                    if (_cIdPend) {
+                        if (!activePedidoData) activePedidoData = { pedidoId, clienteUID: _cIdPend, estado: pedido.estado };
                         if (document.getElementById('mapa-cliente-container').style.display !== 'none' && mapaCliente) {
-                            iniciarSeguimientoCliente(pedido.clienteUID, {
+                            iniciarSeguimientoCliente(_cIdPend, {
                                 pedidoId,
                                 tiempoAceptado: pedido.tiempoAceptado || Date.now(),
                                 desc: pedido.producto || pedido.descripcion || `Pedido #${pedidoId.slice(-6)}`,
