@@ -101,7 +101,7 @@
     <!-- 🛠️ ERUDA: consola de depuración activa -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
-    <title>Panel Repartidor - v1.8.1</title>
+    <title>Panel Repartidor - v1.0.0</title>
     <style>
         /* ┌─────────────────────────────────────────────────────────┐
    │ [CSS-01] VARIABLES GLOBALES (:root)                     │
@@ -2084,7 +2084,62 @@ function _fechaHoyColombia() {
     window.onValue = onValue;
     window.off = off;
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
-    const APP_VERSION = "1.8.1";
+    const APP_VERSION = "1.0.0";
+
+ // ============================================================
+ // CONTROL DE VERSIÓN OBLIGATORIA DEL REPARTIDOR (mismo mecanismo
+ // que el cliente, pero con sus propios campos en 'config' para no
+ // mezclarse con los del cliente):
+ // - config/versionMinimaRepartidor
+ // - config/urlDescargaApkRepartidor
+ // ============================================================
+ function _compararVersionesRep(a, b) {
+ const pa = a.split('.').map(Number);
+ const pb = b.split('.').map(Number);
+ for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+ const na = pa[i] || 0, nb = pb[i] || 0;
+ if (na < nb) return -1;
+ if (na > nb) return 1;
+ }
+ return 0;
+ }
+
+ function _mostrarBloqueoActualizacionRep(versionMinima, urlDescarga) {
+ if (document.getElementById('bloqueoActualizacionRepOverlay')) return;
+ const overlay = document.createElement('div');
+ overlay.id = 'bloqueoActualizacionRepOverlay';
+ overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(5,8,15,0.96);display:flex;align-items:center;justify-content:center;padding:24px;';
+ overlay.innerHTML = `
+ <div style="background:#131F36;border:1px solid #1A2845;border-radius:16px;padding:28px 24px;max-width:360px;width:100%;text-align:center;">
+ <div style="font-size:42px;margin-bottom:12px;">⚠️</div>
+ <h2 style="color:#E2E8F0;font-size:20px;margin:0 0 10px;">Actualización requerida</h2>
+ <p style="color:#94A3B8;font-size:14px;line-height:1.5;margin:0 0 6px;">
+ Tu versión (<strong>${APP_VERSION}</strong>) está desactualizada.
+ </p>
+ <p style="color:#94A3B8;font-size:14px;line-height:1.5;margin:0 0 20px;">
+ Necesitas la versión <strong>${versionMinima}</strong> o superior para seguir usando la app del repartidor.
+ </p>
+ <a href="${urlDescarga || '#'}" target="_blank" rel="noopener" style="display:block;background:#F59E0B;color:#0D1526;font-weight:700;padding:14px;border-radius:10px;text-decoration:none;font-size:15px;">
+ Descargar última versión
+ </a>
+ </div>`;
+ document.body.appendChild(overlay);
+ }
+
+ async function _verificarVersionObligatoriaRep() {
+ try {
+ const snap = await get(ref(db, 'config'));
+ if (!snap.exists()) return;
+ const cfg = snap.val();
+ const versionMinima = cfg.versionMinimaRepartidor;
+ if (versionMinima && _compararVersionesRep(APP_VERSION, versionMinima) < 0) {
+ _mostrarBloqueoActualizacionRep(versionMinima, cfg.urlDescargaApkRepartidor);
+ }
+ } catch (e) {
+ console.error('No se pudo verificar la versión mínima del repartidor:', e.message);
+ }
+ }
+ _verificarVersionObligatoriaRep();
 
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-03] SEGURIDAD (sanitizar, llamarBackend)            │
@@ -5080,7 +5135,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 setTimeout(() => {
                     document.getElementById('showAsignadosBtn').click();
                     document.getElementById('mapa-cliente-container').style.display = 'block';
+                    // FIX MAPA A MEDIAS: si el mapa ya existía (creado antes mientras
+                    // estaba oculto), Leaflet no recalcula solo el tamaño del
+                    // contenedor al volver a mostrarse — hay que decírselo a mano.
                     if (!mapaCliente) inicializarMapaCliente();
+                    else { setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 200); setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 600); }
                     setTimeout(() => {
                         iniciarSeguimientoCliente(clienteUID, {
                             pedidoId,
@@ -5169,6 +5228,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     document.getElementById('showAsignadosBtn').click();
                     document.getElementById('mapa-cliente-container').style.display = 'block';
                     if (!mapaCliente) inicializarMapaCliente();
+                    else { setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 200); setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 600); }
                     setTimeout(() => {
                         iniciarSeguimientoCliente(clienteId, {
                             pedidoId,
@@ -6526,6 +6586,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 if (todos.length > 0) {
                     document.getElementById('mapa-cliente-container').style.display = 'block';
                     if (!mapaCliente) inicializarMapaCliente();
+                    else { setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 200); setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 600); }
                     setTimeout(() => {
                         todos.forEach(({ clienteId, pedidoId, pedido }) => {
                             if (clientesVistos.has(clienteId)) return;
@@ -6548,6 +6609,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     // fallback legacy
                     document.getElementById('mapa-cliente-container').style.display = 'block';
                     if (!mapaCliente) inicializarMapaCliente();
+                    else { setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 200); setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 600); }
                     setTimeout(() => {
                         iniciarSeguimientoCliente(activePedidoData.clienteUID);
                         iniciarEnvioUbicacionRepartidor();
