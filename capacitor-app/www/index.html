@@ -253,6 +253,21 @@
         .rep-notif-item .rni-titulo { font-weight: bold; font-size: 13px; color: var(--color-primary); }
         .rep-notif-item .rni-msg { font-size: 13px; color: #ddd; margin-top: 3px; }
         .rep-notif-item .rni-hora { font-size: 11px; color: #888; margin-top: 4px; }
+        .rep-notif-item-urgente {
+          border-left: 3px solid #F59E0B; background: rgba(245,158,11,0.14);
+          animation: repNotifUrgentePulso 1s ease-in-out infinite;
+        }
+        @keyframes repNotifUrgentePulso {
+          0%, 100% { box-shadow: 0 0 0 rgba(245,158,11,0); }
+          50% { box-shadow: 0 0 10px rgba(245,158,11,0.55); }
+        }
+        .rep-notif-item-urgente .rni-titulo { color: #F59E0B; }
+        .rep-notif-item-urgente .rni-btn-ok {
+          display: block; width: 100%; margin-top: 8px; background: #F59E0B;
+          color: #1A0E0A; font-weight: 700; padding: 9px; border: none;
+          border-radius: 8px; font-size: 13px; cursor: pointer;
+        }
+        .rep-notif-item-urgente .rni-btn-ok:disabled { opacity: 0.6; }
         #repNotifClear {
           text-align: center; padding: 10px; border-top: 1px solid #333;
           color: var(--color-primary); font-size: 13px; cursor: pointer;
@@ -6996,15 +7011,18 @@ function repLimpiarNotif() {
   document.getElementById('repBellBadge').style.display = 'none';
 }
 
-function repAgregarNotif(titulo, mensaje) {
+function repAgregarNotif(titulo, mensaje, opts) {
   _repNotifItems.unshift({ titulo, mensaje, ts: Date.now() });
   const list = document.getElementById('repNotifList');
   const empty = document.getElementById('repNotifEmpty');
   if (empty) empty.remove();
+  const esUrgente = opts && opts.tipo === 'aviso_cliente_devolver' && opts.avisoKey;
   const item = document.createElement('div');
-  item.className = 'rep-notif-item';
+  item.className = esUrgente ? 'rep-notif-item rep-notif-item-urgente' : 'rep-notif-item';
   const hora = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-  item.innerHTML = `<div class="rni-titulo">${titulo}</div><div class="rni-msg">${mensaje}</div><div class="rni-hora">${hora}</div>`;
+  const btnId = esUrgente ? `repNotifOk_${opts.avisoKey}` : null;
+  item.innerHTML = `<div class="rni-titulo">${titulo}</div><div class="rni-msg">${mensaje}</div><div class="rni-hora">${hora}</div>`
+    + (esUrgente ? `<button class="rni-btn-ok" id="${btnId}">✅ Entendido, ya voy</button>` : '');
   list.insertBefore(item, list.firstChild);
   const badge = document.getElementById('repBellBadge');
   const panel = document.getElementById('repNotifPanel');
@@ -7013,6 +7031,39 @@ function repAgregarNotif(titulo, mensaje) {
     badge.style.display = 'flex';
   }
   try { reproducirNotificacion(); } catch(e) {}
+
+  if (esUrgente) {
+    // Abre el panel de notificaciones automáticamente y vibra fuerte hasta
+    // que el repartidor toque el botón OK — así no se pierde entre otras
+    // notificaciones normales de la campana.
+    if (!panel.classList.contains('open')) repToggleNotif();
+    _vibrarFuerteRepetido();
+    const btn = document.getElementById(btnId);
+    if (btn) {
+      btn.onclick = async () => {
+        btn.disabled = true;
+        btn.textContent = 'Confirmando...';
+        await _confirmarAvisoUrgenteBell(opts.avisoKey, opts.pedidoId);
+        _detenerVibracionAvisoUrgente();
+        item.classList.remove('rep-notif-item-urgente');
+        btn.remove();
+      };
+    }
+  }
+}
+
+// Marca el aviso como leído/confirmado en Firebase. El backend (Cloud
+// Function onAvisoRepartidorConfirmado) detecta este cambio y le avisa al
+// cliente por ServiBot que el repartidor ya vio el mensaje.
+async function _confirmarAvisoUrgenteBell(avisoKey, pedidoId) {
+  try {
+    if (avisoKey && window.currentRepartidorUID) {
+      await window.update(window.ref(window.db, `avisos_repartidor/${window.currentRepartidorUID}/${avisoKey}`), {
+        leido: true,
+        confirmadoTs: Date.now(),
+      });
+    }
+  } catch (e) { console.warn('No se pudo confirmar el aviso urgente', e); }
 }
 
 function repEscucharNotificaciones(uid) {
@@ -7103,7 +7154,14 @@ function _escucharAvisosUrgentesRepartidor(uid) {
     const a = snap.val();
     if (!a || a.leido) return;
     if ((a.timestamp || 0) < tsConexion) return;
-    _mostrarAvisoUrgenteRepartidor(a.mensaje || 'El cliente necesita avisarte algo, por favor contáctalo.', snap.key, a.pedidoId);
+    // Antes se mostraba con un modal de pantalla completa
+    // (_mostrarAvisoUrgenteRepartidor); ahora se muestra en la campana de
+    // notificaciones, con vibración hasta confirmar y botón "Entendido".
+    repAgregarNotif('⚠️ Aviso urgente del cliente', a.mensaje || 'El cliente necesita avisarte algo, por favor contáctalo.', {
+      tipo: 'aviso_cliente_devolver',
+      avisoKey: snap.key,
+      pedidoId: a.pedidoId,
+    });
   });
 }
 
