@@ -2052,7 +2052,7 @@
     // │ [JS-01] IMPORTS DE FIREBASE                             │
     // └─────────────────────────────────────────────────────────┘
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded, goOffline, goOnline } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithRedirect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
     import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
@@ -2099,6 +2099,8 @@ function _fechaHoyColombia() {
     window.onValue = onValue;
     window.off = off;
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
+    window.goOffline = () => goOffline(db);
+    window.goOnline = () => goOnline(db);
     const APP_VERSION = "1.0.0";
 
  // ============================================================
@@ -4316,6 +4318,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             if (isWakeLockSupported && wakeLock === null) {
                 await solicitarWakeLock();
             }
+            // 🔧 FIX 2026-08-04: en Android, el WebSocket de Realtime Database
+            // suele quedar "zombie" después de un rato en segundo plano — el
+            // SDK no lo detecta como caído y por eso los listeners en vivo
+            // (avisos_repartidor, pedidos nuevos, etc.) dejaban de recibir
+            // eventos hasta cerrar y reabrir la app por completo. Forzar un
+            // ciclo goOffline()/goOnline() al volver al primer plano obliga
+            // al SDK a reconectar el socket sin necesidad de reiniciar la app.
+            try {
+                goOffline(db);
+                setTimeout(() => goOnline(db), 300);
+            } catch (e) { console.warn('No se pudo forzar reconexión de Firebase', e); }
         }
     });
     // ========================================
@@ -7043,10 +7056,26 @@ function repAgregarNotif(titulo, mensaje, opts) {
       btn.onclick = async () => {
         btn.disabled = true;
         btn.textContent = 'Confirmando...';
-        await _confirmarAvisoUrgenteBell(opts.avisoKey, opts.pedidoId);
-        _detenerVibracionAvisoUrgente();
-        item.classList.remove('rep-notif-item-urgente');
-        btn.remove();
+        try {
+          // 🔧 FIX 2026-08-04: si la conexión de Firebase quedó "zombie"
+          // (mismo problema que obligaba a cerrar/reabrir la app), este
+          // update() podía quedarse esperando para siempre y el botón
+          // nunca se recuperaba. Con Promise.race, si no responde en 6s
+          // se fuerza una reconexión y se le avisa al repartidor en vez
+          // de dejarlo pegado en "Confirmando...".
+          await Promise.race([
+            _confirmarAvisoUrgenteBell(opts.avisoKey, opts.pedidoId),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000)),
+          ]);
+          _detenerVibracionAvisoUrgente();
+          item.classList.remove('rep-notif-item-urgente');
+          btn.remove();
+        } catch (e) {
+          console.warn('No se pudo confirmar el aviso a tiempo, reintentando conexión', e);
+          try { window.goOffline && window.goOffline(); setTimeout(() => window.goOnline && window.goOnline(), 300); } catch (e2) {}
+          btn.disabled = false;
+          btn.textContent = '⚠️ Reintentar';
+        }
       };
     }
   }
@@ -7093,14 +7122,22 @@ function repEscucharNotificaciones(uid) {
 let _avisoUrgenteVibrandoInterval = null;
 
 function _vibrarFuerteRepetido() {
-  if (!navigator.vibrate) return;
-  navigator.vibrate([500, 200, 500, 200, 500]);
+  const Haptics = window.Capacitor?.Plugins?.Haptics;
+  const vibrarUnaVez = () => {
+    if (Haptics && Haptics.vibrate) {
+      // Vibración nativa (Capacitor Haptics) — más confiable en Android
+      // que navigator.vibrate(), que en muchos WebView de Capacitor no
+      // está implementado y falla en silencio sin que se note el error.
+      Haptics.vibrate({ duration: 500 }).catch(() => {});
+    } else if (navigator.vibrate) {
+      navigator.vibrate([500, 200, 500, 200, 500]);
+    }
+  };
+  vibrarUnaVez();
   if (_avisoUrgenteVibrandoInterval) clearInterval(_avisoUrgenteVibrandoInterval);
   // Repite la vibración cada 4s hasta que el repartidor confirme el aviso,
   // así lo siente aunque tenga el celular en el bolsillo.
-  _avisoUrgenteVibrandoInterval = setInterval(() => {
-    navigator.vibrate([500, 200, 500, 200, 500]);
-  }, 4000);
+  _avisoUrgenteVibrandoInterval = setInterval(vibrarUnaVez, 4000);
 }
 
 function _detenerVibracionAvisoUrgente() {
