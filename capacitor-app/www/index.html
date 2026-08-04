@@ -101,7 +101,7 @@
     <!-- 🛠️ ERUDA: consola de depuración activa -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
-    <title>Panel Repartidor - v1.0.0</title>
+    <title>Panel Repartidor - v1.0.1</title>
     <style>
         /* ┌─────────────────────────────────────────────────────────┐
    │ [CSS-01] VARIABLES GLOBALES (:root)                     │
@@ -2101,7 +2101,7 @@ function _fechaHoyColombia() {
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
     window.goOffline = () => goOffline(db);
     window.goOnline = () => goOnline(db);
-    const APP_VERSION = "1.0.0";
+    const APP_VERSION = "1.0.1";
 
  // ============================================================
  // CONTROL DE VERSIÓN OBLIGATORIA DEL REPARTIDOR (mismo mecanismo
@@ -7229,12 +7229,16 @@ async function _inicializarPushFCMRepartidor(uid) {
     // el bug: el JS de arriba (_vibrarFuerteRepetido) solo corre si la app
     // está abierta en primer plano. El backend (Cloud Function enviarPush)
     // El backend (enviarPush en functions/index.js) ya manda
-    // android.notification.channelId = 'aviso_urgente_repartidor' para el
+    // android.notification.channelId = 'aviso_urgente_repartidor_v2' para el
     // tipo 'aviso_cliente_devolver' — el id de abajo debe calzar con ese.
+    // v1.0.1: se renombró de 'aviso_urgente_repartidor' a '..._v2' porque
+    // el canal viejo ya existía sin vibración en los celulares (los canales
+    // de Android son inmutables una vez creados) y crearlo de nuevo con el
+    // mismo id no cambiaba su configuración.
     if (FirebaseMessaging.createChannel) {
       try {
         await FirebaseMessaging.createChannel({
-          id: 'aviso_urgente_repartidor', // debe calzar EXACTO con el channelId que manda enviarPush() en el backend
+          id: 'aviso_urgente_repartidor_v2', // debe calzar EXACTO con el channelId que manda enviarPush() en el backend
           name: 'Avisos urgentes del cliente',
           description: 'Alertas que requieren atención inmediata del repartidor',
           importance: 5, // IMPORTANCE_HIGH: aparece como heads-up y vibra
@@ -7244,7 +7248,7 @@ async function _inicializarPushFCMRepartidor(uid) {
           lights: true,
           lightColor: '#F59E0B',
         });
-        console.log('✅ Canal de notificación "aviso_urgente_repartidor" creado/actualizado');
+        console.log('✅ Canal de notificación "aviso_urgente_repartidor_v2" creado/actualizado');
       } catch (e) { console.warn('No se pudo crear el canal de notificación', e); }
     }
 
