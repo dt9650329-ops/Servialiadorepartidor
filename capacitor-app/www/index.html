@@ -7223,6 +7223,30 @@ async function _inicializarPushFCMRepartidor(uid) {
       return;
     }
 
+    // Canal de notificación Android con vibración fuerte e importancia máxima.
+    // SIN ESTO, cuando la app está en segundo plano o cerrada (celular en el
+    // bolsillo) Android muestra el push en silencio, sin vibrar — este era
+    // el bug: el JS de arriba (_vibrarFuerteRepetido) solo corre si la app
+    // está abierta en primer plano. El backend (Cloud Function enviarPush)
+    // debe enviar el campo android.notification.channelId = 'avisos_urgentes'
+    // para que el push use este canal.
+    if (FirebaseMessaging.createChannel) {
+      try {
+        await FirebaseMessaging.createChannel({
+          id: 'avisos_urgentes',
+          name: 'Avisos urgentes del cliente',
+          description: 'Alertas que requieren atención inmediata del repartidor',
+          importance: 5, // IMPORTANCE_HIGH: aparece como heads-up y vibra
+          visibility: 1,
+          vibration: true,
+          vibrationPattern: [500, 200, 500, 200, 500],
+          lights: true,
+          lightColor: '#F59E0B',
+        });
+        console.log('✅ Canal de notificación "avisos_urgentes" creado/actualizado');
+      } catch (e) { console.warn('No se pudo crear el canal de notificación', e); }
+    }
+
     // Token inicial
     try {
       const { token } = await FirebaseMessaging.getToken();
