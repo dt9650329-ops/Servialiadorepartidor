@@ -7228,12 +7228,13 @@ async function _inicializarPushFCMRepartidor(uid) {
     // bolsillo) Android muestra el push en silencio, sin vibrar — este era
     // el bug: el JS de arriba (_vibrarFuerteRepetido) solo corre si la app
     // está abierta en primer plano. El backend (Cloud Function enviarPush)
-    // debe enviar el campo android.notification.channelId = 'avisos_urgentes'
-    // para que el push use este canal.
+    // El backend (enviarPush en functions/index.js) ya manda
+    // android.notification.channelId = 'aviso_urgente_repartidor' para el
+    // tipo 'aviso_cliente_devolver' — el id de abajo debe calzar con ese.
     if (FirebaseMessaging.createChannel) {
       try {
         await FirebaseMessaging.createChannel({
-          id: 'avisos_urgentes',
+          id: 'aviso_urgente_repartidor', // debe calzar EXACTO con el channelId que manda enviarPush() en el backend
           name: 'Avisos urgentes del cliente',
           description: 'Alertas que requieren atención inmediata del repartidor',
           importance: 5, // IMPORTANCE_HIGH: aparece como heads-up y vibra
@@ -7243,7 +7244,7 @@ async function _inicializarPushFCMRepartidor(uid) {
           lights: true,
           lightColor: '#F59E0B',
         });
-        console.log('✅ Canal de notificación "avisos_urgentes" creado/actualizado');
+        console.log('✅ Canal de notificación "aviso_urgente_repartidor" creado/actualizado');
       } catch (e) { console.warn('No se pudo crear el canal de notificación', e); }
     }
 
