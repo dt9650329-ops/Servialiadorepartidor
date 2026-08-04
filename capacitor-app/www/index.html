@@ -6932,6 +6932,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 // 🔔 Iniciar campana de notificaciones
 
      repEscucharNotificaciones(user.uid);
+                _inicializarPushFCMRepartidor(user.uid);
+                _escucharAvisosUrgentesRepartidor(user.uid);
                 (function _arrancarEscuchaSOS(uid) {
                     if (typeof window.iniciarEscuchaSOS === 'function') {
                         window.iniciarEscuchaSOS(uid);
@@ -7031,6 +7033,138 @@ function repEscucharNotificaciones(uid) {
     if (!n || (n.ts || 0) < _repNotifTsConexion) return;
     repAgregarNotif(n.titulo || '🔔 Notificación', n.mensaje || '');
   });
+}
+
+// ============================================================
+// AVISO URGENTE DEL CLIENTE (avisarRepartidorOlvido) — push +
+// modal bloqueante con vibración hasta que el repartidor confirme
+// ============================================================
+let _avisoUrgenteVibrandoInterval = null;
+
+function _vibrarFuerteRepetido() {
+  if (!navigator.vibrate) return;
+  navigator.vibrate([500, 200, 500, 200, 500]);
+  if (_avisoUrgenteVibrandoInterval) clearInterval(_avisoUrgenteVibrandoInterval);
+  // Repite la vibración cada 4s hasta que el repartidor confirme el aviso,
+  // así lo siente aunque tenga el celular en el bolsillo.
+  _avisoUrgenteVibrandoInterval = setInterval(() => {
+    navigator.vibrate([500, 200, 500, 200, 500]);
+  }, 4000);
+}
+
+function _detenerVibracionAvisoUrgente() {
+  if (_avisoUrgenteVibrandoInterval) {
+    clearInterval(_avisoUrgenteVibrandoInterval);
+    _avisoUrgenteVibrandoInterval = null;
+  }
+  if (navigator.vibrate) navigator.vibrate(0);
+}
+
+// Modal de pantalla completa que NO se puede cerrar tocando afuera —
+// solo desaparece cuando el repartidor toca "Entendido, ya voy".
+function _mostrarAvisoUrgenteRepartidor(mensaje, avisoKey, pedidoId) {
+  if (document.getElementById('avisoUrgenteOverlay')) return; // ya hay uno visible
+  _vibrarFuerteRepetido();
+  try { reproducirNotificacion && reproducirNotificacion(); } catch (e) {}
+
+  const overlay = document.createElement('div');
+  overlay.id = 'avisoUrgenteOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999999;background:rgba(120,20,10,0.97);display:flex;align-items:center;justify-content:center;padding:24px;';
+  overlay.innerHTML = `
+    <div style="background:#1A0E0A;border:2px solid #F59E0B;border-radius:16px;padding:28px 24px;max-width:360px;width:100%;text-align:center;">
+      <div style="font-size:48px;margin-bottom:12px;">⚠️</div>
+      <h2 style="color:#FFF7ED;font-size:19px;margin:0 0 12px;">Aviso urgente del cliente</h2>
+      <p style="color:#FDE3CF;font-size:15px;line-height:1.5;margin:0 0 22px;">${mensaje}</p>
+      <button id="btnAvisoUrgenteOK" style="display:block;width:100%;background:#F59E0B;color:#1A0E0A;font-weight:700;padding:14px;border:none;border-radius:10px;font-size:15px;cursor:pointer;">
+        Entendido, ya voy
+      </button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  document.getElementById('btnAvisoUrgenteOK').onclick = async () => {
+    _detenerVibracionAvisoUrgente();
+    overlay.remove();
+    try {
+      if (avisoKey && window.currentRepartidorUID) {
+        await window.update(window.ref(window.db, `avisos_repartidor/${window.currentRepartidorUID}/${avisoKey}`), { leido: true });
+      }
+    } catch (e) { console.warn('No se pudo marcar el aviso como leído', e); }
+  };
+}
+
+// Revisa avisos pendientes (leido:false) apenas el repartidor entra a la
+// app — cubre el caso en que el push no llegó (celular apagado, sin
+// permiso, etc.) pero el aviso sí quedó guardado en Firebase por el
+// backend (avisarRepartidorOlvido), así nunca se pierde.
+function _escucharAvisosUrgentesRepartidor(uid) {
+  if (!uid || !window.onChildAdded) return;
+  const tsConexion = Date.now() - 5 * 60 * 1000; // solo avisos de los últimos 5 min al conectarse
+  window.onChildAdded(window.ref(window.db, `avisos_repartidor/${uid}`), (snap) => {
+    const a = snap.val();
+    if (!a || a.leido) return;
+    if ((a.timestamp || 0) < tsConexion) return;
+    _mostrarAvisoUrgenteRepartidor(a.mensaje || 'El cliente necesita avisarte algo, por favor contáctalo.', snap.key, a.pedidoId);
+  });
+}
+
+// ── FCM (Capacitor Push Notifications) ──
+// Pide permiso, obtiene el token nativo y lo guarda en
+// usuarios/{uid}/fcmToken para que el backend (enviarPush) pueda
+// enviarle avisos push. SIN ESTO, avisarRepartidorOlvido nunca tiene
+// a quién mandarle la notificación — este era el bug raíz.
+async function _inicializarPushFCMRepartidor(uid) {
+  const FirebaseMessaging = window.Capacitor?.Plugins?.FirebaseMessaging;
+  if (!FirebaseMessaging) {
+    console.warn('[FCM] FirebaseMessaging no está disponible (revisa que @capacitor-firebase/messaging esté instalado y sincronizado)');
+    return;
+  }
+  try {
+    let permStatus = await FirebaseMessaging.checkPermissions();
+    if (permStatus.receive !== 'granted') {
+      permStatus = await FirebaseMessaging.requestPermissions();
+    }
+    if (permStatus.receive !== 'granted') {
+      console.warn('[FCM] Permiso de notificaciones no otorgado');
+      return;
+    }
+
+    // Token inicial
+    try {
+      const { token } = await FirebaseMessaging.getToken();
+      if (token) {
+        await window.update(window.ref(window.db, `usuarios/${uid}`), { fcmToken: token });
+        console.log('✅ Token FCM guardado para', uid);
+      }
+    } catch (e) { console.error('Error obteniendo/guardando token FCM', e); }
+
+    // El token puede renovarse solo (reinstalación, cambio de dispositivo, etc.)
+    FirebaseMessaging.addListener('tokenReceived', async (event) => {
+      try {
+        await window.update(window.ref(window.db, `usuarios/${uid}`), { fcmToken: event.token });
+        console.log('✅ Token FCM renovado y guardado');
+      } catch (e) { console.error('Error guardando token FCM renovado', e); }
+    });
+
+    // Push recibido MIENTRAS la app está abierta (primer plano)
+    FirebaseMessaging.addListener('notificationReceived', (event) => {
+      const n = event.notification || {};
+      const data = n.data || {};
+      if (data.tipo === 'aviso_cliente_devolver') {
+        _mostrarAvisoUrgenteRepartidor(n.body || 'El cliente necesita avisarte algo, por favor contáctalo.', null, data.pedidoId);
+      }
+    });
+
+    // El repartidor tocó la notificación desde la bandeja del sistema
+    FirebaseMessaging.addListener('notificationActionPerformed', (event) => {
+      const n = event.notification || {};
+      const data = n.data || {};
+      if (data.tipo === 'aviso_cliente_devolver') {
+        _mostrarAvisoUrgenteRepartidor(n.body || 'El cliente necesita avisarte algo, por favor contáctalo.', null, data.pedidoId);
+      }
+    });
+  } catch (e) {
+    console.error('[FCM] Error inicializando Firebase Messaging', e);
+  }
 }
 
 function repEscucharChatCliente(pedidoId) {
