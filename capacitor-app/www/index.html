@@ -2613,6 +2613,39 @@ function _fechaHoyColombia() {
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         return R * c; // Distancia en metros
     }
+
+    // FIX DISTANCIA REAL RECOGIDA→ENTREGA: el precio de un pedido ya se calcula
+    // en el backend con la distancia real por carretera (OSRM), pero este panel
+    // seguía mostrando línea recta (Haversine) para ese mismo tramo — por eso no
+    // coincidía con Google Maps. La distancia repartidor→recogida sí se deja en
+    // línea recta a propósito (es solo una referencia rápida que cambia todo el
+    // tiempo mientras te mueves); pero recogida→entrega es fija durante todo el
+    // pedido, así que aquí sí vale la pena traer la ruta real una sola vez y
+    // guardarla en caché.
+    const _distEntregaRutaCache = {}; // pedidoId -> km reales (o null mientras carga)
+    // FIX ESTIMADO SIN OSRM: la línea recta siempre da MENOS que la ruta real
+    // (calles, curvas, ríos, lomas) — se corrige con este factor para que el
+    // estimado (mientras carga, o si OSRM llega a fallar) no se quede corto.
+    const FACTOR_CORRECCION_RUTA = 1.25; // +25% sobre la línea recta
+    async function _obtenerDistanciaRutaReal(pedidoId, coordsA, coordsB) {
+        if (_distEntregaRutaCache[pedidoId] !== undefined) return;
+        _distEntregaRutaCache[pedidoId] = null; // marca "cargando" para no pedirlo dos veces
+        let km = null;
+        try {
+            const url = `https://router.project-osrm.org/route/v1/driving/${coordsA.lng},${coordsA.lat};${coordsB.lng},${coordsB.lat}?overview=false`;
+            const resp = await fetch(url);
+            const data = await resp.json();
+            if (data.routes && data.routes[0]) km = data.routes[0].distance / 1000;
+        } catch (e) {
+            console.warn('[DISTANCIA] OSRM no disponible para pedido', pedidoId, e);
+        }
+        if (km === null) {
+            km = (calcularDistancia(coordsA.lat, coordsA.lng, coordsB.lat, coordsB.lng) / 1000) * FACTOR_CORRECCION_RUTA;
+        }
+        _distEntregaRutaCache[pedidoId] = km;
+        _actualizarPanelDistancias(); // repinta el panel de "Distancias a tus destinos"
+        if (typeof _renderizarRutaSugerida === 'function') _renderizarRutaSugerida(); // y el de "Ruta Sugerida"
+    }
     function calcularDireccion(lat1, lon1, lat2, lon2) {
         const φ1 = lat1 * Math.PI / 180;
         const φ2 = lat2 * Math.PI / 180;
@@ -3298,11 +3331,21 @@ function _fechaHoyColombia() {
                 lineaHtml += `📦 <b>Recoge en ${barrioRec}</b>: <b>${kmA} km</b> · ~${minA} min`;
                 if (pinEnt) {
                     const llEnt = pinEnt.getLatLng();
-                    const distB = calcularDistancia(llRec.lat, llRec.lng, llEnt.lat, llEnt.lng);
-                    const kmB   = (distB / 1000).toFixed(2);
-                    const minB  = Math.round(distB / (30000 / 60));
                     const barrioEnt = info.barrio || info.barrioEntrega || 'Entrega';
-                    lineaHtml += `<br>🏠 <b>Entrega en ${barrioEnt}</b>: <b>${kmB} km</b> · ~${minB} min`;
+                    const kmRealCache = _distEntregaRutaCache[key];
+                    if (kmRealCache !== undefined && kmRealCache !== null) {
+                        // Ya tenemos la distancia real por carretera (coincide con Google Maps)
+                        const minB = Math.round((kmRealCache * 1000) / (30000 / 60));
+                        lineaHtml += `<br>🏠 <b>Entrega en ${barrioEnt}</b>: <b>${kmRealCache.toFixed(2)} km</b> · ~${minB} min`;
+                    } else {
+                        // Mientras llega la ruta real, se muestra un estimado en línea
+                        // recta corregida (se ajusta solo apenas responda la ruta)
+                        const distB = calcularDistancia(llRec.lat, llRec.lng, llEnt.lat, llEnt.lng) * FACTOR_CORRECCION_RUTA;
+                        const kmB   = (distB / 1000).toFixed(2);
+                        const minB  = Math.round(distB / (30000 / 60));
+                        lineaHtml += `<br>🏠 <b>Entrega en ${barrioEnt}</b>: <b>~${kmB} km</b> · ~${minB} min`;
+                        if (kmRealCache === undefined) _obtenerDistanciaRutaReal(key, { lat: llRec.lat, lng: llRec.lng }, { lat: llEnt.lat, lng: llEnt.lng });
+                    }
                 }
             } else if (pinEnt) {
                 const llEnt = pinEnt.getLatLng();
@@ -3367,13 +3410,21 @@ function _fechaHoyColombia() {
                 distRecKm = calcularDistancia(repartidorCoords.lat, repartidorCoords.lng, ll.lat, ll.lng) / 1000;
             }
 
-            // Distancia al punto de entrega (desde recogida)
+            // Distancia al punto de entrega (desde recogida) — misma caché de
+            // ruta real (OSRM) que usa el panel de "Distancias a tus destinos",
+            // para que "ruta total" tampoco quede en línea recta.
             let distEntKm = 0;
             const pinEnt = marcadoresEntregaPedido[pid] || marcadoresEntrega[info.clienteID];
             if (pinRec && pinEnt) {
                 const llR = pinRec.getLatLng();
                 const llE = pinEnt.getLatLng();
-                distEntKm = calcularDistancia(llR.lat, llR.lng, llE.lat, llE.lng) / 1000;
+                const kmRealCache = _distEntregaRutaCache[pid];
+                if (kmRealCache !== undefined && kmRealCache !== null) {
+                    distEntKm = kmRealCache;
+                } else {
+                    distEntKm = (calcularDistancia(llR.lat, llR.lng, llE.lat, llE.lng) / 1000) * FACTOR_CORRECCION_RUTA; // estimado corregido mientras carga
+                    if (kmRealCache === undefined) _obtenerDistanciaRutaReal(pid, { lat: llR.lat, lng: llR.lng }, { lat: llE.lat, lng: llE.lng });
+                }
             }
 
             // Score: más tiempo esperando = prioridad; distancia corta = prioridad
@@ -4124,6 +4175,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             console.error('❌ Error al enviar ubicación Firebase SDK:', error);
         }
     }
+    // ========================================
+    // 🔔 AVISO "REPARTIDOR CERCA" AL CLIENTE
+    // ========================================
+    // Cuando el repartidor va en camino a la entrega (estado 'En Camino') y su
+    // GPS queda a menos de este radio del punto de entrega, se marca el pedido
+    // con repartidorCerca=true. Un trigger en el backend (Cloud Functions)
+    // detecta ese cambio y le manda un push al cliente para que esté listo a
+    // recibir. Solo se dispara UNA vez por pedido (se revisa pedido.repartidorCerca
+    // antes de escribir, así que sobrevive incluso si cierras y abres la app).
+    const UMBRAL_PROXIMIDAD_ENTREGA_METROS = 400;
+
     async function enviarUbicacionDirecta(lat, lon, accuracy, speed, heading) {
         if (!repartidorUID) return;
         try {
@@ -4137,19 +4199,37 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     const pedido = pedidosData[pedidoId];
                     if (pedido.repartidorUID === repartidorUID && pedido.estado !== 'Pendiente') {
                         const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
-                        promesas.push(
-                            update(pedidoRef, {
-                                ubicacionRepartidor: {
-                                    lat: parseFloat(lat.toFixed(6)),
-                                    lng: parseFloat(lon.toFixed(6)),
-                                    accuracy: Math.round(accuracy),
-                                    speed: Math.round(speed * 3.6),
-                                    heading: Math.round(heading),
-                                    timestamp: timestamp,
-                                    googleMapsUrl: googleMapsUrl
-                                }
-                            })
-                        );
+                        const updateData = {
+                            ubicacionRepartidor: {
+                                lat: parseFloat(lat.toFixed(6)),
+                                lng: parseFloat(lon.toFixed(6)),
+                                accuracy: Math.round(accuracy),
+                                speed: Math.round(speed * 3.6),
+                                heading: Math.round(heading),
+                                timestamp: timestamp,
+                                googleMapsUrl: googleMapsUrl
+                            }
+                        };
+
+                        // 🔔 Chequeo de proximidad — solo para pedidos ya en camino
+                        // a la entrega, y solo si todavía no se avisó antes.
+                        if (pedido.estado === 'En Camino' && !pedido.repartidorCerca && pedido.gpsDestino && pedido.gpsDestino.lat && pedido.gpsDestino.lng) {
+                            const distMetros = calcularDistancia(lat, lon, pedido.gpsDestino.lat, pedido.gpsDestino.lng);
+                            if (distMetros <= UMBRAL_PROXIMIDAD_ENTREGA_METROS) {
+                                updateData.repartidorCerca = true;
+                                updateData.repartidorCercaTs = timestamp;
+                                console.log(`🔔 Repartidor a ${Math.round(distMetros)}m de la entrega (pedido ${pedidoId.slice(-6)}) — avisando al cliente`);
+                                // También se marca en pedidos_historial: es el nodo que
+                                // escucha la Cloud Function que manda el push (mismo
+                                // patrón que ya se usa para avisar cambios de estado).
+                                promesas.push(update(ref(db, `pedidos_historial/${pedidoId}`), {
+                                    repartidorCerca: true,
+                                    repartidorCercaTs: timestamp
+                                }).catch(() => {}));
+                            }
+                        }
+
+                        promesas.push(update(pedidoRef, updateData));
                     }
                 });
                 await Promise.all(promesas);
