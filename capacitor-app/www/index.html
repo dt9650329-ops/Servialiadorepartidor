@@ -7038,6 +7038,20 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 document.getElementById('loginContainer').style.display = 'none';
                 document.getElementById('appContainer').style.display = 'block';
                 document.getElementById('repartidorName').textContent = repartidorNombre;
+                // 🛡️ Guardar UID + refreshToken en CapacitorKV para que el
+                // Background Runner (corre aparte del WebView) pueda seguir
+                // marcando "online" aunque esta página se congele en 2do plano.
+                try {
+                    const CapacitorKV = window.Capacitor && window.Capacitor.Plugins
+                        ? window.Capacitor.Plugins.CapacitorKV
+                        : null;
+                    if (CapacitorKV && user.refreshToken) {
+                        await CapacitorKV.set({ key: 'repartidorUID', value: user.uid });
+                        await CapacitorKV.set({ key: 'repartidorRefreshToken', value: user.refreshToken });
+                    }
+                } catch (e) {
+                    console.warn('⚠️ No se pudo guardar sesión en CapacitorKV:', e.message);
+                }
                 await configurarPresenciaInicial();
                 escucharChat();
                 escucharPedidos();
@@ -7080,6 +7094,15 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             detenerBackgroundGeolocation();
             detenerHeartbeat();
             await liberarWakeLock();
+            try {
+                const CapacitorKV = window.Capacitor && window.Capacitor.Plugins
+                    ? window.Capacitor.Plugins.CapacitorKV
+                    : null;
+                if (CapacitorKV) {
+                    await CapacitorKV.remove({ key: 'repartidorUID' });
+                    await CapacitorKV.remove({ key: 'repartidorRefreshToken' });
+                }
+            } catch (e) { /* silencioso */ }
             document.getElementById('loginContainer').style.display = 'flex';
             document.getElementById('appContainer').style.display = 'none';
             document.getElementById('manualLoginForm').style.display = 'block';
