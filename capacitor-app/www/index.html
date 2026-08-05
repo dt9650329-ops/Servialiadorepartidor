@@ -4040,8 +4040,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     const heading = location.bearing || 0;
                     console.log(`📍 BG GPS nativo: ${lat.toFixed(6)}, ${lon.toFixed(6)} [${isBackgroundMode ? 'BACKGROUND' : 'FOREGROUND'}]`);
                     _debugLog(`GPS ok lat=${lat.toFixed(5)} lon=${lon.toFixed(5)} modo=${isBackgroundMode ? 'BG' : 'FG'}`);
-                    enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading);
-                    enviarUbicacionDirecta(lat, lon, accuracy, speed, heading);
+                    if (isBackgroundMode) {
+                        // 🔧 En segundo plano usamos HTTP nativo (CapacitorHttp) para
+                        // evitar el throttling de red que Android aplica al WebView.
+                        // enviarUbicacionDirecta() (actualiza pedidos_pendientes y
+                        // proximidad de entrega) sigue usando el SDK normal, así que
+                        // por ahora esa parte no se refresca mientras está en background.
+                        enviarUbicacionNativaHTTP(lat, lon, accuracy, speed, heading);
+                    } else {
+                        enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading);
+                        enviarUbicacionDirecta(lat, lon, accuracy, speed, heading);
+                    }
                 }
             );
             console.log('✅ Background Geolocation nativo iniciado (sobrevive app cerrada/minimizada)');
@@ -4185,6 +4194,59 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 trackingActivo: false,
                 ultimaUbicacionTimestamp: Date.now()
             });
+        }
+    }
+    // ========================================
+    // 🔧 FIX 2026-08-05: envío de ubicación por HTTP nativo (CapacitorHttp)
+    // en vez del SDK normal de Firebase (WebSocket) cuando la app está en
+    // segundo plano. Android empieza a limitar/bloquear las peticiones de
+    // red que salen del WebView poco después de que la app se oculta
+    // (documentado en el propio plugin background-geolocation), aunque el
+    // GPS nativo siga funcionando. CapacitorHttp hace la petición desde
+    // código nativo Android (OkHttp), no desde el WebView, así que no la
+    // bloquean. Requiere "CapacitorHttp": { "enabled": true } en
+    // capacitor.config.json.
+    // ========================================
+    async function enviarUbicacionNativaHTTP(lat, lon, accuracy, speed, heading) {
+        if (!repartidorUID) return;
+        try {
+            const usuario = auth.currentUser;
+            if (!usuario) return;
+            const token = await usuario.getIdToken();
+            const CapacitorHttp = window.Capacitor && window.Capacitor.Plugins
+                ? window.Capacitor.Plugins.CapacitorHttp
+                : null;
+            if (!CapacitorHttp) {
+                // Respaldo: si el plugin no está disponible, intenta con el SDK normal
+                return enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading);
+            }
+            const timestamp = Date.now();
+            const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json?auth=${token}`;
+            const body = {
+                ubicacion: { lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lon.toFixed(6)) },
+                ubicacionActual: {
+                    lat: parseFloat(lat.toFixed(6)),
+                    lng: parseFloat(lon.toFixed(6)),
+                    accuracy: Math.round(accuracy),
+                    speed: Math.round(speed * 3.6),
+                    heading: Math.round(heading),
+                    timestamp
+                },
+                ubicacionUrl: `https://www.google.com/maps?q=${lat},${lon}`,
+                trackingActivo: true,
+                lastSeen: timestamp,
+                online: true
+            };
+            await CapacitorHttp.patch({
+                url,
+                headers: { 'Content-Type': 'application/json' },
+                data: body
+            });
+            console.log(`📍 Ubicación (HTTP nativo, background): ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+            _debugLog(`HTTP nativo ok lat=${lat.toFixed(5)} lon=${lon.toFixed(5)}`);
+        } catch (error) {
+            console.error('❌ Error enviando ubicación por HTTP nativo:', error);
+            _debugLog(`HTTP nativo ERROR: ${error.message || error}`);
         }
     }
     async function enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading) {
