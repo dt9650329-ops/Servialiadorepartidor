@@ -4425,19 +4425,22 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // MANEJO DE CIERRE DE APP/NAVEGADOR
     // ========================================
     window.addEventListener('beforeunload', async (event) => {
-        console.log('⚠️ Cerrando aplicación...');
+        // 🔧 FIX 2026-08-05: en Android, 'beforeunload' puede dispararse cuando
+        // el sistema pausa/mata la app en segundo plano, NO solo al cerrar la
+        // app de verdad (mismo problema que ya se corrigió para 'pagehide' más
+        // abajo). Antes esto llamaba a marcarComoOffline(), que escribe
+        // online:false, trackingActivo:false y sesionCerradaManualmente:true —
+        // así el repartidor quedaba "desconectado" solo por estar en background.
+        // La desconexión real ya la detecta onDisconnect() (configurado contra
+        // Firebase), así que aquí NO llamamos a marcarComoOffline(). Solo
+        // limpiamos listeners locales (seguro hacerlo aunque la app no cierre
+        // de verdad, se vuelven a iniciar al volver a primer plano).
+        console.log('⚠️ beforeunload disparado (puede ser cierre real o solo background)');
         detenerTrackingGPS();
         detenerEnvioUbicacionRepartidor();
         detenerBackgroundGeolocation();
         detenerHeartbeat();
         await liberarWakeLock();
-        if (repartidorUID) {
-            try {
-                await marcarComoOffline();
-            } catch (error) {
-                console.error('❌ Error al marcar offline:', error);
-            }
-        }
     });
     window.addEventListener('pagehide', () => {
         // 🔧 FIX: 'pagehide' se dispara en Android también al minimizar o apagar
