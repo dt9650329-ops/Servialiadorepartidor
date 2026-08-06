@@ -3770,6 +3770,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             return;
         }
         try {
+            // 🔧 FIX 2026-08-05: sesionCerradaManualmente quedaba en true de forma
+            // obsoleta desde el último logout (nunca se reseteaba en el login),
+            // dando una imagen confusa en el admin panel de una sesión "activa"
+            // que en realidad se ve como cerrada manualmente.
+            await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                sesionCerradaManualmente: false
+            });
             await marcarComoOnline();
             await iniciarHeartbeatPrincipal();
             iniciarEnvioUbicacionDirecto();
@@ -4435,12 +4442,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         // Firebase), así que aquí NO llamamos a marcarComoOffline(). Solo
         // limpiamos listeners locales (seguro hacerlo aunque la app no cierre
         // de verdad, se vuelven a iniciar al volver a primer plano).
-        console.log('⚠️ beforeunload disparado (puede ser cierre real o solo background)');
-        detenerTrackingGPS();
-        detenerEnvioUbicacionRepartidor();
-        detenerBackgroundGeolocation();
-        detenerHeartbeat();
-        await liberarWakeLock();
+        // 🔧 FIX 2026-08-05: al igual que con marcarComoOffline() arriba, tampoco
+        // debemos apagar el tracking GPS, el envío de ubicación, el background
+        // geolocation ni el heartbeat aquí — beforeunload se dispara en Android
+        // solo por minimizar/apagar pantalla, y apagar estas funciones cortaba
+        // el envío de ubicación al admin/cliente cada vez que el repartidor
+        // guardaba el celular. onDisconnect() ya maneja la desconexión real.
+        console.log('⚠️ beforeunload disparado (puede ser cierre real o solo background) — tracking sigue activo');
     });
     window.addEventListener('pagehide', () => {
         // 🔧 FIX: 'pagehide' se dispara en Android también al minimizar o apagar
