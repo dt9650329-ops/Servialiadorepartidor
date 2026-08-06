@@ -7048,9 +7048,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     if (CapacitorKV && user.refreshToken) {
                         await CapacitorKV.set({ key: 'repartidorUID', value: user.uid });
                         await CapacitorKV.set({ key: 'repartidorRefreshToken', value: user.refreshToken });
+                        _debugLog('CapacitorKV guardado ok (runner podrá autenticarse)');
+                    } else {
+                        _debugLog(`CapacitorKV SIN guardar — CapacitorKV=${!!CapacitorKV} refreshToken=${!!user.refreshToken}`);
                     }
                 } catch (e) {
                     console.warn('⚠️ No se pudo guardar sesión en CapacitorKV:', e.message);
+                    _debugLog(`CapacitorKV ERROR: ${e.message}`);
                 }
                 await configurarPresenciaInicial();
                 escucharChat();
