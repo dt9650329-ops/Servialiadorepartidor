@@ -2,6 +2,9 @@
   "appId": "com.servialiados.repartidor",
   "appName": "Servi Aliados Repartidor",
   "webDir": "www",
+  "android": {
+    "useLegacyBridge": true
+  },
   "plugins": {
     "FirebaseAuthentication": {
       "skipNativeAuth": false,
@@ -9,14 +12,6 @@
     },
     "CapacitorHttp": {
       "enabled": true
-    },
-    "BackgroundRunner": {
-      "label": "com.servialiados.repartidor.background.task",
-      "src": "runners/background.js",
-      "event": "servialiadosHeartbeat",
-      "repeat": true,
-      "interval": 15,
-      "autoStart": true
     }
   }
 }
