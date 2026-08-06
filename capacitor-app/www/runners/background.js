@@ -80,3 +80,47 @@ addEventListener("servialiadosHeartbeat", async (resolve, reject) => {
         resolve();
     }
 });
+
+// ============================================================
+// guardarSesion / borrarSesion — despachados desde index.html
+// (CapacitorKV NO es accesible desde el WebView principal, solo
+// desde aquí adentro, así que la app manda los datos por evento
+// y es este runner quien los guarda). Además escribe una
+// confirmación inmediata en Firebase, para poder comprobar desde
+// el debugLog que sí quedaron guardados sin tener que esperar
+// los 15 min del próximo heartbeat automático.
+// ============================================================
+addEventListener("guardarSesion", async (resolve, reject, args) => {
+    try {
+        if (!args || !args.uid || !args.refreshToken) {
+            resolve({ ok: false, motivo: "sin_args" });
+            return;
+        }
+        await CapacitorKV.set("repartidorUID", args.uid);
+        await CapacitorKV.set("repartidorRefreshToken", args.refreshToken);
+
+        const { idToken } = await _obtenerIdTokenFresco(args.refreshToken);
+        const url = `${DB_URL}/repartidores_info/${args.uid}.json?auth=${idToken}`;
+        await fetch(url, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ backgroundRunnerSesionGuardada: Date.now() }),
+        });
+
+        resolve({ ok: true });
+    } catch (err) {
+        console.error("[BackgroundRunner] guardarSesion error:", err.message || err);
+        reject(err);
+    }
+});
+
+addEventListener("borrarSesion", async (resolve, reject) => {
+    try {
+        await CapacitorKV.remove("repartidorUID");
+        await CapacitorKV.remove("repartidorRefreshToken");
+        resolve({ ok: true });
+    } catch (err) {
+        console.error("[BackgroundRunner] borrarSesion error:", err.message || err);
+        reject(err);
+    }
+});
