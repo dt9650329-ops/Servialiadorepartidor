@@ -8,8 +8,17 @@ project(':capacitor-firebase-authentication').projectDir = new File('../node_mod
 include ':capacitor-firebase-messaging'
 project(':capacitor-firebase-messaging').projectDir = new File('../node_modules/@capacitor-firebase/messaging/android')
 
+include ':capacitor-background-runner'
+project(':capacitor-background-runner').projectDir = new File('../node_modules/@capacitor/background-runner/android')
+
 include ':capacitor-local-notifications'
 project(':capacitor-local-notifications').projectDir = new File('../node_modules/@capacitor/local-notifications/android')
 
+include ':capgo-background-geolocation'
+project(':capgo-background-geolocation').projectDir = new File('../node_modules/@capgo/background-geolocation/android')
+
 include ':capgo-capacitor-audio-recorder'
 project(':capgo-capacitor-audio-recorder').projectDir = new File('../node_modules/@capgo/capacitor-audio-recorder/android')
+
+include ':squareetlabs-capacitor-dont-kill-my-app'
+project(':squareetlabs-capacitor-dont-kill-my-app').projectDir = new File('../node_modules/@squareetlabs/capacitor-dont-kill-my-app/android')
