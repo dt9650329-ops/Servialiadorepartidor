@@ -7038,23 +7038,30 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 document.getElementById('loginContainer').style.display = 'none';
                 document.getElementById('appContainer').style.display = 'block';
                 document.getElementById('repartidorName').textContent = repartidorNombre;
-                // 🛡️ Guardar UID + refreshToken en CapacitorKV para que el
-                // Background Runner (corre aparte del WebView) pueda seguir
-                // marcando "online" aunque esta página se congele en 2do plano.
+                // 🛡️ CapacitorKV NO es accesible desde el WebView principal,
+                // solo desde dentro del Background Runner — por eso se manda
+                // el UID + refreshToken por dispatchEvent, y es el runner
+                // quien los guarda en su propio CapacitorKV (ver
+                // guardarSesion en runners/background.js). El runner corre
+                // aparte del WebView, así que puede seguir marcando
+                // "online" aunque esta página se congele en 2do plano.
                 try {
-                    const CapacitorKV = window.Capacitor && window.Capacitor.Plugins
-                        ? window.Capacitor.Plugins.CapacitorKV
+                    const BackgroundRunner = window.Capacitor && window.Capacitor.Plugins
+                        ? window.Capacitor.Plugins.BackgroundRunner
                         : null;
-                    if (CapacitorKV && user.refreshToken) {
-                        await CapacitorKV.set({ key: 'repartidorUID', value: user.uid });
-                        await CapacitorKV.set({ key: 'repartidorRefreshToken', value: user.refreshToken });
-                        _debugLog('CapacitorKV guardado ok (runner podrá autenticarse)');
+                    if (BackgroundRunner && user.refreshToken) {
+                        const resultado = await BackgroundRunner.dispatchEvent({
+                            label: 'com.servialiados.repartidor.background.task',
+                            event: 'guardarSesion',
+                            details: { uid: user.uid, refreshToken: user.refreshToken }
+                        });
+                        _debugLog(`guardarSesion despachado ok: ${JSON.stringify(resultado)}`);
                     } else {
-                        _debugLog(`CapacitorKV SIN guardar — CapacitorKV=${!!CapacitorKV} refreshToken=${!!user.refreshToken}`);
+                        _debugLog(`guardarSesion SIN despachar — BackgroundRunner=${!!BackgroundRunner} refreshToken=${!!user.refreshToken}`);
                     }
                 } catch (e) {
-                    console.warn('⚠️ No se pudo guardar sesión en CapacitorKV:', e.message);
-                    _debugLog(`CapacitorKV ERROR: ${e.message}`);
+                    console.warn('⚠️ No se pudo despachar guardarSesion:', e.message);
+                    _debugLog(`guardarSesion ERROR: ${e.message}`);
                 }
                 await configurarPresenciaInicial();
                 escucharChat();
@@ -7099,12 +7106,14 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             detenerHeartbeat();
             await liberarWakeLock();
             try {
-                const CapacitorKV = window.Capacitor && window.Capacitor.Plugins
-                    ? window.Capacitor.Plugins.CapacitorKV
+                const BackgroundRunner = window.Capacitor && window.Capacitor.Plugins
+                    ? window.Capacitor.Plugins.BackgroundRunner
                     : null;
-                if (CapacitorKV) {
-                    await CapacitorKV.remove({ key: 'repartidorUID' });
-                    await CapacitorKV.remove({ key: 'repartidorRefreshToken' });
+                if (BackgroundRunner) {
+                    await BackgroundRunner.dispatchEvent({
+                        label: 'com.servialiados.repartidor.background.task',
+                        event: 'borrarSesion'
+                    });
                 }
             } catch (e) { /* silencioso */ }
             document.getElementById('loginContainer').style.display = 'flex';
