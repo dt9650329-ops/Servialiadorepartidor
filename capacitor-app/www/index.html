@@ -2379,6 +2379,51 @@ function _fechaHoyColombia() {
     let locationSendInterval = null;
     let backgroundGeoInterval = null;
     let isBackgroundMode = false;
+    // 🔧 FIX 2026-08-07: throttle del GPS nativo en 2do plano — el plugin
+    // (@capgo/background-geolocation) con distanceFilter:0 entregaba CADA
+    // fix crudo del proveedor de ubicación de Android (hasta 3/seg), y ese
+    // callback no tenía ningún límite, así que mandaba todo directo a
+    // Firebase sin filtrar. Regla nueva: se envía si pasaron >=10s desde el
+    // último envío O si el repartidor se movió >=20m, lo que ocurra
+    // primero. distanceFilter se deja en 0 a propósito para que el plugin
+    // SIEMPRE entregue fixes al callback y este temporizador de 10s nunca
+    // se quede sin datos que reenviar (así nunca deja de latir aunque el
+    // repartidor esté quieto).
+    const UBICACION_INTERVALO_MS = 10000; // 10s si está quieto
+    const UBICACION_DISTANCIA_M = 20;     // 20m si se está moviendo
+    let _ultimoEnvioNativoTs = 0;
+    let _ultimoEnvioNativoLat = null;
+    let _ultimoEnvioNativoLon = null;
+    // Última ubicación conocida (de cualquier fuente: GPS foreground o BG
+    // nativo), para que el latido de cada 10s de abajo siempre tenga algo
+    // que reenviar aunque el repartidor esté completamente quieto.
+    let _ultimaUbicacionConocida = null; // {lat, lon, accuracy, speed, heading}
+    function _cachearUbicacion(lat, lon, accuracy, speed, heading) {
+        _ultimaUbicacionConocida = { lat, lon, accuracy: accuracy || 0, speed: speed || 0, heading: heading || 0 };
+    }
+    function _distanciaMetros(lat1, lon1, lat2, lon2) {
+        const R = 6371000;
+        const rad = Math.PI / 180;
+        const dLat = (lat2 - lat1) * rad;
+        const dLon = (lon2 - lon1) * rad;
+        const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+    function _debeEnviarUbicacionNativa(lat, lon) {
+        const ahora = Date.now();
+        const tiempoPasado = ahora - _ultimoEnvioNativoTs;
+        const distancia = (_ultimoEnvioNativoLat === null)
+            ? Infinity
+            : _distanciaMetros(_ultimoEnvioNativoLat, _ultimoEnvioNativoLon, lat, lon);
+        if (tiempoPasado >= UBICACION_INTERVALO_MS || distancia >= UBICACION_DISTANCIA_M) {
+            _ultimoEnvioNativoTs = ahora;
+            _ultimoEnvioNativoLat = lat;
+            _ultimoEnvioNativoLon = lon;
+            return true;
+        }
+        return false;
+    }
     let permisosMultimediaOtorgados = false;
     let permisosCamaraOtorgado = false;
     let permisosMicrofonoOtorgado = false;
@@ -4255,7 +4300,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     backgroundTitle: "Repartidor activo",
                     requestPermissions: true,
                     stale: false,
-                    distanceFilter: 0,
+                    // 🔧 FIX 2026-08-07: el webhook nativo (POST directo desde
+                    // Kotlin al Cloud Function, ver "url" abajo) NO pasa por
+                    // el throttle de JS de más abajo — su única perilla de
+                    // control es este distanceFilter. En 0 mandaba CADA fix
+                    // crudo de Android (hasta 3/seg). 20m = solo reporta
+                    // cuando el repartidor realmente se movió esa distancia.
+                    distanceFilter: 20,
                     ...(urlWebhook ? { url: urlWebhook } : {})
                 },
                 (location, error) => {
@@ -4281,6 +4332,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     const accuracy = location.accuracy || 0;
                     const speed = location.speed || 0;
                     const heading = location.bearing || 0;
+                    _cachearUbicacion(lat, lon, accuracy, speed, heading);
+                    // 🔧 THROTTLE: el plugin nativo entrega un fix crudo de
+                    // Android por cada actualización del proveedor de
+                    // ubicación (hasta 3/seg). Sin este filtro, cada uno de
+                    // esos fixes disparaba un envío a Firebase. Ahora solo
+                    // se deja pasar si ya pasaron >=10s desde el último envío
+                    // o si el repartidor se movió >=20m — así nunca deja de
+                    // "latir" (máximo 10s de silencio) pero deja de saturar.
+                    if (!_debeEnviarUbicacionNativa(lat, lon)) {
+                        return;
+                    }
                     console.log(`📍 BG GPS nativo: ${lat.toFixed(6)}, ${lon.toFixed(6)} [${isBackgroundMode ? 'BACKGROUND' : 'FOREGROUND'}]`);
                     _debugLog(`GPS ok lat=${lat.toFixed(5)} lon=${lon.toFixed(5)} modo=${isBackgroundMode ? 'BG' : 'FG'}`);
                     // El webhook nativo (campo "url" de arriba) ya manda esta
@@ -4321,22 +4383,43 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         if (locationSendInterval) {
             clearInterval(locationSendInterval);
         }
-        // 🔥 OPTIMIZACIÓN: De 5s a 15s
+        // 🔧 FIX 2026-08-07: bajado de 20s a 10s y ahora también reenvía la
+        // última ubicación conocida (no solo el "estoy vivo"). El plugin
+        // nativo de background (@capgo/background-geolocation) solo filtra
+        // por distancia (distanceFilter), no tiene un intervalo de tiempo,
+        // así que si el repartidor está parado, el webhook nativo no manda
+        // nada nuevo. Este latido cubre ese hueco mientras el WebView siga
+        // vivo (foreground siempre, y background el tiempo que Android no
+        // haya congelado la app).
         locationSendInterval = setInterval(async () => {
             if (isTrackingEnabled && repartidorUID && lastLocationUpdate > 0) {
                 try {
                     const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
-                    await update(userStatusRef, {
+                    const payload = {
                         trackingActivo: true,
                         lastSeen: Date.now(),
                         online: true
-                    });
+                    };
+                    if (_ultimaUbicacionConocida) {
+                        const { lat, lon, accuracy, speed, heading } = _ultimaUbicacionConocida;
+                        payload.ubicacion = { lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lon.toFixed(6)) };
+                        payload.ubicacionActual = {
+                            lat: parseFloat(lat.toFixed(6)),
+                            lng: parseFloat(lon.toFixed(6)),
+                            accuracy: Math.round(accuracy),
+                            speed: Math.round(speed * 3.6),
+                            heading: Math.round(heading),
+                            timestamp: Date.now()
+                        };
+                        payload.ubicacionUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+                    }
+                    await update(userStatusRef, payload);
                 } catch (error) {
                     console.warn('⚠️ Error en envío directo de ubicación:', error);
                 }
             }
-        }, 20000); // 🔥 20 SEGUNDOS (optimizado)
-        console.log('✅ Envío directo de ubicación iniciado (cada 20s - optimizado)');
+        }, 10000); // 🔥 10 SEGUNDOS — late aunque esté quieto
+        console.log('✅ Envío directo de ubicación iniciado (cada 10s, con última posición conocida)');
     }
     async function iniciarTrackingGPSAutomatico() {
         console.log('🚀 Iniciando GPS automático al login (optimizado)...');
@@ -4392,6 +4475,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 const speed = position.coords.speed || 0;
                 const heading = position.coords.heading || 0;
                 console.log(`📍 GPS OK [${esAPK ? 'APK' : 'Web'}]: ${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracy)}m) [15s]`);
+                _cachearUbicacion(lat, lon, accuracy, speed, heading);
                 enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading);
                 enviarUbicacionDirecta(lat, lon, accuracy, speed, heading);
             },
