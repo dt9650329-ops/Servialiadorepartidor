@@ -101,7 +101,7 @@
     <!-- 🛠️ ERUDA: consola de depuración activa -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
-    <title>Panel Repartidor - v1.8.1</title>
+    <title>Panel Repartidor - v1.0.3</title>
     <style>
         /* ┌─────────────────────────────────────────────────────────┐
    │ [CSS-01] VARIABLES GLOBALES (:root)                     │
@@ -253,6 +253,21 @@
         .rep-notif-item .rni-titulo { font-weight: bold; font-size: 13px; color: var(--color-primary); }
         .rep-notif-item .rni-msg { font-size: 13px; color: #ddd; margin-top: 3px; }
         .rep-notif-item .rni-hora { font-size: 11px; color: #888; margin-top: 4px; }
+        .rep-notif-item-urgente {
+          border-left: 3px solid #F59E0B; background: rgba(245,158,11,0.14);
+          animation: repNotifUrgentePulso 1s ease-in-out infinite;
+        }
+        @keyframes repNotifUrgentePulso {
+          0%, 100% { box-shadow: 0 0 0 rgba(245,158,11,0); }
+          50% { box-shadow: 0 0 10px rgba(245,158,11,0.55); }
+        }
+        .rep-notif-item-urgente .rni-titulo { color: #F59E0B; }
+        .rep-notif-item-urgente .rni-btn-ok {
+          display: block; width: 100%; margin-top: 8px; background: #F59E0B;
+          color: #1A0E0A; font-weight: 700; padding: 9px; border: none;
+          border-radius: 8px; font-size: 13px; cursor: pointer;
+        }
+        .rep-notif-item-urgente .rni-btn-ok:disabled { opacity: 0.6; }
         #repNotifClear {
           text-align: center; padding: 10px; border-top: 1px solid #333;
           color: var(--color-primary); font-size: 13px; cursor: pointer;
@@ -1105,6 +1120,90 @@
         #permisosModal.show {
             display: flex;
         }
+        /* ┌─────────────────────────────────────────────────────────┐
+           │ [CSS-13b] MODAL DE BATERÍA / FABRICANTE                 │
+           └─────────────────────────────────────────────────────────┘ */
+        #bateriaModal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 15000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #bateriaModal.show { display: flex; }
+        .bateria-content {
+            background: var(--color-card);
+            padding: 26px 24px;
+            border-radius: 15px;
+            max-width: 460px;
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            text-align: left;
+            box-shadow: 0 10px 40px rgba(232, 130, 12, 0.3);
+        }
+        .bateria-content h2 {
+            color: var(--color-primary);
+            margin: 0 0 6px;
+            text-align: center;
+        }
+        .bateria-content .bateria-marca {
+            text-align: center;
+            color: #7a9abf;
+            font-size: 0.9em;
+            margin-bottom: 18px;
+        }
+        .bateria-paso {
+            background: #1e3a52;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+        .bateria-paso strong {
+            display: block;
+            color: #FFC300;
+            margin-bottom: 4px;
+        }
+        .bateria-paso span {
+            color: #d8e4f0;
+            font-size: 0.92em;
+            line-height: 1.5;
+        }
+        .bateria-warning {
+            background: rgba(231, 76, 60, 0.15);
+            border: 1px solid #e74c3c;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 0.85em;
+            color: #f5b7b1;
+            margin: 14px 0;
+        }
+        .btn-bateria-ok {
+            width: 100%;
+            padding: 12px;
+            background: #F59E0B;
+            color: #0D1B2A;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1em;
+            cursor: pointer;
+            margin-top: 6px;
+        }
+        .btn-bateria-luego {
+            width: 100%;
+            padding: 10px;
+            background: transparent;
+            color: #7a9abf;
+            border: none;
+            font-size: 0.85em;
+            cursor: pointer;
+            margin-top: 4px;
+        }
         .permisos-content {
             background: var(--color-card);
             padding: 30px;
@@ -1472,6 +1571,14 @@
     </div>
 </div>
 <!-- ╔═══════════════════════════════════════════════════════╗
+     ║ [HTML-03b] MODAL DE BATERÍA / FABRICANTE              ║
+     ╚═══════════════════════════════════════════════════════╝ -->
+<div id="bateriaModal">
+    <div class="bateria-content" id="bateriaContentBody">
+        <!-- contenido inyectado dinámicamente por mostrarModalBateria() -->
+    </div>
+</div>
+<!-- ╔═══════════════════════════════════════════════════════╗
      ║ [HTML-03] LOGIN + REGISTRO                            ║
      ╚═══════════════════════════════════════════════════════╝ -->
 <div id="loginContainer">
@@ -1579,6 +1686,9 @@
         <div class="side-menu-section-title">⚙️ Ajustes</div>
         <button class="side-menu-item" onclick="mostrarModalPermisos(); cerrarMenu();">
             <span class="item-icon">🔐</span> Permisos GPS/Cam
+        </button>
+        <button class="side-menu-item" onclick="mostrarModalBateria(); cerrarMenu();">
+            <span class="item-icon">🔋</span> GPS no se corta (batería)
         </button>
         <!-- Notificaciones -->
         <button class="side-menu-item" onclick="repToggleNotif(); cerrarMenu();">
@@ -2037,7 +2147,7 @@
     // │ [JS-01] IMPORTS DE FIREBASE                             │
     // └─────────────────────────────────────────────────────────┘
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded, goOffline, goOnline } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithRedirect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
     import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
@@ -2057,10 +2167,12 @@
     const db = getDatabase(app);
     const functionsInstance = getFunctions(app);
     const repartidorBotChatFn = httpsCallable(functionsInstance, 'repartidorBotChat');
+    const obtenerTokenUbicacionFn = httpsCallable(functionsInstance, 'obtenerTokenUbicacion');
     // Expuesta en window porque este <script type="module"> tiene scope aislado
     // y servibotEnviarMensaje() vive en un <script> normal más abajo que no
     // puede ver variables `const`/`let` declaradas dentro de un módulo.
     window.repartidorBotChatFn = repartidorBotChatFn;
+    window.obtenerTokenUbicacionFn = obtenerTokenUbicacionFn;
 
 // ─────────────────────────────────────────────────────────────
 // Fecha local Colombia (UTC-5). Reemplaza toISOString().slice(0,10)
@@ -2084,7 +2196,64 @@ function _fechaHoyColombia() {
     window.onValue = onValue;
     window.off = off;
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
-    const APP_VERSION = "1.8.1";
+    window.goOffline = () => goOffline(db);
+    window.goOnline = () => goOnline(db);
+    const APP_VERSION = "1.0.3";
+
+ // ============================================================
+ // CONTROL DE VERSIÓN OBLIGATORIA DEL REPARTIDOR (mismo mecanismo
+ // que el cliente, pero con sus propios campos en 'config' para no
+ // mezclarse con los del cliente):
+ // - config/versionMinimaRepartidor
+ // - config/urlDescargaApkRepartidor
+ // ============================================================
+ function _compararVersionesRep(a, b) {
+ const pa = a.split('.').map(Number);
+ const pb = b.split('.').map(Number);
+ for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+ const na = pa[i] || 0, nb = pb[i] || 0;
+ if (na < nb) return -1;
+ if (na > nb) return 1;
+ }
+ return 0;
+ }
+
+ function _mostrarBloqueoActualizacionRep(versionMinima, urlDescarga) {
+ if (document.getElementById('bloqueoActualizacionRepOverlay')) return;
+ const overlay = document.createElement('div');
+ overlay.id = 'bloqueoActualizacionRepOverlay';
+ overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(5,8,15,0.96);display:flex;align-items:center;justify-content:center;padding:24px;';
+ overlay.innerHTML = `
+ <div style="background:#131F36;border:1px solid #1A2845;border-radius:16px;padding:28px 24px;max-width:360px;width:100%;text-align:center;">
+ <div style="font-size:42px;margin-bottom:12px;">⚠️</div>
+ <h2 style="color:#E2E8F0;font-size:20px;margin:0 0 10px;">Actualización requerida</h2>
+ <p style="color:#94A3B8;font-size:14px;line-height:1.5;margin:0 0 6px;">
+ Tu versión (<strong>${APP_VERSION}</strong>) está desactualizada.
+ </p>
+ <p style="color:#94A3B8;font-size:14px;line-height:1.5;margin:0 0 20px;">
+ Necesitas la versión <strong>${versionMinima}</strong> o superior para seguir usando la app del repartidor.
+ </p>
+ <a href="${urlDescarga || '#'}" target="_blank" rel="noopener" style="display:block;background:#F59E0B;color:#0D1526;font-weight:700;padding:14px;border-radius:10px;text-decoration:none;font-size:15px;">
+ Descargar última versión
+ </a>
+ </div>`;
+ document.body.appendChild(overlay);
+ }
+
+ async function _verificarVersionObligatoriaRep() {
+ try {
+ const snap = await get(ref(db, 'config'));
+ if (!snap.exists()) return;
+ const cfg = snap.val();
+ const versionMinima = cfg.versionMinimaRepartidor;
+ if (versionMinima && _compararVersionesRep(APP_VERSION, versionMinima) < 0) {
+ _mostrarBloqueoActualizacionRep(versionMinima, cfg.urlDescargaApkRepartidor);
+ }
+ } catch (e) {
+ console.error('No se pudo verificar la versión mínima del repartidor:', e.message);
+ }
+ }
+ _verificarVersionObligatoriaRep();
 
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-03] SEGURIDAD (sanitizar, llamarBackend)            │
@@ -2116,10 +2285,17 @@ function _fechaHoyColombia() {
                 <p style="color:#aaa;font-size:11px;margin:4px 0 0;">📷 El cliente envió estos datos como foto — toca para ampliar</p>
             </div>`;
         }
+        // FIX UBICACIÓN GPS: si el pedido trae coordenadas exactas de entrega
+        // (marcadas por el cliente en el mapeador/GPS), mostrar un enlace directo
+        // a Google Maps en vez de dejar solo el texto "GPS: lat,lng" sin acción.
+        const gpsDestino = pedido.gpsDestino || null;
+        const linkMapa = (gpsDestino && gpsDestino.lat && gpsDestino.lng)
+            ? `<br><a href="https://www.google.com/maps?q=${gpsDestino.lat},${gpsDestino.lng}" target="_blank" style="color:#4A9EFF;font-size:11px;">🗺️ Abrir ubicación exacta en Google Maps</a>`
+            : '';
         return `
             👤 ${sanitizarHTML(nombre || '—')}<br>
             📍 ${sanitizarHTML(direccion || '—')}<br>
-            📞 ${sanitizarHTML(telefono || '—')}`;
+            📞 ${sanitizarHTML(telefono || '—')}${linkMapa}`;
     }
 
     // ✅ SEGURIDAD: Llamar al backend con autenticación
@@ -2207,6 +2383,26 @@ function _fechaHoyColombia() {
     let permisosCamaraOtorgado = false;
     let permisosMicrofonoOtorgado = false;
     let permisosUbicacionOtorgado = false;
+
+    // ============================================================
+    // DIAGNÓSTICO TEMPORAL v1.0.2 — log de eventos a Firebase para
+    // poder ver qué pasa en segundo plano sin computador ni cable USB.
+    // Escribe en debug_repartidor/{uid}, se puede ver desde la consola
+    // de Firebase (Realtime Database) abierta en el navegador del
+    // celular. Quitar cuando ya no se necesite.
+    // ============================================================
+    function _debugLog(msg) {
+        try {
+            if (!repartidorUID) return;
+            push(ref(db, `repartidores_info/${repartidorUID}/debugLog`), {
+                ts: Date.now(),
+                hora: new Date().toLocaleTimeString('es-CO'),
+                msg: String(msg),
+                oculto: document.hidden
+            });
+        } catch (e) { /* silencioso, es solo diagnóstico */ }
+    }
+    window._debugLog = _debugLog;
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-04] VARIABLES DEL MAPA (MULTI-CLIENTE)              │
     // └─────────────────────────────────────────────────────────┘
@@ -2215,6 +2411,13 @@ function _fechaHoyColombia() {
     let marcadorCliente = null;       // compat. legacy
     let marcadorRepartidor = null;
     let mapaYaAjustado = false; // Evita recentrar el mapa tras el primer ajuste
+ // FIX SEGUNDO PEDIDO SIN MOSTRAR: antes, una vez el mapa se ajustaba la
+ // primera vez, quedaba bloqueado para siempre — si aceptabas un segundo
+ // pedido después de eso, su pin SÍ se colocaba, pero la vista nunca se
+ // reajustaba para incluirlo (podía quedar fuera de lo que ves en pantalla).
+ // Este set guarda qué pedidos ya se tuvieron en cuenta en algún ajuste de
+ // zoom, para poder reabrir el ajuste solo cuando llega uno nuevo.
+ let _pedidosIncluidosEnZoom = new Set();
     let clienteUbicacionListener = null;  // compat. legacy
     let repartidorCoords = null;
     let clienteCoordsRepartidorApp = null;
@@ -2318,6 +2521,7 @@ function _fechaHoyColombia() {
         marcadorCliente = null;
         marcadorRepartidor = null;
         mapaYaAjustado = false; // Permitir reajuste al iniciar nuevo pedido
+        _pedidosIncluidosEnZoom = new Set();
     }
     
     try {
@@ -2542,6 +2746,39 @@ function _fechaHoyColombia() {
                 Math.sin(Δλ/2) * Math.sin(Δλ/2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         return R * c; // Distancia en metros
+    }
+
+    // FIX DISTANCIA REAL RECOGIDA→ENTREGA: el precio de un pedido ya se calcula
+    // en el backend con la distancia real por carretera (OSRM), pero este panel
+    // seguía mostrando línea recta (Haversine) para ese mismo tramo — por eso no
+    // coincidía con Google Maps. La distancia repartidor→recogida sí se deja en
+    // línea recta a propósito (es solo una referencia rápida que cambia todo el
+    // tiempo mientras te mueves); pero recogida→entrega es fija durante todo el
+    // pedido, así que aquí sí vale la pena traer la ruta real una sola vez y
+    // guardarla en caché.
+    const _distEntregaRutaCache = {}; // pedidoId -> km reales (o null mientras carga)
+    // FIX ESTIMADO SIN OSRM: la línea recta siempre da MENOS que la ruta real
+    // (calles, curvas, ríos, lomas) — se corrige con este factor para que el
+    // estimado (mientras carga, o si OSRM llega a fallar) no se quede corto.
+    const FACTOR_CORRECCION_RUTA = 1.25; // +25% sobre la línea recta
+    async function _obtenerDistanciaRutaReal(pedidoId, coordsA, coordsB) {
+        if (_distEntregaRutaCache[pedidoId] !== undefined) return;
+        _distEntregaRutaCache[pedidoId] = null; // marca "cargando" para no pedirlo dos veces
+        let km = null;
+        try {
+            const url = `https://router.project-osrm.org/route/v1/driving/${coordsA.lng},${coordsA.lat};${coordsB.lng},${coordsB.lat}?overview=false`;
+            const resp = await fetch(url);
+            const data = await resp.json();
+            if (data.routes && data.routes[0]) km = data.routes[0].distance / 1000;
+        } catch (e) {
+            console.warn('[DISTANCIA] OSRM no disponible para pedido', pedidoId, e);
+        }
+        if (km === null) {
+            km = (calcularDistancia(coordsA.lat, coordsA.lng, coordsB.lat, coordsB.lng) / 1000) * FACTOR_CORRECCION_RUTA;
+        }
+        _distEntregaRutaCache[pedidoId] = km;
+        _actualizarPanelDistancias(); // repinta el panel de "Distancias a tus destinos"
+        if (typeof _renderizarRutaSugerida === 'function') _renderizarRutaSugerida(); // y el de "Ruta Sugerida"
     }
     function calcularDireccion(lat1, lon1, lat2, lon2) {
         const φ1 = lat1 * Math.PI / 180;
@@ -2969,11 +3206,23 @@ function _fechaHoyColombia() {
         if (_geocodificandoBarrio[pedidoId]) return;
         const barrioEntrega = info.barrio || info.barrioEntrega || '';
         const zonaEntrega   = info.zona   || info.zonaEntrega   || '';
-        if (!barrioEntrega) return;
-        if (marcadoresEntregaPedido[pedidoId] && marcadoresEntregaPedido[pedidoId]._barrioKey === barrioEntrega) return;
-        _geocodificandoBarrio[pedidoId] = true;
-        const coords = await _geocodificarBarrio(barrioEntrega);
-        _geocodificandoBarrio[pedidoId] = false;
+        // FIX UBICACIÓN GPS: si el cliente marcó el punto en el mapeador (o usó GPS),
+        // el pedido trae gpsDestino {lat,lng} aunque no haya barrio de texto. Antes
+        // esta función se salía aquí mismo y nunca se colocaba el pin.
+        const gpsDestino = info.gpsDestino || null;
+        const etiquetaEntrega = barrioEntrega || (gpsDestino ? 'Ubicación GPS del cliente' : '');
+        if (!barrioEntrega && !gpsDestino) return;
+        const claveActual = barrioEntrega || `gps:${gpsDestino.lat.toFixed(5)},${gpsDestino.lng.toFixed(5)}`;
+        if (marcadoresEntregaPedido[pedidoId] && marcadoresEntregaPedido[pedidoId]._barrioKey === claveActual) return;
+        let coords = null;
+        if (gpsDestino && gpsDestino.lat && gpsDestino.lng) {
+            // Coordenadas exactas del cliente: no hace falta geocodificar
+            coords = { lat: parseFloat(gpsDestino.lat), lng: parseFloat(gpsDestino.lng) };
+        } else {
+            _geocodificandoBarrio[pedidoId] = true;
+            coords = await _geocodificarBarrio(barrioEntrega);
+            _geocodificandoBarrio[pedidoId] = false;
+        }
         if (!coords || !mapaCliente) return;
         if (marcadoresEntregaPedido[pedidoId]) mapaCliente.removeLayer(marcadoresEntregaPedido[pedidoId]);
         const zonaColor = ZONA_COLORES[(zonaEntrega||'').toUpperCase()] || '#2980b9';
@@ -2989,21 +3238,22 @@ function _fechaHoyColombia() {
             }),
             zIndexOffset: 900
         }).addTo(mapaCliente);
-        pinEnt._barrioKey = barrioEntrega;
+        pinEnt._barrioKey = claveActual;
         pinEnt.bindTooltip(
-            `🏠 <b style="color:#4A9EFF;">${barrioEntrega}</b>${zonaSpan}<br><span style="font-size:10px;color:#ccc;">Destino de entrega</span>`,
+            `🏠 <b style="color:#4A9EFF;">${etiquetaEntrega}</b>${zonaSpan}<br><span style="font-size:10px;color:#ccc;">Destino de entrega</span>`,
             { permanent: true, direction: 'top', offset: [0, -22], className: 'leaflet-tooltip-barrio' }
         );
         pinEnt.bindPopup(
-            `<b>🏠 Destino de entrega</b><br><b style="color:#4A9EFF;">${barrioEntrega}</b>`
+            `<b>🏠 Destino de entrega</b><br><b style="color:#4A9EFF;">${etiquetaEntrega}</b>`
             + (zonaEntrega ? ` <span style="background:${zonaColor};color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;">${zonaEntrega}</span>` : '')
             + (info.desc ? `<br><span style="font-size:11px;color:#aaa;">${info.desc}</span>` : '')
+            + `<br><a href="https://www.google.com/maps?q=${coords.lat},${coords.lng}" target="_blank" style="color:#4A9EFF;font-size:11px;">📍 Ver en Google Maps</a>`
         );
         marcadoresEntregaPedido[pedidoId] = pinEnt;
         // Compat. legacy: primer pin también va al dict por clienteID
         const cid = info.clienteID;
         if (cid && !marcadoresEntrega[cid]) marcadoresEntrega[cid] = pinEnt;
-        console.log(`[MAPA] ✅ Pin entrega (pid=${pedidoId.slice(-6)}) en ${coords.lat},${coords.lng} (${barrioEntrega})`);
+        console.log(`[MAPA] ✅ Pin entrega (pid=${pedidoId.slice(-6)}) en ${coords.lat},${coords.lng} (${etiquetaEntrega})`);
         _ajustarZoomTodos();
     }
 
@@ -3013,11 +3263,21 @@ function _fechaHoyColombia() {
         if (_geocodificandoRecogida[pedidoId]) return;
         const barrioRecogida = info.barrioRecogida || '';
         const zonaRecogida   = info.zonaRecogida   || '';
-        if (!barrioRecogida) return;
-        if (marcadoresRecogidaPedido[pedidoId] && marcadoresRecogidaPedido[pedidoId]._barrioKey === barrioRecogida) return;
-        _geocodificandoRecogida[pedidoId] = true;
-        const coords = await _geocodificarBarrio(barrioRecogida);
-        _geocodificandoRecogida[pedidoId] = false;
+        // FIX UBICACIÓN GPS: usar coordenadas exactas si el cliente marcó el punto
+        // de recogida en el mapeador/GPS (antes se salía aquí y no se colocaba pin).
+        const gpsRecogida = info.gpsRecogida || null;
+        const etiquetaRecogida = barrioRecogida || (gpsRecogida ? 'Ubicación GPS del cliente' : '');
+        if (!barrioRecogida && !gpsRecogida) return;
+        const claveActual = barrioRecogida || `gps:${gpsRecogida.lat.toFixed(5)},${gpsRecogida.lng.toFixed(5)}`;
+        if (marcadoresRecogidaPedido[pedidoId] && marcadoresRecogidaPedido[pedidoId]._barrioKey === claveActual) return;
+        let coords = null;
+        if (gpsRecogida && gpsRecogida.lat && gpsRecogida.lng) {
+            coords = { lat: parseFloat(gpsRecogida.lat), lng: parseFloat(gpsRecogida.lng) };
+        } else {
+            _geocodificandoRecogida[pedidoId] = true;
+            coords = await _geocodificarBarrio(barrioRecogida);
+            _geocodificandoRecogida[pedidoId] = false;
+        }
         if (!coords || !mapaCliente) return;
         if (marcadoresRecogidaPedido[pedidoId]) mapaCliente.removeLayer(marcadoresRecogidaPedido[pedidoId]);
         const zonaColor = ZONA_COLORES[(zonaRecogida||'').toUpperCase()] || '#E08B00';
@@ -3033,21 +3293,22 @@ function _fechaHoyColombia() {
             }),
             zIndexOffset: 850
         }).addTo(mapaCliente);
-        pinRec._barrioKey = barrioRecogida;
+        pinRec._barrioKey = claveActual;
         pinRec.bindTooltip(
-            `📦 <b style="color:#F59E0B;">${barrioRecogida}</b>${zonaSpan}<br><span style="font-size:10px;color:#ccc;">Punto de recogida</span>`,
+            `📦 <b style="color:#F59E0B;">${etiquetaRecogida}</b>${zonaSpan}<br><span style="font-size:10px;color:#ccc;">Punto de recogida</span>`,
             { permanent: true, direction: 'top', offset: [0, -22], className: 'leaflet-tooltip-barrio' }
         );
         pinRec.bindPopup(
-            `<b>📦 Punto de recogida</b><br><b style="color:#F59E0B;">${barrioRecogida}</b>`
+            `<b>📦 Punto de recogida</b><br><b style="color:#F59E0B;">${etiquetaRecogida}</b>`
             + (zonaRecogida ? ` <span style="background:${zonaColor};color:#fff;border-radius:6px;padding:1px 6px;font-size:11px;">${zonaRecogida}</span>` : '')
             + (info.desc ? `<br><span style="font-size:11px;color:#aaa;">${info.desc}</span>` : '')
+            + `<br><a href="https://www.google.com/maps?q=${coords.lat},${coords.lng}" target="_blank" style="color:#F59E0B;font-size:11px;">📍 Ver en Google Maps</a>`
         );
         marcadoresRecogidaPedido[pedidoId] = pinRec;
         // Compat. legacy
         const cid = info.clienteID;
         if (cid && !marcadoresRecogida[cid]) marcadoresRecogida[cid] = pinRec;
-        console.log(`[MAPA] ✅ Pin recogida (pid=${pedidoId.slice(-6)}) en ${coords.lat},${coords.lng} (${barrioRecogida})`);
+        console.log(`[MAPA] ✅ Pin recogida (pid=${pedidoId.slice(-6)}) en ${coords.lat},${coords.lng} (${etiquetaRecogida})`);
         _ajustarZoomTodos();
     }
 
@@ -3133,7 +3394,16 @@ function _fechaHoyColombia() {
     // Ajustar zoom para ver repartidor + todos los clientes + pins de entrega
     function _ajustarZoomTodos() {
         if (!mapaCliente) return;
-        if (mapaYaAjustado) return; // No resetear si el usuario ya movió/hizo zoom
+
+        // ¿Hay algún pedido con pin en el mapa que todavía no se haya tenido en
+        // cuenta en un ajuste de zoom anterior? Si sí, forzamos un reajuste aunque
+        // el mapa ya se hubiera ajustado antes por otro pedido.
+        const idsConPin = new Set([...Object.keys(marcadoresEntregaPedido), ...Object.keys(marcadoresRecogidaPedido)]);
+        let hayPedidoNuevo = false;
+        idsConPin.forEach(pid => { if (!_pedidosIncluidosEnZoom.has(pid)) hayPedidoNuevo = true; });
+
+        if (mapaYaAjustado && !hayPedidoNuevo) return; // No resetear si el usuario ya movió/hizo zoom y no hay nada nuevo
+
         const puntos = [];
         if (repartidorCoords) puntos.push([repartidorCoords.lat, repartidorCoords.lng]);
         Object.values(coordsClientes).forEach(c => puntos.push([c.lat, c.lng]));
@@ -3145,6 +3415,7 @@ function _fechaHoyColombia() {
         Object.values(marcadoresRecogida).forEach(m => { const ll = m.getLatLng(); if (ll) puntos.push([ll.lat, ll.lng]); });
         if (puntos.length === 0) return;
         mapaYaAjustado = true;
+        idsConPin.forEach(pid => _pedidosIncluidosEnZoom.add(pid));
         if (puntos.length === 1) { mapaCliente.setView(puntos[0], 15); return; }
         mapaCliente.fitBounds(L.latLngBounds(puntos), { padding: [50, 50] });
     }
@@ -3194,11 +3465,21 @@ function _fechaHoyColombia() {
                 lineaHtml += `📦 <b>Recoge en ${barrioRec}</b>: <b>${kmA} km</b> · ~${minA} min`;
                 if (pinEnt) {
                     const llEnt = pinEnt.getLatLng();
-                    const distB = calcularDistancia(llRec.lat, llRec.lng, llEnt.lat, llEnt.lng);
-                    const kmB   = (distB / 1000).toFixed(2);
-                    const minB  = Math.round(distB / (30000 / 60));
                     const barrioEnt = info.barrio || info.barrioEntrega || 'Entrega';
-                    lineaHtml += `<br>🏠 <b>Entrega en ${barrioEnt}</b>: <b>${kmB} km</b> · ~${minB} min`;
+                    const kmRealCache = _distEntregaRutaCache[key];
+                    if (kmRealCache !== undefined && kmRealCache !== null) {
+                        // Ya tenemos la distancia real por carretera (coincide con Google Maps)
+                        const minB = Math.round((kmRealCache * 1000) / (30000 / 60));
+                        lineaHtml += `<br>🏠 <b>Entrega en ${barrioEnt}</b>: <b>${kmRealCache.toFixed(2)} km</b> · ~${minB} min`;
+                    } else {
+                        // Mientras llega la ruta real, se muestra un estimado en línea
+                        // recta corregida (se ajusta solo apenas responda la ruta)
+                        const distB = calcularDistancia(llRec.lat, llRec.lng, llEnt.lat, llEnt.lng) * FACTOR_CORRECCION_RUTA;
+                        const kmB   = (distB / 1000).toFixed(2);
+                        const minB  = Math.round(distB / (30000 / 60));
+                        lineaHtml += `<br>🏠 <b>Entrega en ${barrioEnt}</b>: <b>~${kmB} km</b> · ~${minB} min`;
+                        if (kmRealCache === undefined) _obtenerDistanciaRutaReal(key, { lat: llRec.lat, lng: llRec.lng }, { lat: llEnt.lat, lng: llEnt.lng });
+                    }
                 }
             } else if (pinEnt) {
                 const llEnt = pinEnt.getLatLng();
@@ -3263,13 +3544,21 @@ function _fechaHoyColombia() {
                 distRecKm = calcularDistancia(repartidorCoords.lat, repartidorCoords.lng, ll.lat, ll.lng) / 1000;
             }
 
-            // Distancia al punto de entrega (desde recogida)
+            // Distancia al punto de entrega (desde recogida) — misma caché de
+            // ruta real (OSRM) que usa el panel de "Distancias a tus destinos",
+            // para que "ruta total" tampoco quede en línea recta.
             let distEntKm = 0;
             const pinEnt = marcadoresEntregaPedido[pid] || marcadoresEntrega[info.clienteID];
             if (pinRec && pinEnt) {
                 const llR = pinRec.getLatLng();
                 const llE = pinEnt.getLatLng();
-                distEntKm = calcularDistancia(llR.lat, llR.lng, llE.lat, llE.lng) / 1000;
+                const kmRealCache = _distEntregaRutaCache[pid];
+                if (kmRealCache !== undefined && kmRealCache !== null) {
+                    distEntKm = kmRealCache;
+                } else {
+                    distEntKm = (calcularDistancia(llR.lat, llR.lng, llE.lat, llE.lng) / 1000) * FACTOR_CORRECCION_RUTA; // estimado corregido mientras carga
+                    if (kmRealCache === undefined) _obtenerDistanciaRutaReal(pid, { lat: llR.lat, lng: llR.lng }, { lat: llE.lat, lng: llE.lng });
+                }
             }
 
             // Score: más tiempo esperando = prioridad; distancia corta = prioridad
@@ -3397,6 +3686,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         if (permisosUbicacionOtorgado) {
             await iniciarTrackingGPSAutomatico();
         }
+        // 🔋 Guía de batería por fabricante — solo la primera vez en este
+        // dispositivo (se guarda en localStorage porque depende del teléfono,
+        // no de la cuenta). Se muestra justo después de resolver permisos.
+        if (!localStorage.getItem('bateriaInstruccionesVistas')) {
+            mostrarModalBateria();
+        }
     }
     window.omitirPermisos = function() {
         console.log('⏭️ Permisos omitidos por el usuario');
@@ -3408,12 +3703,117 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
               '- NO podrás enviar fotos (sin cámara)\n' +
               '- NO podrás enviar audios (sin micrófono)\n\n' +
               'Puedes activarlos después desde Configuración.');
+        if (!localStorage.getItem('bateriaInstruccionesVistas')) {
+            mostrarModalBateria();
+        }
     }
     function mostrarModalPermisos() {
         const modal = document.getElementById('permisosModal');
         modal.classList.add('show');
     }
     window.mostrarModalPermisos = mostrarModalPermisos;
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-15b] DETECCIÓN DE FABRICANTE + GUÍA DE BATERÍA      │
+    // └─────────────────────────────────────────────────────────┘
+    // 🔋 Fabricantes chinos de gama media (Xiaomi/MIUI, Infinix-Tecno-itel/XOS,
+    // Oppo-Realme/ColorOS, Huawei-Honor/EMUI, Vivo-iQOO/FuntouchOS) matan el
+    // WebView en segundo plano aunque el repartidor ya haya dado el permiso
+    // estándar de Android para ignorar la optimización de batería — cada uno
+    // esconde restricciones adicionales en su propio menú. Esta guía detecta
+    // la marca por el User-Agent y muestra los pasos exactos para esa marca.
+    const _GUIAS_BATERIA = {
+        xiaomi: {
+            nombre: 'Xiaomi / Redmi / POCO (MIUI)',
+            pasos: [
+                ['Inicio automático', 'Ajustes → Aplicaciones → Administrar apps → Servi Aliados Repartidor → Inicio automático → Activar.'],
+                ['Ahorro de batería', 'Ajustes → Batería → Ahorro de batería de apps → Servi Aliados → "Sin restricciones".'],
+                ['Bloquear en recientes', 'Abre las apps recientes, mantén presionada la tarjeta de Servi Aliados y toca el candado 🔒.'],
+            ]
+        },
+        infinix: {
+            nombre: 'Infinix / Tecno / itel (XOS)',
+            pasos: [
+                ['Inicio automático', 'Ajustes → Aplicaciones → Servi Aliados Repartidor → Inicio automático → Activar.'],
+                ['Gestión de batería', 'Ajustes → Batería → Gestión de batería de apps → Servi Aliados → "Sin restricciones".'],
+                ['Bloquear en recientes', 'Abre las apps recientes, mantén presionada la tarjeta de Servi Aliados y toca el candado 🔒.'],
+            ]
+        },
+        oppo: {
+            nombre: 'Oppo / Realme (ColorOS)',
+            pasos: [
+                ['Inicio automático', 'Ajustes → Gestión de apps → Inicio automático de apps → Servi Aliados → Activar.'],
+                ['Uso de batería', 'Ajustes → Batería → Uso de batería de la app → Servi Aliados → "Permitir actividad en segundo plano".'],
+                ['Bloquear en recientes', 'Abre las apps recientes, mantén presionada la tarjeta de Servi Aliados y toca el candado 🔒.'],
+            ]
+        },
+        huawei: {
+            nombre: 'Huawei / Honor (EMUI / Magic UI)',
+            pasos: [
+                ['Inicio en segundo plano', 'Ajustes → Batería → Inicio de apps → Servi Aliados → Desactivar "Gestión automática" y activar manualmente Inicio automático, Inicio secundario y Ejecución en segundo plano.'],
+                ['Bloquear en recientes', 'Abre las apps recientes, mantén presionada la tarjeta de Servi Aliados y toca el candado 🔒.'],
+            ]
+        },
+        vivo: {
+            nombre: 'Vivo / iQOO (FuntouchOS / OriginOS)',
+            pasos: [
+                ['Inicio automático', 'Ajustes → Batería → Consumo de batería en segundo plano → Servi Aliados → Permitir.'],
+                ['Gestión de apps en segundo plano', 'Ajustes → Batería → Alto consumo en segundo plano → Activar para Servi Aliados.'],
+                ['Bloquear en recientes', 'Abre las apps recientes, mantén presionada la tarjeta de Servi Aliados y toca el candado 🔒.'],
+            ]
+        },
+        generico: {
+            nombre: 'tu teléfono',
+            pasos: [
+                ['Batería sin restricciones', 'Ajustes → Batería → busca Servi Aliados Repartidor → selecciona "Sin restricciones" (no solo "Optimizado").'],
+                ['Inicio automático (si existe)', 'Ajustes → Aplicaciones → Servi Aliados → busca una opción de "Inicio automático" o "Actividad en segundo plano" y actívala.'],
+                ['Bloquear en recientes', 'Abre las apps recientes, mantén presionada la tarjeta de Servi Aliados y actívale el candado 🔒 si tu teléfono lo permite.'],
+            ]
+        }
+    };
+    function _detectarFabricante() {
+        const ua = (navigator.userAgent || '').toLowerCase();
+        if (ua.includes('redmi') || ua.includes('poco') || ua.includes('mi ') || ua.includes('xiaomi')) return 'xiaomi';
+        if (ua.includes('infinix') || ua.includes('tecno') || ua.includes('itel')) return 'infinix';
+        if (ua.includes('oppo') || ua.includes('realme') || ua.includes('cph')) return 'oppo';
+        if (ua.includes('huawei') || ua.includes('honor')) return 'huawei';
+        if (ua.includes('vivo') || ua.includes('iqoo')) return 'vivo';
+        return 'generico';
+    }
+    function mostrarModalBateria() {
+        const marca = _detectarFabricante();
+        const guia = _GUIAS_BATERIA[marca];
+        const body = document.getElementById('bateriaContentBody');
+        body.innerHTML = `
+            <h2>🔋 Evita que se corte el GPS</h2>
+            <div class="bateria-marca">Detectado: <strong>${guia.nombre}</strong></div>
+            ${guia.pasos.map(([titulo, texto]) => `
+                <div class="bateria-paso">
+                    <strong>${titulo}</strong>
+                    <span>${texto}</span>
+                </div>
+            `).join('')}
+            <div class="bateria-warning">
+                ⚠️ Si no haces estos pasos, tu teléfono puede cerrar la app cuando la pantalla se apaga y dejarás de recibir pedidos aunque la app siga "abierta".
+            </div>
+            <button class="btn-bateria-ok" onclick="cerrarModalBateria(true)">✅ Ya configuré esto</button>
+            <button class="btn-bateria-luego" onclick="cerrarModalBateria(false)">Recordarme después</button>
+        `;
+        document.getElementById('bateriaModal').classList.add('show');
+    }
+    window.mostrarModalBateria = mostrarModalBateria;
+    function cerrarModalBateria(confirmado) {
+        document.getElementById('bateriaModal').classList.remove('show');
+        try {
+            localStorage.setItem('bateriaInstruccionesVistas', '1');
+            if (confirmado && repartidorUID && db) {
+                update(ref(db, `repartidores_info/${repartidorUID}`), {
+                    bateriaInstruccionesConfirmadas: Date.now(),
+                    bateriaFabricanteDetectado: _detectarFabricante()
+                });
+            }
+        } catch (e) { /* silencioso */ }
+    }
+    window.cerrarModalBateria = cerrarModalBateria;
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-15] SISTEMA DE HEARTBEAT                            │
     // └─────────────────────────────────────────────────────────┘
@@ -3446,6 +3846,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         heartbeatInterval = setInterval(async () => {
             if (sessionActive && repartidorUID) {
                 await marcarComoOnline();
+                _debugLog(`heartbeat ok`);
                 // Renovar onDisconnect en cada heartbeat (se resetea en cada update de Firebase)
                 try {
                     await onDisconnect(ref(db, `repartidores_info/${repartidorUID}`)).update({
@@ -3577,6 +3978,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             return;
         }
         try {
+            // 🔧 FIX 2026-08-05: sesionCerradaManualmente quedaba en true de forma
+            // obsoleta desde el último logout (nunca se reseteaba en el login),
+            // dando una imagen confusa en el admin panel de una sesión "activa"
+            // que en realidad se ve como cerrada manualmente.
+            await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                sesionCerradaManualmente: false
+            });
             await marcarComoOnline();
             await iniciarHeartbeatPrincipal();
             iniciarEnvioUbicacionDirecto();
@@ -3800,7 +4208,20 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // ========================================
     // 🔥 SISTEMA GPS OPTIMIZADO (15 SEGUNDOS)
     // ========================================
-    let bgGeoWatcherId = null;
+    let bgGeoActivo = false;
+    let _ubicacionWebhookToken = null;
+    async function _obtenerTokenUbicacionCacheado() {
+        if (_ubicacionWebhookToken) return _ubicacionWebhookToken;
+        try {
+            const res = await window.obtenerTokenUbicacionFn();
+            _ubicacionWebhookToken = res.data.token;
+            return _ubicacionWebhookToken;
+        } catch (e) {
+            console.error('❌ No se pudo obtener el token de ubicación:', e);
+            _debugLog(`token ubicacion ERROR: ${e.message}`);
+            return null;
+        }
+    }
     async function iniciarBackgroundGeolocation() {
         try {
             const BackgroundGeolocation = window.Capacitor && window.Capacitor.Plugins
@@ -3810,21 +4231,37 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 console.warn('⚠️ Plugin BackgroundGeolocation no disponible (¿estás en navegador web?)');
                 return;
             }
-            if (bgGeoWatcherId) {
+            if (bgGeoActivo) {
                 console.log('⚠️ Background Geolocation nativo ya está activo');
                 return;
             }
-            bgGeoWatcherId = await BackgroundGeolocation.addWatcher(
+            if (!repartidorUID) return;
+            const token = await _obtenerTokenUbicacionCacheado();
+            // 🔗 URL de POST nativo — el propio plugin (Kotlin) manda cada
+            // ubicación directo a este webhook, SIN pasar por el WebView/JS.
+            // Por eso sigue funcionando aunque Android congele la app.
+            // ⚠️ Verifica esta URL en Firebase Console → Functions después
+            // de desplegar actualizarUbicacionRepartidor (puede variar).
+            const urlWebhook = token
+                ? `https://actualizarubicacionrepartidor-7ihdi2caea-uc.a.run.app?uid=${repartidorUID}&token=${token}`
+                : null;
+            if (!urlWebhook) {
+                console.warn('⚠️ Sin token de ubicación — el webhook nativo NO quedará activo, solo el callback JS.');
+            }
+
+            await BackgroundGeolocation.start(
                 {
                     backgroundMessage: "Servi Aliados está siguiendo tu ubicación",
                     backgroundTitle: "Repartidor activo",
                     requestPermissions: true,
                     stale: false,
-                    distanceFilter: 20
+                    distanceFilter: 20,
+                    ...(urlWebhook ? { url: urlWebhook } : {})
                 },
                 (location, error) => {
                     if (error) {
                         console.warn('⚠️ Error en background GPS nativo:', error.message);
+                        _debugLog(`GPS ERROR: ${error.message || error.code || 'desconocido'}`);
                         if (error.code === 'NOT_AUTHORIZED') {
                             permisosUbicacionOtorgado = false;
                             alert('⚠️ IMPORTANTE: Permiso de ubicación denegado.\n\n' +
@@ -3845,13 +4282,25 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     const speed = location.speed || 0;
                     const heading = location.bearing || 0;
                     console.log(`📍 BG GPS nativo: ${lat.toFixed(6)}, ${lon.toFixed(6)} [${isBackgroundMode ? 'BACKGROUND' : 'FOREGROUND'}]`);
-                    enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading);
-                    enviarUbicacionDirecta(lat, lon, accuracy, speed, heading);
+                    _debugLog(`GPS ok lat=${lat.toFixed(5)} lon=${lon.toFixed(5)} modo=${isBackgroundMode ? 'BG' : 'FG'}`);
+                    // El webhook nativo (campo "url" de arriba) ya manda esta
+                    // misma ubicación a Firebase de forma independiente al
+                    // WebView. Esta rama solo cubre lo que el webhook NO hace
+                    // (pedidos_pendientes / proximidad de entrega), y solo
+                    // sirve cuando el WebView sigue despierto.
+                    if (isBackgroundMode) {
+                        enviarUbicacionNativaHTTP(lat, lon, accuracy, speed, heading);
+                    } else {
+                        enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading);
+                        enviarUbicacionDirecta(lat, lon, accuracy, speed, heading);
+                    }
                 }
             );
-            console.log('✅ Background Geolocation nativo iniciado (sobrevive app cerrada/minimizada)');
+            bgGeoActivo = true;
+            console.log('✅ Background Geolocation nativo iniciado (webhook nativo:', !!urlWebhook, ')');
         } catch (error) {
             console.error('❌ Error iniciando Background Geolocation nativo:', error);
+            _debugLog(`BG GEO iniciar ERROR: ${error.message}`);
         }
     }
     async function detenerBackgroundGeolocation() {
@@ -3859,9 +4308,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             const BackgroundGeolocation = window.Capacitor && window.Capacitor.Plugins
                 ? window.Capacitor.Plugins.BackgroundGeolocation
                 : null;
-            if (BackgroundGeolocation && bgGeoWatcherId) {
-                await BackgroundGeolocation.removeWatcher({ id: bgGeoWatcherId });
-                bgGeoWatcherId = null;
+            if (BackgroundGeolocation && bgGeoActivo) {
+                await BackgroundGeolocation.stop();
+                bgGeoActivo = false;
                 console.log('🛑 Background Geolocation nativo detenido');
             }
         } catch (error) {
@@ -3992,6 +4441,59 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             });
         }
     }
+    // ========================================
+    // 🔧 FIX 2026-08-05: envío de ubicación por HTTP nativo (CapacitorHttp)
+    // en vez del SDK normal de Firebase (WebSocket) cuando la app está en
+    // segundo plano. Android empieza a limitar/bloquear las peticiones de
+    // red que salen del WebView poco después de que la app se oculta
+    // (documentado en el propio plugin background-geolocation), aunque el
+    // GPS nativo siga funcionando. CapacitorHttp hace la petición desde
+    // código nativo Android (OkHttp), no desde el WebView, así que no la
+    // bloquean. Requiere "CapacitorHttp": { "enabled": true } en
+    // capacitor.config.json.
+    // ========================================
+    async function enviarUbicacionNativaHTTP(lat, lon, accuracy, speed, heading) {
+        if (!repartidorUID) return;
+        try {
+            const usuario = auth.currentUser;
+            if (!usuario) return;
+            const token = await usuario.getIdToken();
+            const CapacitorHttp = window.Capacitor && window.Capacitor.Plugins
+                ? window.Capacitor.Plugins.CapacitorHttp
+                : null;
+            if (!CapacitorHttp) {
+                // Respaldo: si el plugin no está disponible, intenta con el SDK normal
+                return enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading);
+            }
+            const timestamp = Date.now();
+            const url = `https://domicilios-1cd74-default-rtdb.firebaseio.com/repartidores_info/${repartidorUID}.json?auth=${token}`;
+            const body = {
+                ubicacion: { lat: parseFloat(lat.toFixed(6)), lng: parseFloat(lon.toFixed(6)) },
+                ubicacionActual: {
+                    lat: parseFloat(lat.toFixed(6)),
+                    lng: parseFloat(lon.toFixed(6)),
+                    accuracy: Math.round(accuracy),
+                    speed: Math.round(speed * 3.6),
+                    heading: Math.round(heading),
+                    timestamp
+                },
+                ubicacionUrl: `https://www.google.com/maps?q=${lat},${lon}`,
+                trackingActivo: true,
+                lastSeen: timestamp,
+                online: true
+            };
+            await CapacitorHttp.patch({
+                url,
+                headers: { 'Content-Type': 'application/json' },
+                data: body
+            });
+            console.log(`📍 Ubicación (HTTP nativo, background): ${lat.toFixed(6)}, ${lon.toFixed(6)}`);
+            _debugLog(`HTTP nativo ok lat=${lat.toFixed(5)} lon=${lon.toFixed(5)}`);
+        } catch (error) {
+            console.error('❌ Error enviando ubicación por HTTP nativo:', error);
+            _debugLog(`HTTP nativo ERROR: ${error.message || error}`);
+        }
+    }
     async function enviarUbicacionAFirebase(lat, lon, accuracy, speed, heading) {
         if (!repartidorUID) return;
         try {
@@ -4020,6 +4522,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             console.error('❌ Error al enviar ubicación Firebase SDK:', error);
         }
     }
+    // ========================================
+    // 🔔 AVISO "REPARTIDOR CERCA" AL CLIENTE
+    // ========================================
+    // Cuando el repartidor va en camino a la entrega (estado 'En Camino') y su
+    // GPS queda a menos de este radio del punto de entrega, se marca el pedido
+    // con repartidorCerca=true. Un trigger en el backend (Cloud Functions)
+    // detecta ese cambio y le manda un push al cliente para que esté listo a
+    // recibir. Solo se dispara UNA vez por pedido (se revisa pedido.repartidorCerca
+    // antes de escribir, así que sobrevive incluso si cierras y abres la app).
+    const UMBRAL_PROXIMIDAD_ENTREGA_METROS = 400;
+
     async function enviarUbicacionDirecta(lat, lon, accuracy, speed, heading) {
         if (!repartidorUID) return;
         try {
@@ -4033,19 +4546,37 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     const pedido = pedidosData[pedidoId];
                     if (pedido.repartidorUID === repartidorUID && pedido.estado !== 'Pendiente') {
                         const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
-                        promesas.push(
-                            update(pedidoRef, {
-                                ubicacionRepartidor: {
-                                    lat: parseFloat(lat.toFixed(6)),
-                                    lng: parseFloat(lon.toFixed(6)),
-                                    accuracy: Math.round(accuracy),
-                                    speed: Math.round(speed * 3.6),
-                                    heading: Math.round(heading),
-                                    timestamp: timestamp,
-                                    googleMapsUrl: googleMapsUrl
-                                }
-                            })
-                        );
+                        const updateData = {
+                            ubicacionRepartidor: {
+                                lat: parseFloat(lat.toFixed(6)),
+                                lng: parseFloat(lon.toFixed(6)),
+                                accuracy: Math.round(accuracy),
+                                speed: Math.round(speed * 3.6),
+                                heading: Math.round(heading),
+                                timestamp: timestamp,
+                                googleMapsUrl: googleMapsUrl
+                            }
+                        };
+
+                        // 🔔 Chequeo de proximidad — solo para pedidos ya en camino
+                        // a la entrega, y solo si todavía no se avisó antes.
+                        if (pedido.estado === 'En Camino' && !pedido.repartidorCerca && pedido.gpsDestino && pedido.gpsDestino.lat && pedido.gpsDestino.lng) {
+                            const distMetros = calcularDistancia(lat, lon, pedido.gpsDestino.lat, pedido.gpsDestino.lng);
+                            if (distMetros <= UMBRAL_PROXIMIDAD_ENTREGA_METROS) {
+                                updateData.repartidorCerca = true;
+                                updateData.repartidorCercaTs = timestamp;
+                                console.log(`🔔 Repartidor a ${Math.round(distMetros)}m de la entrega (pedido ${pedidoId.slice(-6)}) — avisando al cliente`);
+                                // También se marca en pedidos_historial: es el nodo que
+                                // escucha la Cloud Function que manda el push (mismo
+                                // patrón que ya se usa para avisar cambios de estado).
+                                promesas.push(update(ref(db, `pedidos_historial/${pedidoId}`), {
+                                    repartidorCerca: true,
+                                    repartidorCercaTs: timestamp
+                                }).catch(() => {}));
+                            }
+                        }
+
+                        promesas.push(update(pedidoRef, updateData));
                     }
                 });
                 await Promise.all(promesas);
@@ -4098,6 +4629,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     document.addEventListener('visibilitychange', async () => {
         if (document.hidden) {
             console.log('📱 App en segundo plano');
+            _debugLog('visibilitychange -> OCULTA (pantalla apagada o app minimizada)');
             isBackgroundMode = true;
             if (repartidorUID) {
                 await update(ref(db, `repartidores_info/${repartidorUID}`), {
@@ -4107,6 +4639,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             }
         } else {
             console.log('📱 App en primer plano');
+            _debugLog('visibilitychange -> VISIBLE (pantalla encendida / app al frente)');
             isBackgroundMode = false;
             if (repartidorUID) {
                 await update(ref(db, `repartidores_info/${repartidorUID}`), {
@@ -4117,6 +4650,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             if (isWakeLockSupported && wakeLock === null) {
                 await solicitarWakeLock();
             }
+            // 🔧 FIX 2026-08-04: en Android, el WebSocket de Realtime Database
+            // suele quedar "zombie" después de un rato en segundo plano — el
+            // SDK no lo detecta como caído y por eso los listeners en vivo
+            // (avisos_repartidor, pedidos nuevos, etc.) dejaban de recibir
+            // eventos hasta cerrar y reabrir la app por completo. Forzar un
+            // ciclo goOffline()/goOnline() al volver al primer plano obliga
+            // al SDK a reconectar el socket sin necesidad de reiniciar la app.
+            try {
+                goOffline(db);
+                setTimeout(() => goOnline(db), 300);
+            } catch (e) { console.warn('No se pudo forzar reconexión de Firebase', e); }
         }
     });
     // ========================================
@@ -4126,19 +4670,23 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // MANEJO DE CIERRE DE APP/NAVEGADOR
     // ========================================
     window.addEventListener('beforeunload', async (event) => {
-        console.log('⚠️ Cerrando aplicación...');
-        detenerTrackingGPS();
-        detenerEnvioUbicacionRepartidor();
-        detenerBackgroundGeolocation();
-        detenerHeartbeat();
-        await liberarWakeLock();
-        if (repartidorUID) {
-            try {
-                await marcarComoOffline();
-            } catch (error) {
-                console.error('❌ Error al marcar offline:', error);
-            }
-        }
+        // 🔧 FIX 2026-08-05: en Android, 'beforeunload' puede dispararse cuando
+        // el sistema pausa/mata la app en segundo plano, NO solo al cerrar la
+        // app de verdad (mismo problema que ya se corrigió para 'pagehide' más
+        // abajo). Antes esto llamaba a marcarComoOffline(), que escribe
+        // online:false, trackingActivo:false y sesionCerradaManualmente:true —
+        // así el repartidor quedaba "desconectado" solo por estar en background.
+        // La desconexión real ya la detecta onDisconnect() (configurado contra
+        // Firebase), así que aquí NO llamamos a marcarComoOffline(). Solo
+        // limpiamos listeners locales (seguro hacerlo aunque la app no cierre
+        // de verdad, se vuelven a iniciar al volver a primer plano).
+        // 🔧 FIX 2026-08-05: al igual que con marcarComoOffline() arriba, tampoco
+        // debemos apagar el tracking GPS, el envío de ubicación, el background
+        // geolocation ni el heartbeat aquí — beforeunload se dispara en Android
+        // solo por minimizar/apagar pantalla, y apagar estas funciones cortaba
+        // el envío de ubicación al admin/cliente cada vez que el repartidor
+        // guardaba el celular. onDisconnect() ya maneja la desconexión real.
+        console.log('⚠️ beforeunload disparado (puede ser cierre real o solo background) — tracking sigue activo');
     });
     window.addEventListener('pagehide', () => {
         // 🔧 FIX: 'pagehide' se dispara en Android también al minimizar o apagar
@@ -4715,10 +5263,18 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     mostrarPedidoAsignado(pedido, pedidoId, listaAsignados);
                     repEscucharChatCliente(pedidoId); // 🔔 Notificar mensajes del cliente
                     // 🔧 FIX: Iniciar seguimiento para TODOS los pedidos (sin filtro de listener)
-                    if (pedido.clienteUID) {
-                        if (!activePedidoData) activePedidoData = { pedidoId, clienteUID: pedido.clienteUID, estado: pedido.estado };
+                    // FIX MAPA/DISTANCIAS SEGÚN ORIGEN: los pedidos creados por ServiBot
+                    // ("pedido para tercero") guardan el ID del cliente como
+                    // clienteIdAsignado, no como clienteUID. Antes esta rama solo
+                    // miraba clienteUID, así que esos pedidos se mostraban en la
+                    // lista pero nunca activaban el mapa/seguimiento — y como ya
+                    // quedaban marcados como procesados, tampoco los recogía la
+                    // otra rama (la de pedidos_historial) que sí tenía el respaldo.
+                    const _cIdPend = pedido.clienteUID || pedido.clienteIdAsignado;
+                    if (_cIdPend) {
+                        if (!activePedidoData) activePedidoData = { pedidoId, clienteUID: _cIdPend, estado: pedido.estado };
                         if (document.getElementById('mapa-cliente-container').style.display !== 'none' && mapaCliente) {
-                            iniciarSeguimientoCliente(pedido.clienteUID, {
+                            iniciarSeguimientoCliente(_cIdPend, {
                                 pedidoId,
                                 tiempoAceptado: pedido.tiempoAceptado || Date.now(),
                                 desc: pedido.producto || pedido.descripcion || `Pedido #${pedidoId.slice(-6)}`,
@@ -4726,7 +5282,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                                 barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
                                 zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                                 barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
-                                zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
+                                zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                                gpsDestino: pedido.gpsDestino || null,
+                                gpsRecogida: pedido.gpsRecogida || null
                             });
                         }
                     }
@@ -4763,7 +5321,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                                     barrio: p.barrioEntrega || p.barrio_entrega || p.barrioDestino || '',
                                     zona: p.zonaEntrega || p.zona_entrega || p.zona || '',
                                     barrioRecogida: p.barrioRecogida || p.barrio_recogida || p.barrioOrigen || '',
-                                    zonaRecogida: p.zonaRecogida || p.zona_recogida || ''
+                                    zonaRecogida: p.zonaRecogida || p.zona_recogida || '',
+                                    gpsDestino: p.gpsDestino || null,
+                                    gpsRecogida: p.gpsRecogida || null
                                 });
                             }
                         }
@@ -5019,7 +5579,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 setTimeout(() => {
                     document.getElementById('showAsignadosBtn').click();
                     document.getElementById('mapa-cliente-container').style.display = 'block';
+                    // FIX MAPA A MEDIAS: si el mapa ya existía (creado antes mientras
+                    // estaba oculto), Leaflet no recalcula solo el tamaño del
+                    // contenedor al volver a mostrarse — hay que decírselo a mano.
                     if (!mapaCliente) inicializarMapaCliente();
+                    else { setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 200); setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 600); }
                     setTimeout(() => {
                         iniciarSeguimientoCliente(clienteUID, {
                             pedidoId,
@@ -5028,7 +5592,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
                             zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                             barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
-                            zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
+                            zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                            gpsDestino: pedido.gpsDestino || null,
+                            gpsRecogida: pedido.gpsRecogida || null
                         });
                         iniciarEnvioUbicacionRepartidor();
                     }, 500);
@@ -5106,6 +5672,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     document.getElementById('showAsignadosBtn').click();
                     document.getElementById('mapa-cliente-container').style.display = 'block';
                     if (!mapaCliente) inicializarMapaCliente();
+                    else { setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 200); setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 600); }
                     setTimeout(() => {
                         iniciarSeguimientoCliente(clienteId, {
                             pedidoId,
@@ -5114,7 +5681,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
                             zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                             barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
-                            zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
+                            zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                            gpsDestino: pedido.gpsDestino || null,
+                            gpsRecogida: pedido.gpsRecogida || null
                         });
                         iniciarEnvioUbicacionRepartidor();
                     }, 500);
@@ -6461,6 +7030,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 if (todos.length > 0) {
                     document.getElementById('mapa-cliente-container').style.display = 'block';
                     if (!mapaCliente) inicializarMapaCliente();
+                    else { setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 200); setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 600); }
                     setTimeout(() => {
                         todos.forEach(({ clienteId, pedidoId, pedido }) => {
                             if (clientesVistos.has(clienteId)) return;
@@ -6472,7 +7042,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                                 barrio: pedido.barrioEntrega || pedido.barrio_entrega || pedido.barrioDestino || '',
                                 zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                                 barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
-                                zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || ''
+                                zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                                gpsDestino: pedido.gpsDestino || null,
+                                gpsRecogida: pedido.gpsRecogida || null
                             });
                         });
                         iniciarEnvioUbicacionRepartidor();
@@ -6481,6 +7053,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     // fallback legacy
                     document.getElementById('mapa-cliente-container').style.display = 'block';
                     if (!mapaCliente) inicializarMapaCliente();
+                    else { setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 200); setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 600); }
                     setTimeout(() => {
                         iniciarSeguimientoCliente(activePedidoData.clienteUID);
                         iniciarEnvioUbicacionRepartidor();
@@ -6711,6 +7284,31 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 document.getElementById('loginContainer').style.display = 'none';
                 document.getElementById('appContainer').style.display = 'block';
                 document.getElementById('repartidorName').textContent = repartidorNombre;
+                // 🛡️ CapacitorKV NO es accesible desde el WebView principal,
+                // solo desde dentro del Background Runner — por eso se manda
+                // el UID + refreshToken por dispatchEvent, y es el runner
+                // quien los guarda en su propio CapacitorKV (ver
+                // guardarSesion en runners/background.js). El runner corre
+                // aparte del WebView, así que puede seguir marcando
+                // "online" aunque esta página se congele en 2do plano.
+                try {
+                    const BackgroundRunner = window.Capacitor && window.Capacitor.Plugins
+                        ? window.Capacitor.Plugins.BackgroundRunner
+                        : null;
+                    if (BackgroundRunner && user.refreshToken) {
+                        const resultado = await BackgroundRunner.dispatchEvent({
+                            label: 'com.servialiados.repartidor.background.task',
+                            event: 'guardarSesion',
+                            details: { uid: user.uid, refreshToken: user.refreshToken }
+                        });
+                        _debugLog(`guardarSesion despachado ok: ${JSON.stringify(resultado)}`);
+                    } else {
+                        _debugLog(`guardarSesion SIN despachar — BackgroundRunner=${!!BackgroundRunner} refreshToken=${!!user.refreshToken}`);
+                    }
+                } catch (e) {
+                    console.warn('⚠️ No se pudo despachar guardarSesion:', e.message);
+                    _debugLog(`guardarSesion ERROR: ${e.message}`);
+                }
                 await configurarPresenciaInicial();
                 escucharChat();
                 escucharPedidos();
@@ -6723,6 +7321,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 // 🔔 Iniciar campana de notificaciones
 
      repEscucharNotificaciones(user.uid);
+                _inicializarPushFCMRepartidor(user.uid);
+                _escucharAvisosUrgentesRepartidor(user.uid);
                 (function _arrancarEscuchaSOS(uid) {
                     if (typeof window.iniciarEscuchaSOS === 'function') {
                         window.iniciarEscuchaSOS(uid);
@@ -6751,6 +7351,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             detenerBackgroundGeolocation();
             detenerHeartbeat();
             await liberarWakeLock();
+            try {
+                const BackgroundRunner = window.Capacitor && window.Capacitor.Plugins
+                    ? window.Capacitor.Plugins.BackgroundRunner
+                    : null;
+                if (BackgroundRunner) {
+                    await BackgroundRunner.dispatchEvent({
+                        label: 'com.servialiados.repartidor.background.task',
+                        event: 'borrarSesion'
+                    });
+                }
+            } catch (e) { /* silencioso */ }
             document.getElementById('loginContainer').style.display = 'flex';
             document.getElementById('appContainer').style.display = 'none';
             document.getElementById('manualLoginForm').style.display = 'block';
@@ -6785,15 +7396,18 @@ function repLimpiarNotif() {
   document.getElementById('repBellBadge').style.display = 'none';
 }
 
-function repAgregarNotif(titulo, mensaje) {
+function repAgregarNotif(titulo, mensaje, opts) {
   _repNotifItems.unshift({ titulo, mensaje, ts: Date.now() });
   const list = document.getElementById('repNotifList');
   const empty = document.getElementById('repNotifEmpty');
   if (empty) empty.remove();
+  const esUrgente = opts && opts.tipo === 'aviso_cliente_devolver' && opts.avisoKey;
   const item = document.createElement('div');
-  item.className = 'rep-notif-item';
+  item.className = esUrgente ? 'rep-notif-item rep-notif-item-urgente' : 'rep-notif-item';
   const hora = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-  item.innerHTML = `<div class="rni-titulo">${titulo}</div><div class="rni-msg">${mensaje}</div><div class="rni-hora">${hora}</div>`;
+  const btnId = esUrgente ? `repNotifOk_${opts.avisoKey}` : null;
+  item.innerHTML = `<div class="rni-titulo">${titulo}</div><div class="rni-msg">${mensaje}</div><div class="rni-hora">${hora}</div>`
+    + (esUrgente ? `<button class="rni-btn-ok" id="${btnId}">✅ Entendido, ya voy</button>` : '');
   list.insertBefore(item, list.firstChild);
   const badge = document.getElementById('repBellBadge');
   const panel = document.getElementById('repNotifPanel');
@@ -6802,6 +7416,55 @@ function repAgregarNotif(titulo, mensaje) {
     badge.style.display = 'flex';
   }
   try { reproducirNotificacion(); } catch(e) {}
+
+  if (esUrgente) {
+    // Abre el panel de notificaciones automáticamente y vibra fuerte hasta
+    // que el repartidor toque el botón OK — así no se pierde entre otras
+    // notificaciones normales de la campana.
+    if (!panel.classList.contains('open')) repToggleNotif();
+    _vibrarFuerteRepetido();
+    const btn = document.getElementById(btnId);
+    if (btn) {
+      btn.onclick = async () => {
+        btn.disabled = true;
+        btn.textContent = 'Confirmando...';
+        try {
+          // 🔧 FIX 2026-08-04: si la conexión de Firebase quedó "zombie"
+          // (mismo problema que obligaba a cerrar/reabrir la app), este
+          // update() podía quedarse esperando para siempre y el botón
+          // nunca se recuperaba. Con Promise.race, si no responde en 6s
+          // se fuerza una reconexión y se le avisa al repartidor en vez
+          // de dejarlo pegado en "Confirmando...".
+          await Promise.race([
+            _confirmarAvisoUrgenteBell(opts.avisoKey, opts.pedidoId),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000)),
+          ]);
+          _detenerVibracionAvisoUrgente();
+          item.classList.remove('rep-notif-item-urgente');
+          btn.remove();
+        } catch (e) {
+          console.warn('No se pudo confirmar el aviso a tiempo, reintentando conexión', e);
+          try { window.goOffline && window.goOffline(); setTimeout(() => window.goOnline && window.goOnline(), 300); } catch (e2) {}
+          btn.disabled = false;
+          btn.textContent = '⚠️ Reintentar';
+        }
+      };
+    }
+  }
+}
+
+// Marca el aviso como leído/confirmado en Firebase. El backend (Cloud
+// Function onAvisoRepartidorConfirmado) detecta este cambio y le avisa al
+// cliente por ServiBot que el repartidor ya vio el mensaje.
+async function _confirmarAvisoUrgenteBell(avisoKey, pedidoId) {
+  try {
+    if (avisoKey && window.currentRepartidorUID) {
+      await window.update(window.ref(window.db, `avisos_repartidor/${window.currentRepartidorUID}/${avisoKey}`), {
+        leido: true,
+        confirmadoTs: Date.now(),
+      });
+    }
+  } catch (e) { console.warn('No se pudo confirmar el aviso urgente', e); }
 }
 
 function repEscucharNotificaciones(uid) {
@@ -6822,6 +7485,182 @@ function repEscucharNotificaciones(uid) {
     if (!n || (n.ts || 0) < _repNotifTsConexion) return;
     repAgregarNotif(n.titulo || '🔔 Notificación', n.mensaje || '');
   });
+}
+
+// ============================================================
+// AVISO URGENTE DEL CLIENTE (avisarRepartidorOlvido) — push +
+// modal bloqueante con vibración hasta que el repartidor confirme
+// ============================================================
+let _avisoUrgenteVibrandoInterval = null;
+
+function _vibrarFuerteRepetido() {
+  const Haptics = window.Capacitor?.Plugins?.Haptics;
+  const vibrarUnaVez = () => {
+    if (Haptics && Haptics.vibrate) {
+      // Vibración nativa (Capacitor Haptics) — más confiable en Android
+      // que navigator.vibrate(), que en muchos WebView de Capacitor no
+      // está implementado y falla en silencio sin que se note el error.
+      Haptics.vibrate({ duration: 500 }).catch(() => {});
+    } else if (navigator.vibrate) {
+      navigator.vibrate([500, 200, 500, 200, 500]);
+    }
+  };
+  vibrarUnaVez();
+  if (_avisoUrgenteVibrandoInterval) clearInterval(_avisoUrgenteVibrandoInterval);
+  // Repite la vibración cada 4s hasta que el repartidor confirme el aviso,
+  // así lo siente aunque tenga el celular en el bolsillo.
+  _avisoUrgenteVibrandoInterval = setInterval(vibrarUnaVez, 4000);
+}
+
+function _detenerVibracionAvisoUrgente() {
+  if (_avisoUrgenteVibrandoInterval) {
+    clearInterval(_avisoUrgenteVibrandoInterval);
+    _avisoUrgenteVibrandoInterval = null;
+  }
+  if (navigator.vibrate) navigator.vibrate(0);
+}
+
+// Modal de pantalla completa que NO se puede cerrar tocando afuera —
+// solo desaparece cuando el repartidor toca "Entendido, ya voy".
+function _mostrarAvisoUrgenteRepartidor(mensaje, avisoKey, pedidoId) {
+  if (document.getElementById('avisoUrgenteOverlay')) return; // ya hay uno visible
+  _vibrarFuerteRepetido();
+  try { reproducirNotificacion && reproducirNotificacion(); } catch (e) {}
+
+  const overlay = document.createElement('div');
+  overlay.id = 'avisoUrgenteOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:9999999;background:rgba(120,20,10,0.97);display:flex;align-items:center;justify-content:center;padding:24px;';
+  overlay.innerHTML = `
+    <div style="background:#1A0E0A;border:2px solid #F59E0B;border-radius:16px;padding:28px 24px;max-width:360px;width:100%;text-align:center;">
+      <div style="font-size:48px;margin-bottom:12px;">⚠️</div>
+      <h2 style="color:#FFF7ED;font-size:19px;margin:0 0 12px;">Aviso urgente del cliente</h2>
+      <p style="color:#FDE3CF;font-size:15px;line-height:1.5;margin:0 0 22px;">${mensaje}</p>
+      <button id="btnAvisoUrgenteOK" style="display:block;width:100%;background:#F59E0B;color:#1A0E0A;font-weight:700;padding:14px;border:none;border-radius:10px;font-size:15px;cursor:pointer;">
+        Entendido, ya voy
+      </button>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  document.getElementById('btnAvisoUrgenteOK').onclick = async () => {
+    _detenerVibracionAvisoUrgente();
+    overlay.remove();
+    try {
+      if (avisoKey && window.currentRepartidorUID) {
+        await window.update(window.ref(window.db, `avisos_repartidor/${window.currentRepartidorUID}/${avisoKey}`), { leido: true });
+      }
+    } catch (e) { console.warn('No se pudo marcar el aviso como leído', e); }
+  };
+}
+
+// Revisa avisos pendientes (leido:false) apenas el repartidor entra a la
+// app — cubre el caso en que el push no llegó (celular apagado, sin
+// permiso, etc.) pero el aviso sí quedó guardado en Firebase por el
+// backend (avisarRepartidorOlvido), así nunca se pierde.
+function _escucharAvisosUrgentesRepartidor(uid) {
+  if (!uid || !window.onChildAdded) return;
+  const tsConexion = Date.now() - 5 * 60 * 1000; // solo avisos de los últimos 5 min al conectarse
+  window.onChildAdded(window.ref(window.db, `avisos_repartidor/${uid}`), (snap) => {
+    const a = snap.val();
+    if (!a || a.leido) return;
+    if ((a.timestamp || 0) < tsConexion) return;
+    // Antes se mostraba con un modal de pantalla completa
+    // (_mostrarAvisoUrgenteRepartidor); ahora se muestra en la campana de
+    // notificaciones, con vibración hasta confirmar y botón "Entendido".
+    repAgregarNotif('⚠️ Aviso urgente del cliente', a.mensaje || 'El cliente necesita avisarte algo, por favor contáctalo.', {
+      tipo: 'aviso_cliente_devolver',
+      avisoKey: snap.key,
+      pedidoId: a.pedidoId,
+    });
+  });
+}
+
+// ── FCM (Capacitor Push Notifications) ──
+// Pide permiso, obtiene el token nativo y lo guarda en
+// usuarios/{uid}/fcmToken para que el backend (enviarPush) pueda
+// enviarle avisos push. SIN ESTO, avisarRepartidorOlvido nunca tiene
+// a quién mandarle la notificación — este era el bug raíz.
+async function _inicializarPushFCMRepartidor(uid) {
+  const FirebaseMessaging = window.Capacitor?.Plugins?.FirebaseMessaging;
+  if (!FirebaseMessaging) {
+    console.warn('[FCM] FirebaseMessaging no está disponible (revisa que @capacitor-firebase/messaging esté instalado y sincronizado)');
+    return;
+  }
+  try {
+    let permStatus = await FirebaseMessaging.checkPermissions();
+    if (permStatus.receive !== 'granted') {
+      permStatus = await FirebaseMessaging.requestPermissions();
+    }
+    if (permStatus.receive !== 'granted') {
+      console.warn('[FCM] Permiso de notificaciones no otorgado');
+      return;
+    }
+
+    // Canal de notificación Android con vibración fuerte e importancia máxima.
+    // SIN ESTO, cuando la app está en segundo plano o cerrada (celular en el
+    // bolsillo) Android muestra el push en silencio, sin vibrar — este era
+    // el bug: el JS de arriba (_vibrarFuerteRepetido) solo corre si la app
+    // está abierta en primer plano. El backend (Cloud Function enviarPush)
+    // El backend (enviarPush en functions/index.js) ya manda
+    // android.notification.channelId = 'aviso_urgente_repartidor_v2' para el
+    // tipo 'aviso_cliente_devolver' — el id de abajo debe calzar con ese.
+    // v1.0.1: se renombró de 'aviso_urgente_repartidor' a '..._v2' porque
+    // el canal viejo ya existía sin vibración en los celulares (los canales
+    // de Android son inmutables una vez creados) y crearlo de nuevo con el
+    // mismo id no cambiaba su configuración.
+    if (FirebaseMessaging.createChannel) {
+      try {
+        await FirebaseMessaging.createChannel({
+          id: 'aviso_urgente_repartidor_v2', // debe calzar EXACTO con el channelId que manda enviarPush() en el backend
+          name: 'Avisos urgentes del cliente',
+          description: 'Alertas que requieren atención inmediata del repartidor',
+          importance: 5, // IMPORTANCE_HIGH: aparece como heads-up y vibra
+          visibility: 1,
+          vibration: true,
+          vibrationPattern: [500, 200, 500, 200, 500],
+          lights: true,
+          lightColor: '#F59E0B',
+        });
+        console.log('✅ Canal de notificación "aviso_urgente_repartidor_v2" creado/actualizado');
+      } catch (e) { console.warn('No se pudo crear el canal de notificación', e); }
+    }
+
+    // Token inicial
+    try {
+      const { token } = await FirebaseMessaging.getToken();
+      if (token) {
+        await window.update(window.ref(window.db, `usuarios/${uid}`), { fcmToken: token });
+        console.log('✅ Token FCM guardado para', uid);
+      }
+    } catch (e) { console.error('Error obteniendo/guardando token FCM', e); }
+
+    // El token puede renovarse solo (reinstalación, cambio de dispositivo, etc.)
+    FirebaseMessaging.addListener('tokenReceived', async (event) => {
+      try {
+        await window.update(window.ref(window.db, `usuarios/${uid}`), { fcmToken: event.token });
+        console.log('✅ Token FCM renovado y guardado');
+      } catch (e) { console.error('Error guardando token FCM renovado', e); }
+    });
+
+    // Push recibido MIENTRAS la app está abierta (primer plano)
+    FirebaseMessaging.addListener('notificationReceived', (event) => {
+      const n = event.notification || {};
+      const data = n.data || {};
+      if (data.tipo === 'aviso_cliente_devolver') {
+        _mostrarAvisoUrgenteRepartidor(n.body || 'El cliente necesita avisarte algo, por favor contáctalo.', null, data.pedidoId);
+      }
+    });
+
+    // El repartidor tocó la notificación desde la bandeja del sistema
+    FirebaseMessaging.addListener('notificationActionPerformed', (event) => {
+      const n = event.notification || {};
+      const data = n.data || {};
+      if (data.tipo === 'aviso_cliente_devolver') {
+        _mostrarAvisoUrgenteRepartidor(n.body || 'El cliente necesita avisarte algo, por favor contáctalo.', null, data.pedidoId);
+      }
+    });
+  } catch (e) {
+    console.error('[FCM] Error inicializando Firebase Messaging', e);
+  }
 }
 
 function repEscucharChatCliente(pedidoId) {
