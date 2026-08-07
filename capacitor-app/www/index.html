@@ -4255,7 +4255,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     backgroundTitle: "Repartidor activo",
                     requestPermissions: true,
                     stale: false,
-                    distanceFilter: 20,
+                    distanceFilter: 0,
                     ...(urlWebhook ? { url: urlWebhook } : {})
                 },
                 (location, error) => {
@@ -7220,12 +7220,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     });
     document.getElementById('regLogoutBtn').addEventListener('click', async () => {
-        try {
-            await signOut(auth);
-            console.log('✅ Sesión cerrada');
-        } catch (error) {
-            console.error('❌ Error al cerrar sesión:', error);
-        }
+        // 🔧 Antes solo hacía signOut(auth) sin detener el GPS nativo en
+        // segundo plano ni marcar al repartidor como offline — por eso el
+        // admin lo seguía viendo "En línea" indefinidamente después de
+        // cerrar sesión desde esta pantalla (registro/pendiente de
+        // aprobación). Ahora usa la misma limpieza completa que el botón
+        // de logout normal.
+        await _doLogout(true);
     });
     async function _doLogout(saltarConfirmacion) {
         if (!saltarConfirmacion) {
