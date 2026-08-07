@@ -28,6 +28,11 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Fix background-runner native library
+        run: |
+          mkdir -p android/capacitor-cordova-android-plugins/src/main/libs
+          cp node_modules/@capacitor/background-runner/android/src/main/libs/android-js-engine-release.aar android/capacitor-cordova-android-plugins/src/main/libs/android-js-engine-release.aar
+
       - name: Decode keystore
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/servi-aliados-repartidor.keystore
 
