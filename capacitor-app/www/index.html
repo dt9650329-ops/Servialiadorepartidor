@@ -6426,12 +6426,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-28d] MI ESTADO DE CUENTA (créditos según horas)      │
     // └─────────────────────────────────────────────────────────┘
-    // Calcula, por cada día trabajado, cuánto se le debe al repartidor
-    // según el tiempo conectado ese día, prorrateado sobre una jornada
-    // de 8 horas y el valor del día que configura el admin.
-    // Solo cuenta como "pendiente" lo posterior a repartidores_info/{uid}/pagadoHasta
-    // (fecha que el admin actualiza cuando ya liquidó).
+    // ✅ FIX 2026-08-07: antes leía repartidores_info/{uid}/valorDiaTrabajo,
+    // un campo que el panel admin nunca escribe (por eso siempre salía "no
+    // configurado"). Ahora lee los nodos reales que sí llena el admin desde
+    // su sección de Sueldos:
+    //   config_sueldos/valorBaseDiario  → valor por defecto de cada turno
+    //   sueldos/{fecha}/{uid}           → { valor, pagado } (ajuste puntual + pagado)
     const JORNADA_COMPLETA_MS = 8 * 3600000; // 8 horas
+
+    let _estadoCuentaInterval = null;
+    let _estadoCuentaValorHoy = 0;
+    let _estadoCuentaMsHistoricoHoy = 0;
 
     async function _cargarEstadoCuenta() {
         const contenidoEl   = document.getElementById('estadoCuentaContenido');
@@ -6442,87 +6447,131 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         const valorDiaInfoEl= document.getElementById('estadoCuentaValorDiaInfo');
         if (!contenidoEl || !repartidorUID) return;
 
+        if (_estadoCuentaInterval) { clearInterval(_estadoCuentaInterval); _estadoCuentaInterval = null; }
+
         contenidoEl.style.display = 'none';
         sinConfigEl.style.display = 'none';
         cargandoEl.style.display  = 'block';
         listaEl.style.display     = 'none';
 
-        try {
-            const snapPerfil = await get(ref(db, `repartidores_info/${repartidorUID}`));
-            const perfil = snapPerfil.exists() ? snapPerfil.val() : {};
-            const valorDia   = Number(perfil.valorDiaTrabajo) || 0;
-            const pagadoHasta = perfil.pagadoHasta || ''; // 'YYYY-MM-DD', días <= esta fecha ya se liquidaron
+        function _fmtFecha(fechaStr) {
+            const [anio, mes, dia] = fechaStr.split('-').map(Number);
+            const d = new Date(anio, mes - 1, dia);
+            return d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
+        }
+        function _fmtPesos(n) {
+            return '$' + Math.round(n).toLocaleString('es-CO');
+        }
+        function _msAHoras(ms) {
+            const h = ms / 3600000;
+            return h.toFixed(1) + 'h';
+        }
 
-            if (!valorDia) {
+        try {
+            const hoyStr = _fechaHoyColombia();
+
+            // 1) Valor base que fija el admin para todos por defecto
+            const baseSnap = await get(ref(db, 'config_sueldos/valorBaseDiario'));
+            const valorBase = baseSnap.exists() ? (Number(baseSnap.val()) || 0) : 0;
+
+            // 2) Histórico de conexión (igual que antes)
+            const snapHist = await get(ref(db, `repartidores_info/${repartidorUID}/historialConexion`));
+            const tiempoHoyActual = _tiempoConexionAcumulado +
+                (_perfilTiempoInicioSesion ? (Date.now() - _perfilTiempoInicioSesion) : 0);
+
+            const mapaMs = {};
+            if (snapHist.exists()) {
+                snapHist.forEach(child => {
+                    const d = child.val();
+                    if (d.fecha && d.tiempoTotalMs) mapaMs[d.fecha] = d.tiempoTotalMs;
+                });
+            }
+            const msHistoricoHoy = mapaMs[hoyStr] || 0;
+            if (tiempoHoyActual > 0) {
+                mapaMs[hoyStr] = Math.max(msHistoricoHoy, tiempoHoyActual);
+            }
+            _estadoCuentaMsHistoricoHoy = msHistoricoHoy;
+
+            const fechas = Object.keys(mapaMs).sort((a, b) => b.localeCompare(a));
+
+            // 3) Para cada fecha, el sueldo real que guardó el admin ese día
+            //    (ajuste puntual si existe; si no, el valor base actual)
+            const sueldosPorFecha = {};
+            for (const f of fechas) {
+                try {
+                    const snapSueldo = await get(ref(db, `sueldos/${f}/${repartidorUID}`));
+                    sueldosPorFecha[f] = snapSueldo.exists() ? snapSueldo.val() : {};
+                } catch (e) {
+                    sueldosPorFecha[f] = {};
+                }
+            }
+
+            const hayAlgoConfigurado = valorBase > 0 ||
+                Object.values(sueldosPorFecha).some(s => Number(s.valor) > 0);
+
+            if (!hayAlgoConfigurado) {
                 sinConfigEl.style.display = 'block';
                 cargandoEl.style.display = 'none';
                 return;
             }
 
-            // Reusar el mismo histórico de conexión que usa el perfil
-            const snapHist = await get(ref(db, `repartidores_info/${repartidorUID}/historialConexion`));
-            const hoyStr = _fechaHoyColombia();
-            const tiempoHoyActual = _tiempoConexionAcumulado +
-                (_perfilTiempoInicioSesion ? (Date.now() - _perfilTiempoInicioSesion) : 0);
-
-            const mapa = {};
-            if (snapHist.exists()) {
-                snapHist.forEach(child => {
-                    const d = child.val();
-                    if (d.fecha && d.tiempoTotalMs) mapa[d.fecha] = d.tiempoTotalMs;
-                });
-            }
-            if (tiempoHoyActual > 0) {
-                mapa[hoyStr] = Math.max(mapa[hoyStr] || 0, tiempoHoyActual);
-            }
-
-            const fechas = Object.keys(mapa).sort((a, b) => b.localeCompare(a));
-
-            function _fmtFecha(fechaStr) {
-                const [anio, mes, dia] = fechaStr.split('-').map(Number);
-                const d = new Date(anio, mes - 1, dia);
-                return d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
-            }
-            function _fmtPesos(n) {
-                return '$' + Math.round(n).toLocaleString('es-CO');
-            }
-            function _msAHoras(ms) {
-                const h = ms / 3600000;
-                return h.toFixed(1) + 'h';
-            }
-
             let totalPendiente = 0;
             let html = '';
+            let valorHoyResuelto = valorBase;
             fechas.forEach(f => {
-                const ms = mapa[f] || 0;
-                // Prorrateo: proporción de la jornada de 8h trabajada ese día, tope 100%
+                const ms = mapaMs[f] || 0;
+                const override = sueldosPorFecha[f] || {};
+                const valorDelDia = (override.valor !== undefined && override.valor !== null && Number(override.valor) > 0)
+                    ? Number(override.valor) : valorBase;
+                if (f === hoyStr) valorHoyResuelto = valorDelDia;
+
                 const proporcion = Math.min(1, ms / JORNADA_COMPLETA_MS);
-                const monto = proporcion * valorDia;
-                const yaLiquidado = pagadoHasta && f <= pagadoHasta;
+                const monto = proporcion * valorDelDia;
+                const yaLiquidado = override.pagado === true;
                 if (!yaLiquidado) totalPendiente += monto;
 
                 html += `
-                    <div class="historial-sesion-row" style="${yaLiquidado ? 'opacity:0.45;' : ''}">
+                    <div class="historial-sesion-row" style="${yaLiquidado ? 'opacity:0.45;' : ''}" ${f === hoyStr ? 'id="estadoCuentaFilaHoy"' : ''}>
                         <span class="historial-sesion-fecha">
                             ${_fmtFecha(f)} ${f === hoyStr ? '<span class="historial-sesion-hoy">HOY</span>' : ''}
-                            <br><span style="color:#7a9abf; font-size:0.75em;">${_msAHoras(ms)} trabajadas${yaLiquidado ? ' · ✅ liquidado' : ''}</span>
+                            <br><span style="color:#7a9abf; font-size:0.75em;">${_msAHoras(ms)} trabajadas${yaLiquidado ? ' · ✅ pagado' : ''}</span>
                         </span>
-                        <span class="historial-sesion-tiempo" style="color:${yaLiquidado ? '#7a9abf' : '#27ae60'};">${_fmtPesos(monto)}</span>
+                        <span class="historial-sesion-tiempo" style="color:${yaLiquidado ? '#7a9abf' : '#27ae60'};" ${f === hoyStr ? 'id="estadoCuentaMontoHoy"' : ''}>${_fmtPesos(monto)}</span>
                     </div>`;
             });
 
-            if (fechas.length === 0) {
-                listaEl.innerHTML = '<div style="color:#7a9abf;text-align:center;padding:10px 0;font-size:0.85em;">Sin registros aún</div>';
-            } else {
-                listaEl.innerHTML = html;
-            }
+            listaEl.innerHTML = fechas.length === 0
+                ? '<div style="color:#7a9abf;text-align:center;padding:10px 0;font-size:0.85em;">Sin registros aún</div>'
+                : html;
 
-            valorDiaInfoEl.textContent = `Valor del día completo (8h): ${_fmtPesos(valorDia)}`;
+            _estadoCuentaValorHoy = valorHoyResuelto;
+            valorDiaInfoEl.textContent = `Valor del día completo (8h): ${_fmtPesos(valorHoyResuelto)}`;
             totalEl.textContent = _fmtPesos(totalPendiente);
 
             listaEl.style.display    = 'block';
             cargandoEl.style.display = 'none';
             contenidoEl.style.display = 'block';
+
+            // 4) Si el turno de hoy sigue abierto y no está pagado, el monto de
+            //    "HOY" sube solo mientras el repartidor sigue conectado —
+            //    proporcional a las horas trabajadas, sin esperar a recargar.
+            const pagadoHoy = (sueldosPorFecha[hoyStr] || {}).pagado === true;
+            if (_perfilTiempoInicioSesion && !pagadoHoy && _estadoCuentaValorHoy > 0) {
+                _estadoCuentaInterval = setInterval(() => {
+                    const seccionEl = document.getElementById('estadoCuentaSection');
+                    if (!seccionEl || seccionEl.style.display === 'none') {
+                        clearInterval(_estadoCuentaInterval);
+                        _estadoCuentaInterval = null;
+                        return;
+                    }
+                    const msActual = _tiempoConexionAcumulado + (Date.now() - _perfilTiempoInicioSesion);
+                    const msHoy = Math.max(_estadoCuentaMsHistoricoHoy, msActual);
+                    const proporcionHoy = Math.min(1, msHoy / JORNADA_COMPLETA_MS);
+                    const montoHoy = proporcionHoy * _estadoCuentaValorHoy;
+                    const montoEl = document.getElementById('estadoCuentaMontoHoy');
+                    if (montoEl) montoEl.textContent = _fmtPesos(montoHoy);
+                }, 30000); // recalcula cada 30s — la tarifa sube de forma continua, no a saltos
+            }
 
         } catch(e) {
             console.warn('⚠️ Error cargando estado de cuenta:', e);
