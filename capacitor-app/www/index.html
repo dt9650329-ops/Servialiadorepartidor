@@ -1996,6 +1996,22 @@
         </div>
 
         <div id="estadoCuentaContenido" style="display:none;">
+            <!-- Barra de progreso del turno de HOY -->
+            <div style="background:var(--color-card); border:1px solid #27ae60; border-radius:14px; padding:18px 16px; margin-bottom:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px;">
+                    <span style="color:#7a9abf; font-size:0.85em;">Turno de hoy</span>
+                    <span id="estadoCuentaPorcentajeHoy" style="color:#7a9abf; font-size:0.85em; font-weight:700;">0%</span>
+                </div>
+                <div style="background:#0d1b2a; border-radius:20px; height:22px; overflow:hidden; border:1px solid rgba(39,174,96,0.3);">
+                    <div id="estadoCuentaBarraHoy" style="background:linear-gradient(90deg,#1e8e4a,#27ae60); height:100%; width:0%; border-radius:20px; transition:width 1s linear;"></div>
+                </div>
+                <div style="text-align:center; margin-top:12px;">
+                    <div id="estadoCuentaGanadoHoy" style="color:#27ae60; font-size:1.9em; font-weight:800;">$0</div>
+                    <div style="color:#7a9abf; font-size:0.75em;" id="estadoCuentaHorasHoyTxt">0.0h de 8h</div>
+                    <div id="estadoCuentaExtraHoy" style="display:none; color:#f59e0b; font-size:0.85em; font-weight:700; margin-top:6px;">⏰ Hora extra: 0.0h</div>
+                </div>
+            </div>
+
             <!-- Resumen: total pendiente por pagar -->
             <div class="perfil-stat-card" style="grid-column:1/-1; background:linear-gradient(135deg,#1a3a1a,#0d2010); border-color:#27ae60; margin-bottom:16px;">
                 <div class="perfil-stat-icon">💵</div>
@@ -2003,13 +2019,16 @@
                 <div class="perfil-stat-label">Pendiente por pagar/consignar</div>
             </div>
 
-            <div style="color:#7a9abf; font-size:0.78em; margin-bottom:8px;" id="estadoCuentaValorDiaInfo">Valor del día completo: —</div>
-
-            <!-- Detalle día por día -->
+            <!-- Detalle día por día, colapsado por defecto -->
             <div class="historial-sesiones-card">
-                <h4>📅 Detalle por día</h4>
-                <div id="estadoCuentaCargando">Cargando...</div>
-                <div id="estadoCuentaLista" style="display:none;"></div>
+                <button onclick="window._toggleDetalleEstadoCuenta()" style="width:100%; background:none; border:none; color:var(--color-secondary); font-size:0.95em; font-weight:700; display:flex; justify-content:space-between; align-items:center; padding:4px 0; cursor:pointer;">
+                    <span>📅 Ver detalle por día</span>
+                    <span id="estadoCuentaToggleIcono">▾</span>
+                </button>
+                <div id="estadoCuentaDetalleWrap" style="display:none; margin-top:8px;">
+                    <div id="estadoCuentaCargando">Cargando...</div>
+                    <div id="estadoCuentaLista" style="display:none;"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -4117,7 +4136,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     }, 500);
                 }
             } else {
-                console.log('📭 No hay pedidos pendientes para asignar');
+                console.log('?? No hay pedidos pendientes para asignar');
             }
             
         } catch (error) {
@@ -6432,11 +6451,52 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // su sección de Sueldos:
     //   config_sueldos/valorBaseDiario  → valor por defecto de cada turno
     //   sueldos/{fecha}/{uid}           → { valor, pagado } (ajuste puntual + pagado)
+    // ✅ SIMPLIFICADO 2026-08-07: la vista principal ahora es una barra de
+    // progreso grande del turno de HOY (llena en vivo según horas
+    // trabajadas / 8h); el detalle día por día queda colapsado detrás de
+    // un botón "Ver detalle por día".
     const JORNADA_COMPLETA_MS = 8 * 3600000; // 8 horas
 
     let _estadoCuentaInterval = null;
     let _estadoCuentaValorHoy = 0;
     let _estadoCuentaMsHistoricoHoy = 0;
+    let _estadoCuentaDetalleAbierto = false;
+
+    window._toggleDetalleEstadoCuenta = function() {
+        const wrap = document.getElementById('estadoCuentaDetalleWrap');
+        const icono = document.getElementById('estadoCuentaToggleIcono');
+        if (!wrap) return;
+        _estadoCuentaDetalleAbierto = !_estadoCuentaDetalleAbierto;
+        wrap.style.display = _estadoCuentaDetalleAbierto ? 'block' : 'none';
+        if (icono) icono.textContent = _estadoCuentaDetalleAbierto ? '▸' : '▾';
+    };
+
+    function _fmtPesosEstadoCuenta(n) {
+        return '$' + Math.round(n).toLocaleString('es-CO');
+    }
+
+    function _pintarBarraHoy(msHoy, valorHoy) {
+        const normalMs = Math.min(msHoy, JORNADA_COMPLETA_MS);
+        const extraMs = Math.max(0, msHoy - JORNADA_COMPLETA_MS);
+        const proporcion = normalMs / JORNADA_COMPLETA_MS;
+        const monto = proporcion * valorHoy;
+        const barraEl = document.getElementById('estadoCuentaBarraHoy');
+        const pctEl   = document.getElementById('estadoCuentaPorcentajeHoy');
+        const montoEl = document.getElementById('estadoCuentaGanadoHoy');
+        const horasEl = document.getElementById('estadoCuentaHorasHoyTxt');
+        const extraEl = document.getElementById('estadoCuentaExtraHoy');
+        if (barraEl) {
+            barraEl.style.width = (proporcion * 100).toFixed(1) + '%';
+            barraEl.style.background = extraMs > 0 ? 'linear-gradient(90deg,#c9820a,#f59e0b)' : 'linear-gradient(90deg,#1e8e4a,#27ae60)';
+        }
+        if (pctEl)   pctEl.textContent = Math.round(proporcion * 100) + '%';
+        if (montoEl) montoEl.textContent = _fmtPesosEstadoCuenta(monto);
+        if (horasEl) horasEl.textContent = (msHoy / 3600000).toFixed(1) + 'h de 8h';
+        if (extraEl) {
+            if (extraMs > 0) { extraEl.style.display = 'block'; extraEl.textContent = '⏰ Hora extra: ' + (extraMs / 3600000).toFixed(1) + 'h'; }
+            else extraEl.style.display = 'none';
+        }
+    }
 
     async function _cargarEstadoCuenta() {
         const contenidoEl   = document.getElementById('estadoCuentaContenido');
@@ -6444,7 +6504,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         const cargandoEl    = document.getElementById('estadoCuentaCargando');
         const listaEl       = document.getElementById('estadoCuentaLista');
         const totalEl       = document.getElementById('estadoCuentaTotalPendiente');
-        const valorDiaInfoEl= document.getElementById('estadoCuentaValorDiaInfo');
         if (!contenidoEl || !repartidorUID) return;
 
         if (_estadoCuentaInterval) { clearInterval(_estadoCuentaInterval); _estadoCuentaInterval = null; }
@@ -6458,9 +6517,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             const [anio, mes, dia] = fechaStr.split('-').map(Number);
             const d = new Date(anio, mes - 1, dia);
             return d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric', month: 'short' });
-        }
-        function _fmtPesos(n) {
-            return '$' + Math.round(n).toLocaleString('es-CO');
         }
         function _msAHoras(ms) {
             const h = ms / 3600000;
@@ -6531,12 +6587,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 if (!yaLiquidado) totalPendiente += monto;
 
                 html += `
-                    <div class="historial-sesion-row" style="${yaLiquidado ? 'opacity:0.45;' : ''}" ${f === hoyStr ? 'id="estadoCuentaFilaHoy"' : ''}>
+                    <div class="historial-sesion-row" style="${yaLiquidado ? 'opacity:0.45;' : ''}">
                         <span class="historial-sesion-fecha">
                             ${_fmtFecha(f)} ${f === hoyStr ? '<span class="historial-sesion-hoy">HOY</span>' : ''}
                             <br><span style="color:#7a9abf; font-size:0.75em;">${_msAHoras(ms)} trabajadas${yaLiquidado ? ' · ✅ pagado' : ''}</span>
                         </span>
-                        <span class="historial-sesion-tiempo" style="color:${yaLiquidado ? '#7a9abf' : '#27ae60'};" ${f === hoyStr ? 'id="estadoCuentaMontoHoy"' : ''}>${_fmtPesos(monto)}</span>
+                        <span class="historial-sesion-tiempo" style="color:${yaLiquidado ? '#7a9abf' : '#27ae60'};">${_fmtPesosEstadoCuenta(monto)}</span>
                     </div>`;
             });
 
@@ -6545,16 +6601,16 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 : html;
 
             _estadoCuentaValorHoy = valorHoyResuelto;
-            valorDiaInfoEl.textContent = `Valor del día completo (8h): ${_fmtPesos(valorHoyResuelto)}`;
-            totalEl.textContent = _fmtPesos(totalPendiente);
+            totalEl.textContent = _fmtPesosEstadoCuenta(totalPendiente);
+            _pintarBarraHoy(mapaMs[hoyStr] || 0, valorHoyResuelto);
 
             listaEl.style.display    = 'block';
             cargandoEl.style.display = 'none';
             contenidoEl.style.display = 'block';
 
-            // 4) Si el turno de hoy sigue abierto y no está pagado, el monto de
-            //    "HOY" sube solo mientras el repartidor sigue conectado —
-            //    proporcional a las horas trabajadas, sin esperar a recargar.
+            // 4) Si el turno de hoy sigue abierto y no está pagado, la barra
+            //    y el monto de "hoy" suben solos mientras el repartidor
+            //    sigue conectado — proporcional a las horas trabajadas.
             const pagadoHoy = (sueldosPorFecha[hoyStr] || {}).pagado === true;
             if (_perfilTiempoInicioSesion && !pagadoHoy && _estadoCuentaValorHoy > 0) {
                 _estadoCuentaInterval = setInterval(() => {
@@ -6566,11 +6622,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     }
                     const msActual = _tiempoConexionAcumulado + (Date.now() - _perfilTiempoInicioSesion);
                     const msHoy = Math.max(_estadoCuentaMsHistoricoHoy, msActual);
-                    const proporcionHoy = Math.min(1, msHoy / JORNADA_COMPLETA_MS);
-                    const montoHoy = proporcionHoy * _estadoCuentaValorHoy;
-                    const montoEl = document.getElementById('estadoCuentaMontoHoy');
-                    if (montoEl) montoEl.textContent = _fmtPesos(montoHoy);
-                }, 30000); // recalcula cada 30s — la tarifa sube de forma continua, no a saltos
+                    _pintarBarraHoy(msHoy, _estadoCuentaValorHoy);
+                }, 15000); // recalcula cada 15s — la transición CSS suaviza el avance
             }
 
         } catch(e) {
