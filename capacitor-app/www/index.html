@@ -4454,6 +4454,25 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         // haya congelado la app).
         locationSendInterval = setInterval(async () => {
             if (isTrackingEnabled && repartidorUID && lastLocationUpdate > 0) {
+                // 🔧 FIX 2026-08-08: cuentas se desconectaban solas a los
+                // 10-15 min cuando el repartidor estaba quieto y en segundo
+                // plano. Causa: este "estoy vivo" usaba el SDK de Firebase
+                // (WebSocket iniciado desde el WebView), y Android empieza a
+                // throttlear/bloquear ese tráfico ~5 min después de que la
+                // app pasa a background (documentado por el propio plugin
+                // background-geolocation). Como el dispositivo no se movía,
+                // el webhook nativo tampoco disparaba (solo reacciona a
+                // distanceFilter de 20m), así que no había ningún "estoy
+                // vivo" real llegando a Firebase → onDisconnect/watchdog lo
+                // marcaban offline. Ahora en background se usa
+                // enviarUbicacionNativaHTTP (CapacitorHttp, corre en código
+                // nativo Android/OkHttp, no en el WebView) para que el
+                // latido sobreviva aunque el repartidor esté parado.
+                if (isBackgroundMode && _ultimaUbicacionConocida) {
+                    const { lat, lon, accuracy, speed, heading } = _ultimaUbicacionConocida;
+                    await enviarUbicacionNativaHTTP(lat, lon, accuracy, speed, heading);
+                    return;
+                }
                 try {
                     const userStatusRef = ref(db, `repartidores_info/${repartidorUID}`);
                     const payload = {
@@ -4480,7 +4499,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 }
             }
         }, 10000); // 🔥 10 SEGUNDOS — late aunque esté quieto
-        console.log('✅ Envío directo de ubicación iniciado (cada 10s, con última posición conocida)');
+        console.log('✅ Envío directo de ubicación iniciado (cada 10s, con última posición conocida; HTTP nativo en background)');
     }
     async function iniciarTrackingGPSAutomatico() {
         console.log('🚀 Iniciando GPS automático al login (optimizado)...');
