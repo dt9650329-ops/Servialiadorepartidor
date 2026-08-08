@@ -3853,10 +3853,10 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     async function _abrirAutostartNativo() {
         try {
             const DeviceOptimizer = window.Capacitor && window.Capacitor.Plugins
-                ? window.Capacitor.Plugins.DeviceOptimizerPlugin
+                ? window.Capacitor.Plugins.DeviceOptimizer
                 : null;
             if (!DeviceOptimizer) {
-                console.warn('⚠️ DeviceOptimizerPlugin no disponible (¿estás en el navegador, no en el APK?)');
+                console.warn('⚠️ DeviceOptimizer no disponible (¿estás en el navegador, no en el APK?)');
                 return { ok: false, fabricante: 'desconocido' };
             }
             const resultado = await DeviceOptimizer.openAutoStartSettings();
