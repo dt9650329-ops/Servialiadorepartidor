@@ -13,6 +13,11 @@
         <package android:name="com.asus.mobilemanager" />
         <package android:name="com.letv.android.letvsafe" />
         <package android:name="com.samsung.android.lool" />
+        <package android:name="com.oppo.safe" />
+        <package android:name="com.meizu.safe" />
+        <package android:name="com.lenovo.powersetting" />
+        <package android:name="com.oneplus.security" />
+        <package android:name="com.evenwell.powersaving.g3" />
     </queries>
 <application
         android:allowBackup="true"
