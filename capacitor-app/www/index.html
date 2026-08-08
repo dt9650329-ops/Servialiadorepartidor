@@ -2398,6 +2398,10 @@ function _fechaHoyColombia() {
     let locationSendInterval = null;
     let backgroundGeoInterval = null;
     let isBackgroundMode = false;
+    // 🔧 FIX 2026-08-08: watchdog de auto-recuperación del GPS nativo.
+    let _alertaPermisoUbicacionMostrada = false;
+    let _ultimoIntentoReinicioBG = 0;
+    const REINICIO_BG_INTERVALO_MS = 30000; // reintenta cada 30s, no en cada latido
     // 🔧 FIX 2026-08-07: throttle del GPS nativo en 2do plano — el plugin
     // (@capgo/background-geolocation) con distanceFilter:0 entregaba CADA
     // fix crudo del proveedor de ubicación de Android (hasta 3/seg), y ese
@@ -4361,13 +4365,16 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     backgroundTitle: "Repartidor activo",
                     requestPermissions: true,
                     stale: false,
-                    // 🔧 FIX 2026-08-07: el webhook nativo (POST directo desde
-                    // Kotlin al Cloud Function, ver "url" abajo) NO pasa por
-                    // el throttle de JS de más abajo — su única perilla de
-                    // control es este distanceFilter. En 0 mandaba CADA fix
-                    // crudo de Android (hasta 3/seg). 20m = solo reporta
-                    // cuando el repartidor realmente se movió esa distancia.
-                    distanceFilter: 20,
+                    // 🔧 FIX 2026-08-08: distanceFilter en 20 bloqueaba TODO
+                    // (callback JS y webhook nativo) mientras el repartidor
+                    // estaba quieto, porque este plugin no tiene un intervalo
+                    // por tiempo independiente — distanceFilter es su ÚNICA
+                    // perilla. Con 0, Android entrega fixes constantemente
+                    // (incluso parado, por el ruido normal del GPS) y es
+                    // _debeEnviarUbicacionNativa() quien decide cuándo
+                    // realmente reenviar (cada 10s o cada 20m, lo que ocurra
+                    // primero) — así el "estoy vivo" nunca se corta.
+                    distanceFilter: 0,
                     ...(urlWebhook ? { url: urlWebhook } : {})
                 },
                 (location, error) => {
@@ -4376,13 +4383,25 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         _debugLog(`GPS ERROR: ${error.message || error.code || 'desconocido'}`);
                         if (error.code === 'NOT_AUTHORIZED') {
                             permisosUbicacionOtorgado = false;
-                            alert('⚠️ IMPORTANTE: Permiso de ubicación denegado.\n\n' +
-                                  'Sin este permiso NO podrás recibir pedidos.\n\n' +
-                                  'Para activarlo:\n' +
-                                  '1. Ve a Configuración de Android\n' +
-                                  '2. Aplicaciones → Servi Aliados\n' +
-                                  '3. Permisos → Ubicación\n' +
-                                  '4. Selecciona "Permitir TODO EL TIEMPO"');
+                            // 🔧 FIX 2026-08-08: antes esto apagaba el watcher
+                            // para siempre — si el repartidor apagaba y volvía
+                            // a encender la ubicación del sistema, nada lo
+                            // reactivaba (había que reabrir la app). Ahora solo
+                            // se avisa UNA vez (no en cada reintento) y se deja
+                            // que el watchdog de iniciarEnvioUbicacionPeriodicoDirecto()
+                            // reintente solo cada 30s hasta que el permiso/GPS
+                            // vuelva — sin que el repartidor tenga que hacer nada.
+                            if (!_alertaPermisoUbicacionMostrada) {
+                                _alertaPermisoUbicacionMostrada = true;
+                                alert('⚠️ IMPORTANTE: Ubicación desactivada o sin permiso.\n\n' +
+                                      'Sin esto NO podrás recibir pedidos.\n\n' +
+                                      'Activa la ubicación del sistema o, si es permiso:\n' +
+                                      '1. Configuración de Android\n' +
+                                      '2. Aplicaciones → Servi Aliados\n' +
+                                      '3. Permisos → Ubicación\n' +
+                                      '4. "Permitir TODO EL TIEMPO"\n\n' +
+                                      'La app reintentará sola en cuanto la reactives.');
+                            }
                             detenerBackgroundGeolocation();
                         }
                         return;
@@ -4420,6 +4439,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 }
             );
             bgGeoActivo = true;
+            permisosUbicacionOtorgado = true;
+            _alertaPermisoUbicacionMostrada = false; // si se recuperó, puede volver a avisar si se pierde otra vez
             console.log('✅ Background Geolocation nativo iniciado (webhook nativo:', !!urlWebhook, ')');
         } catch (error) {
             console.error('❌ Error iniciando Background Geolocation nativo:', error);
@@ -4453,6 +4474,21 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         // vivo (foreground siempre, y background el tiempo que Android no
         // haya congelado la app).
         locationSendInterval = setInterval(async () => {
+            // 🔧 FIX 2026-08-08: watchdog — si se supone que el repartidor
+            // debería estar rastreándose (isTrackingEnabled) pero el GPS
+            // nativo en segundo plano está apagado (bgGeoActivo === false,
+            // p.ej. porque se apagó la ubicación del sistema y ya se
+            // recuperó, o el plugin se cayó por cualquier otra razón),
+            // reintenta encenderlo solo, sin que el repartidor tenga que
+            // reabrir la app. Máximo un intento cada 30s para no saturar.
+            if (isTrackingEnabled && repartidorUID && !bgGeoActivo) {
+                const ahoraReinicio = Date.now();
+                if (ahoraReinicio - _ultimoIntentoReinicioBG >= REINICIO_BG_INTERVALO_MS) {
+                    _ultimoIntentoReinicioBG = ahoraReinicio;
+                    console.log('🔄 Watchdog: GPS nativo caído, reintentando iniciarBackgroundGeolocation()...');
+                    iniciarBackgroundGeolocation();
+                }
+            }
             if (isTrackingEnabled && repartidorUID && lastLocationUpdate > 0) {
                 // 🔧 FIX 2026-08-08: cuentas se desconectaban solas a los
                 // 10-15 min cuando el repartidor estaba quieto y en segundo
