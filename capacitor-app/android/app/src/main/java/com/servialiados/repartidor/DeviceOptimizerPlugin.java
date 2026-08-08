@@ -56,6 +56,30 @@ public class DeviceOptimizerPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void listActivities(PluginCall call) {
+        String packageName = call.getString("packageName", "com.transsion.phonemanager");
+        JSObject ret = new JSObject();
+        try {
+            android.content.pm.PackageManager pm = getContext().getPackageManager();
+            android.content.pm.PackageInfo info = pm.getPackageInfo(packageName, android.content.pm.PackageManager.GET_ACTIVITIES);
+            org.json.JSONArray nombres = new org.json.JSONArray();
+            if (info.activities != null) {
+                for (android.content.pm.ActivityInfo ai : info.activities) {
+                    nombres.put(ai.name);
+                }
+            } else {
+                nombres.put("(sin actividades listadas)");
+            }
+            ret.put("paquete", packageName);
+            ret.put("actividades", nombres.toString());
+        } catch (Exception e) {
+            ret.put("paquete", packageName);
+            ret.put("error", e.getMessage());
+        }
+        call.resolve(ret);
+    }
+
+    @PluginMethod
     public void openAutoStartSettings(PluginCall call) {
         String fabricante = Build.MANUFACTURER == null ? "" : Build.MANUFACTURER.toLowerCase();
         boolean abierto = false;
