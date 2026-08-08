@@ -3850,6 +3850,23 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         if (ua.includes('vivo') || ua.includes('iqoo')) return 'vivo';
         return 'generico';
     }
+    async function _abrirAutostartNativo() {
+        try {
+            const DeviceOptimizer = window.Capacitor && window.Capacitor.Plugins
+                ? window.Capacitor.Plugins.DeviceOptimizerPlugin
+                : null;
+            if (!DeviceOptimizer) {
+                console.warn('⚠️ DeviceOptimizerPlugin no disponible (¿estás en el navegador, no en el APK?)');
+                return { ok: false, fabricante: 'desconocido' };
+            }
+            const resultado = await DeviceOptimizer.openAutoStartSettings();
+            console.log('🔋 Ajustes autostart nativo:', resultado);
+            return { ok: !!resultado.abrioAjustesEspecificos, fabricante: resultado.fabricante || 'desconocido' };
+        } catch (e) {
+            console.error('❌ Error abriendo ajustes autostart nativo:', e);
+            return { ok: false, fabricante: 'desconocido' };
+        }
+    }
     function mostrarModalBateria() {
         const marca = _detectarFabricante();
         const guia = _GUIAS_BATERIA[marca];
@@ -3866,7 +3883,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             <div class="bateria-warning">
                 ⚠️ Si no haces estos pasos, tu teléfono puede cerrar la app cuando la pantalla se apaga y dejarás de recibir pedidos aunque la app siga "abierta".
             </div>
-            <button class="btn-bateria-ok" onclick="cerrarModalBateria(true)">✅ Ya configuré esto</button>
+            <button class="btn-bateria-ok" onclick="window._activarAutostart()">🚀 Activar automáticamente (1 toque)</button>
+            <button class="btn-bateria-ok" onclick="cerrarModalBateria(true)" style="opacity:.7">✅ Ya lo configuré manualmente</button>
             <button class="btn-bateria-luego" onclick="cerrarModalBateria(false)">Recordarme después</button>
         `;
         document.getElementById('bateriaModal').classList.add('show');
@@ -3885,6 +3903,14 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         } catch (e) { /* silencioso */ }
     }
     window.cerrarModalBateria = cerrarModalBateria;
+    window._activarAutostart = async function() {
+        const resultado = await _abrirAutostartNativo();
+        if (resultado.ok) {
+            cerrarModalBateria(true);
+        } else {
+            alert('No se pudo abrir la pantalla automática de tu teléfono (' + resultado.fabricante + '). Te dejamos los pasos manuales abajo para que los hagas tú mismo.');
+        }
+    };
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-15] SISTEMA DE HEARTBEAT                            │
     // └─────────────────────────────────────────────────────────┘
