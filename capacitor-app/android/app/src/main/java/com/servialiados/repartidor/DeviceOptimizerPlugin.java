@@ -61,6 +61,7 @@ public class DeviceOptimizerPlugin extends Plugin {
         boolean abierto = false;
 
         ComponentName[] candidatos;
+        org.json.JSONArray errores = new org.json.JSONArray();
 
         if (fabricante.contains("xiaomi") || fabricante.contains("redmi") || fabricante.contains("poco")) {
             candidatos = new ComponentName[]{
@@ -115,8 +116,10 @@ public class DeviceOptimizerPlugin extends Plugin {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 getActivity().startActivity(intent);
                 abierto = true;
+                errores.put(cn.getClassName() + ": OK");
                 break;
             } catch (Exception e) {
+                errores.put(cn.getClassName() + ": " + e.getMessage());
             }
         }
 
@@ -128,12 +131,14 @@ public class DeviceOptimizerPlugin extends Plugin {
                 getActivity().startActivity(intent);
             } catch (Exception e2) {
                 Log.e(TAG, "No se pudo abrir ninguna pantalla de ajustes: " + e2.getMessage());
+                errores.put("fallback: " + e2.getMessage());
             }
         }
 
         JSObject ret = new JSObject();
         ret.put("abrioAjustesEspecificos", abierto);
         ret.put("fabricante", Build.MANUFACTURER);
+        ret.put("errores", errores.toString());
         call.resolve(ret);
     }
 }
