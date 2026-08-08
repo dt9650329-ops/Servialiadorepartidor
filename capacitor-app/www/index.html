@@ -3852,19 +3852,28 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     }
     async function _abrirAutostartNativo() {
         try {
-            const DeviceOptimizer = window.Capacitor && window.Capacitor.Plugins
-                ? window.Capacitor.Plugins.DeviceOptimizer
+            // 🔧 FIX 2026-08-08: dejamos de adivinar nombres de clase de
+            // Activity a ciegas (DeviceOptimizer casero) y usamos el plugin
+            // ya instalado en el proyecto: @squareetlabs/capacitor-dont-kill-my-app.
+            // Este mantiene una base de datos actualizada por la comunidad
+            // con los nombres correctos por marca, Y de paso siempre intenta
+            // la exención de optimización de batería estándar de Android
+            // (esa SÍ funciona en cualquier marca, incluido Infinix/XOS,
+            // porque no depende de adivinar nada — es una API oficial de
+            // Android, no un truco por fabricante).
+            const DontKillMyApp = window.Capacitor && window.Capacitor.Plugins
+                ? window.Capacitor.Plugins.DontKillMyApp
                 : null;
-            if (!DeviceOptimizer) {
-                console.warn('⚠️ DeviceOptimizer no disponible (¿estás en el navegador, no en el APK?)');
-                return { ok: false, fabricante: 'desconocido' };
+            if (!DontKillMyApp) {
+                console.warn('⚠️ DontKillMyApp no disponible (¿estás en el navegador, no en el APK?)');
+                return { ok: false };
             }
-            const resultado = await DeviceOptimizer.openAutoStartSettings();
-            console.log('🔋 Ajustes autostart nativo:', resultado);
-            return { ok: !!resultado.abrioAjustesEspecificos, fabricante: resultado.fabricante || 'desconocido' };
+            const resultado = await DontKillMyApp.requestRunInBackground();
+            console.log('🔋 DontKillMyApp.requestRunInBackground:', resultado);
+            return { ok: !!(resultado && resultado.requested) };
         } catch (e) {
-            console.error('❌ Error abriendo ajustes autostart nativo:', e);
-            return { ok: false, fabricante: 'desconocido' };
+            console.error('❌ Error solicitando exención de batería:', e);
+            return { ok: false };
         }
     }
     function mostrarModalBateria() {
@@ -3908,7 +3917,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         if (resultado.ok) {
             cerrarModalBateria(true);
         } else {
-            alert('No se pudo abrir la pantalla automática de tu teléfono (' + resultado.fabricante + '). Te dejamos los pasos manuales abajo para que los hagas tú mismo.');
+            alert('No se pudo completar automáticamente en tu teléfono. Te dejamos los pasos manuales abajo para que los hagas tú mismo.');
         }
     };
     // ┌─────────────────────────────────────────────────────────┐
@@ -4293,7 +4302,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             const estado = await LocalNotifications.checkPermissions();
             if (estado.display !== 'granted') {
                 const resultado = await LocalNotifications.requestPermissions();
-                console.log('🔔 Permiso de notificaciones:', resultado.display);
+                console.log('?? Permiso de notificaciones:', resultado.display);
             } else {
                 console.log('🔔 Permiso de notificaciones ya concedido');
             }
