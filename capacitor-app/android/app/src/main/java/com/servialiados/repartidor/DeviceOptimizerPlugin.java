@@ -101,7 +101,7 @@ public class DeviceOptimizerPlugin extends Plugin {
             };
         } else if (fabricante.contains("transsion") || fabricante.contains("infinix") || fabricante.contains("tecno") || fabricante.contains("itel")) {
             candidatos = new ComponentName[]{
-                new ComponentName("com.transsion.phonemanager", "com.transsion.phonemanager.ui.autobootmanage.AutoBootMangeActivity"),
+                new ComponentName("com.transsion.phonemanager", "com.transsion.phonemanager.ui.autobootmanage.AutoBootManageActivity"),
                 new ComponentName("com.transsion.batteryjoint", "com.transsion.batteryjoint.act.MainActivity"),
                 new ComponentName("com.itel.autobootmanager", "com.itel.autobootmanager.activity.WhiteListActivity")
             };
