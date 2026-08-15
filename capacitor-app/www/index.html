@@ -5902,6 +5902,31 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 estado: nuevoEstado,
                 [`tiempo${nuevoEstado.replace(' ', '')}`]: tsEstado
             });
+
+            // 🔔 FIX 2026-08-15 (geofencing en background): el aviso "repartidor
+            // cerca" (repartidorCerca) antes solo se calculaba en el JS de
+            // primer plano (enviarUbicacionAFirebase) — si el repartidor iba
+            // con la app en segundo plano (el caso más común en una entrega
+            // real), el aviso nunca se disparaba, porque el webhook nativo de
+            // background NO hacía ese chequeo. Ahora, al pasar a "En Camino",
+            // se guarda el destino en repartidores_info/{uid} para que el
+            // propio Cloud Function del webhook (actualizarUbicacionRepartidor)
+            // pueda calcular la proximidad en CADA actualización, venga del
+            // modo que venga (foreground, background, o webhook 100% nativo).
+            if (nuevoEstado === 'En Camino' && repartidorUID) {
+                try {
+                    const snapDestino = await get(pedidoRef);
+                    const gpsDestino = snapDestino.exists() ? (snapDestino.val().gpsDestino || null) : null;
+                    if (gpsDestino && gpsDestino.lat && gpsDestino.lng) {
+                        await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                            pedidoEnCaminoId: pedidoId,
+                            destinoEnCamino: { lat: gpsDestino.lat, lng: gpsDestino.lng }
+                        });
+                    }
+                } catch (eDestino) {
+                    console.warn('⚠️ No se pudo guardar destino para proximidad en background:', eDestino);
+                }
+            }
             // 🔔 Notificar al cliente: escribir en pedidos_historial dispara la campañita
             try {
                 await update(ref(db, `pedidos_historial/${pedidoId}`), {
@@ -5996,7 +6021,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 // borrar de pendientes) en una sola escritura atómica: o pasan los
                 // dos, o no pasa ninguno. Ya no puede quedar a medio camino.
                 try {
-                    await update(ref(db), {
+                    const updatesAtomicos = {
                         [`pedidos_historial/${pedidoId}`]: {
                             ...pedido,
                             estado: 'Completado',
@@ -6005,7 +6030,14 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             tiempoCompletado: Date.now()
                         },
                         [`pedidos_pendientes/${pedidoId}`]: null
-                    });
+                    };
+                    // 🔧 Limpia el destino de proximidad en background si era este pedido
+                    // (evita que el webhook siga comparando contra un pedido ya entregado).
+                    if (repartidorUID) {
+                        updatesAtomicos[`repartidores_info/${repartidorUID}/pedidoEnCaminoId`] = null;
+                        updatesAtomicos[`repartidores_info/${repartidorUID}/destinoEnCamino`] = null;
+                    }
+                    await update(ref(db), updatesAtomicos);
                 } catch (atomicErr) {
                     // Fallback: si por reglas de Firebase no se puede escribir en
                     // ambas rutas a la vez, intentamos el camino viejo en 2 pasos
@@ -6018,6 +6050,14 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         repartidorNombre: repartidorNombre,
                         tiempoCompletado: Date.now()
                     });
+                    if (repartidorUID) {
+                        try {
+                            await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                                pedidoEnCaminoId: null,
+                                destinoEnCamino: null
+                            });
+                        } catch (eLimpiar) { /* no crítico */ }
+                    }
                     try {
                         await remove(pedidoPendRef);
                     } catch (removeErr) {
