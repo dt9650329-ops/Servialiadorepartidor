@@ -44,6 +44,17 @@ android {
     }
 }
 
+// 🆕 FIX 2026-08-25: fuerza androidx.credentials a 1.3.0+ — versiones más
+// viejas de esta librería fallan con "Your device doesn't support credential
+// manager" en varios celulares (confirmado en Oppo/ColorOS y otros). Es el
+// mismo fix que ya tiene el build.gradle del cliente.
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.credentials:credentials:1.3.0'
+        force 'androidx.credentials:credentials-play-services-auth:1.3.0'
+    }
+}
+
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
