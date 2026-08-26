@@ -101,7 +101,7 @@
     <!-- 🛠️ ERUDA: consola de depuración activa -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
-    <title>Panel Repartidor - v1.0.5</title>
+    <title>Panel Repartidor - v1.0.6</title>
     <style>
         /* ┌─────────────────────────────────────────────────────────┐
    │ [CSS-01] VARIABLES GLOBALES (:root)                     │
@@ -117,6 +117,16 @@
             --color-delivery: #2980B9;
             --color-card: #1A2E42;
         }
+        /* Optimización de desplazamiento: scroll con inercia nativa en
+           iOS/WebView y sin "rebote" que se contagia a contenedores padres
+           (menos sensación de pegado al hacer scroll en listas, mapa y chats) */
+        * {
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
+        html {
+            scroll-behavior: smooth;
+        }
         /* ┌─────────────────────────────────────────────────────────┐
            │ [CSS-02] BODY + ESTILOS GENERALES                       │
            └─────────────────────────────────────────────────────────┘ */
@@ -125,6 +135,9 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
             background: var(--color-background);
             color: var(--color-secondary);
+            /* Reduce repintado de texto durante el scroll en Android WebView */
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeSpeed;
         }
         /* ┌─────────────────────────────────────────────────────────┐
            │ [CSS-11] LOGIN + REGISTRO                               │
@@ -2217,7 +2230,7 @@ function _fechaHoyColombia() {
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
     window.goOffline = () => goOffline(db);
     window.goOnline = () => goOnline(db);
-    const APP_VERSION = "1.0.5";
+    const APP_VERSION = "1.0.6";
 
  // ============================================================
  // CONTROL DE VERSIÓN OBLIGATORIA DEL REPARTIDOR (mismo mecanismo
@@ -4092,8 +4105,15 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             // obsoleta desde el último logout (nunca se reseteaba en el login),
             // dando una imagen confusa en el admin panel de una sesión "activa"
             // que en realidad se ve como cerrada manualmente.
+            // 🆕 FIX 2026-08-25: se agrega ultimoLoginExplicito — a diferencia del
+            // campo online (que sube y baja también por simple señal/conexión),
+            // este campo solo se escribe UNA vez aquí, al arrancar una sesión real
+            // (login recién hecho o app reabierta con sesión guardada), nunca en
+            // reconexiones de señal ni heartbeats. El admin lo usa para avisar
+            // "Fulano se conectó" solo en inicios de turno reales, no por señal.
             await update(ref(db, `repartidores_info/${repartidorUID}`), {
-                sesionCerradaManualmente: false
+                sesionCerradaManualmente: false,
+                ultimoLoginExplicito: Date.now()
             });
             await marcarComoOnline();
             await iniciarHeartbeatPrincipal();
@@ -7560,6 +7580,20 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             // Cancelar timer de medianoche
             if (_midnightTimeout) { clearTimeout(_midnightTimeout);   _midnightTimeout  = null; }
             if (_midnightBackup)  { clearInterval(_midnightBackup);   _midnightBackup   = null; }
+            // 🆕 FIX 2026-08-25: ultimoLogoutExplicito solo se escribe aquí, en el
+            // cierre de sesión real (botón de logout) — nunca en desconexiones por
+            // señal (esas las maneja onDisconnect en Firebase, sin este campo). El
+            // admin usa esto para avisar "Fulano cerró sesión" solo en fin de turno
+            // real, no cuando el celular pierde señal un momento.
+            if (repartidorUID && db) {
+                try {
+                    await update(ref(db, `repartidores_info/${repartidorUID}`), {
+                        ultimoLogoutExplicito: Date.now()
+                    });
+                } catch (e) {
+                    console.warn('⚠️ No se pudo guardar ultimoLogoutExplicito:', e.message);
+                }
+            }
             await marcarComoOffline();
             detenerTrackingGPS();
             detenerEnvioUbicacionRepartidor();
