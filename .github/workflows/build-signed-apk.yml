@@ -45,6 +45,11 @@ jobs:
             -PRELEASE_KEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
             -PRELEASE_KEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
 
+      - name: Renombrar APK
+        run: |
+          cd android
+          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/servi-aliados-repartidor.apk
+
       - name: Debug signing
         run: |
           cd android
@@ -53,10 +58,10 @@ jobs:
           echo "--- Contenido del keystore (con password de secrets) ---"
           keytool -list -v -keystore app/servi-aliados-repartidor.keystore -storepass "${{ secrets.KEYSTORE_PASSWORD }}" -alias "${{ secrets.KEY_ALIAS }}" || echo "FALLO AL LEER KEYSTORE CON ESA PASSWORD/ALIAS"
           echo "--- Verificando APK generado ---"
-          keytool -printcert -jarfile app/build/outputs/apk/release/app-release.apk || echo "APK NO FIRMADO"
+          keytool -printcert -jarfile app/build/outputs/apk/release/servi-aliados-repartidor.apk || echo "APK NO FIRMADO"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: capacitor-app/android/app/build/outputs/apk/release/app-release.apk
+          name: servi-aliados-repartidor
+          path: capacitor-app/android/app/build/outputs/apk/release/servi-aliados-repartidor.apk
