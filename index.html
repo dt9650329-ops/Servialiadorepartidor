@@ -2179,7 +2179,7 @@
     // │ [JS-01] IMPORTS DE FIREBASE                             │
     // └─────────────────────────────────────────────────────────┘
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded, goOffline, goOnline } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded, goOffline, goOnline, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithRedirect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
     import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
@@ -4119,8 +4119,16 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             await iniciarHeartbeatPrincipal();
             iniciarEnvioUbicacionDirecto();
             
-            // 🆕 Buscar y asignar pedidos pendientes automáticamente
+            // 🆕 Buscar y asignar pedidos pendientes automáticamente (una vez, al conectar)
             await buscarYAsignarPedidosPendientes();
+
+            // 🔧 FIX 2026-09-05: lo anterior solo corre UNA VEZ al conectar, así que
+            // un pedido creado DESPUÉS (ej. por ServiBot vía confirmarPedidoParaTercero)
+            // mientras el repartidor ya está activo nunca se detectaba — se quedaba en
+            // "pendiente" para siempre porque nada volvía a escanear. Este listener en
+            // tiempo real cubre eso: sigue vigilando pedidos_historial mientras dure la
+            // sesión, no solo en el instante de la conexión.
+            escucharPedidosNuevosParaAsignar();
             
             console.log('✅ Sistema de presencia persistente configurado');
             actualizarIndicadorConexion(true);
@@ -4203,6 +4211,40 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         }
     }
     
+    // 🔧 FIX 2026-09-05: bandera para no registrar el listener más de una vez
+    // (ej. si configurarPresenciaPersistente se vuelve a llamar en una reconexión).
+    let _listenerPedidosNuevosActivo = false;
+
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-16b] LISTENER EN TIEMPO REAL DE PEDIDOS NUEVOS       │
+    // └─────────────────────────────────────────────────────────┘
+    // A diferencia de buscarYAsignarPedidosPendientes() (que solo corre una
+    // vez, al conectar), onChildAdded se mantiene escuchando pedidos_historial
+    // mientras dure la sesión: dispara tanto para los pedidos que ya existían
+    // al conectar como para cada pedido NUEVO que se cree después (formulario,
+    // ServiBot/chatbot para tercero, agenda activada, etc.), que es justo el
+    // caso que se estaba quedando sin asignar.
+    function escucharPedidosNuevosParaAsignar() {
+        if (_listenerPedidosNuevosActivo || !repartidorUID || !db) return;
+        _listenerPedidosNuevosActivo = true;
+
+        onChildAdded(ref(db, 'pedidos_historial'), (childSnapshot) => {
+            const pedido = childSnapshot.val();
+            const pedidoId = childSnapshot.key;
+            if (!pedido) return;
+
+            const sinRepartidor = pedido.estado === 'sin_repartidor' ||
+                                 (pedido.estado === 'pendiente' && !pedido.repartidorUID);
+
+            if (sinRepartidor) {
+                console.log(`🔔 Pedido nuevo detectado en vivo: ${pedidoId.substring(0, 8)} - Intentando asignar...`);
+                asignarPedidoARepartidor(pedidoId, pedido);
+            }
+        });
+
+        console.log('👂 Escuchando pedidos_historial en tiempo real para auto-asignación.');
+    }
+
     async function asignarPedidoARepartidor(pedidoId, pedidoData) {
         try {
             // 🚫 No auto-asignar si este repartidor tiene un bloqueo de servicio
@@ -4226,25 +4268,45 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             const repSnapshot = await get(ref(db, `repartidores_info/${repartidorUID}`));
             const repData = repSnapshot.exists() ? repSnapshot.val() : {};
             const repNombre = repData.nombre || repartidorNombre || 'Repartidor';
-            
-            // Actualizar el pedido en pedidos_historial
-            await update(ref(db, `pedidos_historial/${pedidoId}`), {
-                estado: 'pendiente',
-                repartidorUID: repartidorUID,
-                repartidorNombre: repNombre,
-                repartidorIdAsignado: `repartidor_${repartidorUID}`,
-                timestampAsignacionAutomatica: Date.now(),
-                asignacionAutomatica: true
+
+            // 🔧 FIX 2026-09-05: reclamo ATÓMICO vía transacción sobre repartidorUID.
+            // Antes esto era un update() directo: si dos repartidores conectados
+            // detectaban el mismo pedido al mismo tiempo (ej. ambos reconectando o
+            // ambos con el listener disparando a la vez), los dos terminaban
+            // escribiendo su propio repartidores_pedidos/{uid}/{pedidoId} para el
+            // MISMO pedido — quedaba "asignado" en el celular de ambos aunque en
+            // pedidos_historial solo ganara el último update(). La transacción
+            // garantiza que solo uno gane la asignación.
+            const pedidoRef = ref(db, `pedidos_historial/${pedidoId}`);
+            const resultado = await runTransaction(pedidoRef, (pedidoActual) => {
+                if (!pedidoActual) return pedidoActual; // ya no existe, abortar
+                const yaAsignado = pedidoActual.repartidorUID && pedidoActual.estado !== 'sin_repartidor';
+                if (yaAsignado) return; // abortar: otro repartidor ya lo tomó primero
+                return {
+                    ...pedidoActual,
+                    estado: 'pendiente',
+                    repartidorUID: repartidorUID,
+                    repartidorNombre: repNombre,
+                    repartidorIdAsignado: `repartidor_${repartidorUID}`,
+                    timestampAsignacionAutomatica: Date.now(),
+                    asignacionAutomatica: true
+                };
             });
-            
+
+            if (!resultado.committed || !resultado.snapshot.exists()) {
+                console.log(`⏭️ Pedido ${pedidoId.substring(0, 8)} ya fue tomado por otro repartidor, se descarta.`);
+                return;
+            }
+            const pedidoFinal = resultado.snapshot.val();
+            if (pedidoFinal.repartidorUID !== repartidorUID) {
+                console.log(`⏭️ Pedido ${pedidoId.substring(0, 8)} terminó asignado a otro repartidor, se descarta.`);
+                return;
+            }
+
             // Crear entrada en repartidores_pedidos
             await set(ref(db, `repartidores_pedidos/${repartidorUID}/${pedidoId}`), {
-                ...pedidoData,
-                estado: 'pendiente',
-                repartidorUID: repartidorUID,
-                repartidorNombre: repNombre,
-                timestampAsignacionAutomatica: Date.now(),
-                asignacionAutomatica: true
+                ...pedidoFinal,
+                pedidoId
             });
             
             console.log(`✅ Pedido ${pedidoId.substring(0, 8)} asignado correctamente`);
