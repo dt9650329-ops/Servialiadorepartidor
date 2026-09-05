@@ -5462,7 +5462,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 // Ignorar pedidos ya completados o cancelados
                 const estadoNorm = (pedido.estado || '').toLowerCase();
                 if (estadoNorm === 'completado' || estadoNorm === 'cancelado') return;
-                if (pedido.estado === 'Pendiente') {
+                if (estadoNorm === 'pendiente') {
                     pedidosYaMostrados.add(pedidoId);
                     contadorPendientes++;
                     mostrarPedidoPendiente(pedido, pedidoId, listaPendientes);
