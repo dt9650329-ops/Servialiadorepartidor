@@ -101,7 +101,7 @@
     <!-- 🛠️ ERUDA: consola de depuración activa -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
-    <title>Panel Repartidor - v1.0.8</title>
+    <title>Panel Repartidor - v1.0.6</title>
     <style>
         /* ┌─────────────────────────────────────────────────────────┐
    │ [CSS-01] VARIABLES GLOBALES (:root)                     │
@@ -2230,7 +2230,7 @@ function _fechaHoyColombia() {
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
     window.goOffline = () => goOffline(db);
     window.goOnline = () => goOnline(db);
-    const APP_VERSION = "1.0.8";
+    const APP_VERSION = "1.0.7";
 
  // ============================================================
  // CONTROL DE VERSIÓN OBLIGATORIA DEL REPARTIDOR (mismo mecanismo
@@ -3421,25 +3421,12 @@ function _fechaHoyColombia() {
         const idx  = keys.indexOf(clienteID) % COLORES_CLIENTES.length;
         const color = COLORES_CLIENTES[idx];
         const emoji = EMOJIS_CLIENTES[idx];
-        // 🔧 FIX 2026-09-05: antes se leía SIEMPRE de pedidosClientesInfo[clienteID],
-        // una caché indexada por cliente que un segundo pedido del MISMO cliente
-        // sobrescribía por completo (el marcador en vivo terminaba mostrando los
-        // datos de un solo pedido para los dos). Ahora se busca en pedidosPorId
-        // (indexado por pedido) para saber cuántos pedidos activos tiene este
-        // cliente y de cuál mostrar el detalle.
-        const _pedidosDeEsteCliente = Object.values(pedidosPorId).filter(p => p && p.clienteID === clienteID);
-        const info  = _pedidosDeEsteCliente[0] || pedidosClientesInfo[clienteID] || {};
-        const _multiplesPedidos = _pedidosDeEsteCliente.length > 1;
-        const label = _multiplesPedidos
-            ? `Cliente (${_pedidosDeEsteCliente.length} pedidos)`
-            : (info.desc || `Cliente ${idx+1}`);
-        // Con varios pedidos activos del mismo cliente, el barrio/zona de UNO
-        // solo confundiría en el tooltip del marcador en vivo — cada pedido ya
-        // tiene su propio pin de recogida/entrega correcto en el mapa.
-        const barrio         = _multiplesPedidos ? '' : (info.barrio         || '');   // barrioEntrega (destino)
-        const zona           = _multiplesPedidos ? '' : (info.zona           || '');   // zonaEntrega
-        const barrioRecogida = _multiplesPedidos ? '' : (info.barrioRecogida || '');   // punto de recogida
-        const zonaRecogida   = _multiplesPedidos ? '' : (info.zonaRecogida   || '');
+        const info  = pedidosClientesInfo[clienteID] || {};
+        const label = info.desc || `Cliente ${idx+1}`;
+        const barrio         = info.barrio         || '';   // barrioEntrega (destino)
+        const zona           = info.zona           || '';   // zonaEntrega
+        const barrioRecogida = info.barrioRecogida || '';   // punto de recogida
+        const zonaRecogida   = info.zonaRecogida   || '';
         const zonaColor = ZONA_COLORES[(zona||'').toUpperCase()] || '#555';
         const tooltipContent = _tooltipBarrio(barrioRecogida, zonaRecogida, barrio, zona);
         // 🔍 DEBUG: log pedido info for diagnosis
@@ -4245,10 +4232,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 estado: 'pendiente',
                 repartidorUID: repartidorUID,
                 repartidorNombre: repNombre,
-                // FIX 2026-09-03: antes se guardaba con prefijo "repartidor_",
-                // contradiciendo el repartidorUID de la misma actualización
-                // (mismo repartidor, dos valores distintos). Ahora coincide.
-                repartidorIdAsignado: repartidorUID,
+                repartidorIdAsignado: `repartidor_${repartidorUID}`,
                 timestampAsignacionAutomatica: Date.now(),
                 asignacionAutomatica: true
             });
@@ -5475,7 +5459,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 // Ignorar pedidos ya completados o cancelados
                 const estadoNorm = (pedido.estado || '').toLowerCase();
                 if (estadoNorm === 'completado' || estadoNorm === 'cancelado') return;
-                if (estadoNorm === 'pendiente') {
+                if (pedido.estado === 'Pendiente') {
                     pedidosYaMostrados.add(pedidoId);
                     contadorPendientes++;
                     mostrarPedidoPendiente(pedido, pedidoId, listaPendientes);
@@ -5630,14 +5614,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         try {
             const _mapaVisible = document.getElementById('mapa-cliente-container').style.display !== 'none' && mapaCliente;
             if (_mapaVisible) {
-                // 🔧 FIX 2026-09-05: antes se iteraba pedidosClientesInfo (por
-                // cliente), así que si un cliente tenía 2 pedidos activos solo se
-                // reconciliaba el último guardado. Iterando pedidosPorId (por
-                // pedido) se reconcilian TODOS los pedidos, aunque compartan cliente.
-                Object.keys(pedidosPorId).forEach(pid => {
-                    const info = pedidosPorId[pid];
-                    if (info && info.clienteID && !clientesListeners[info.clienteID]) {
-                        iniciarSeguimientoCliente(info.clienteID, info);
+                Object.keys(pedidosClientesInfo).forEach(cId => {
+                    if (!clientesListeners[cId]) {
+                        iniciarSeguimientoCliente(cId, pedidosClientesInfo[cId]);
                     }
                 });
             }
@@ -6153,40 +6132,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
         // ── Pasos secundarios: nunca deben revertir ni bloquear lo anterior ──
         try {
-            // 🔧 FIX 2026-09-05: antes se buscaba el cliente en pedidosClientesInfo
-            // (indexado por cliente), y si el mismo cliente tenía 2 pedidos activos,
-            // esa caché ya solo tenía guardado UNO de los dos — a veces el que se
-            // estaba completando, a veces el otro. Si por azar apuntaba al pedido
-            // equivocado, detenerSeguimientoCliente() borraba el seguimiento y los
-            // pines del pedido que SEGUÍA activo, dejándolo sin mapa a mitad de
-            // camino. Ahora se busca en pedidosPorId (indexado por pedido), que
-            // siempre apunta al cliente correcto de ESTE pedidoId.
-            const _infoPedidoCompletado = pedidosPorId[pedidoId];
-            const cIdCompletado = _infoPedidoCompletado ? _infoPedidoCompletado.clienteID : null;
+            // ✅ Quitar solo este cliente del mapa, no todos
+            const cIdCompletado = Object.keys(pedidosClientesInfo).find(
+                cid => pedidosClientesInfo[cid] && pedidosClientesInfo[cid].pedidoId === pedidoId
+            );
             if (cIdCompletado) {
-                // ¿Le quedan a este cliente otros pedidos activos aparte de este?
-                const _otrosPedidosDelCliente = Object.keys(pedidosPorId).filter(
-                    pid => pid !== pedidoId && pedidosPorId[pid] && pedidosPorId[pid].clienteID === cIdCompletado
-                );
-                if (_otrosPedidosDelCliente.length === 0) {
-                    // No le quedan más pedidos activos: sí apagamos su seguimiento completo
-                    detenerSeguimientoCliente(cIdCompletado);
-                } else {
-                    // Le queda(n) otro(s) pedido(s) activo(s): NO tocamos el listener de
-                    // ubicación ni los pines del otro pedido — solo limpiamos lo de ESTE.
-                    if (marcadoresEntregaPedido[pedidoId] && mapaCliente) {
-                        mapaCliente.removeLayer(marcadoresEntregaPedido[pedidoId]);
-                        delete marcadoresEntregaPedido[pedidoId];
-                    }
-                    if (marcadoresRecogidaPedido[pedidoId] && mapaCliente) {
-                        mapaCliente.removeLayer(marcadoresRecogidaPedido[pedidoId]);
-                        delete marcadoresRecogidaPedido[pedidoId];
-                    }
-                    delete _geocodificandoBarrio[pedidoId];
-                    delete _geocodificandoRecogida[pedidoId];
-                    delete pedidosPorId[pedidoId];
-                    _actualizarPanelDistancias();
-                }
+                detenerSeguimientoCliente(cIdCompletado);
             }
             // Si no quedan más clientes, ocultar mapa y detener GPS
             if (Object.keys(coordsClientes).length === 0) {
