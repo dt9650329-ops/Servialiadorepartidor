@@ -101,7 +101,7 @@
     <!-- 🛠️ ERUDA: consola de depuración activa -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
-    <title>Panel Repartidor - v1.1.0</title>
+    <title>Panel Repartidor - v1.1.2</title>
     <style>
         /* ┌─────────────────────────────────────────────────────────┐
    │ [CSS-01] VARIABLES GLOBALES (:root)                     │
@@ -2179,7 +2179,7 @@
     // │ [JS-01] IMPORTS DE FIREBASE                             │
     // └─────────────────────────────────────────────────────────┘
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded, goOffline, goOnline, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+    import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded, goOffline, goOnline, runTransaction, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
     import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithRedirect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
     import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
@@ -2230,7 +2230,7 @@ function _fechaHoyColombia() {
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
     window.goOffline = () => goOffline(db);
     window.goOnline = () => goOnline(db);
-    const APP_VERSION = "1.1.0";
+    const APP_VERSION = "1.1.2";
 
  // ============================================================
  // CONTROL DE VERSIÓN OBLIGATORIA DEL REPARTIDOR (mismo mecanismo
@@ -4152,21 +4152,31 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         console.log('🔍 Buscando pedidos pendientes sin repartidor...');
         
         try {
-            // Buscar en pedidos_historial
-            const pedidosRef = ref(db, 'pedidos_historial');
-            const snapshot = await get(pedidosRef);
+            // 🔧 FIX 2026-09-06: un get() a lo bruto de todo 'pedidos_historial'
+            // es rechazado por las reglas de Firebase para un repartidor normal
+            // (permission-denied silencioso). Las reglas SÍ permiten consultas
+            // filtradas por 'estado' == 'pendiente' o 'sin_repartidor', así que
+            // se hacen 2 queries separadas (Firebase no permite 2 valores en un
+            // mismo equalTo) y se combinan los resultados.
+            const [snapSinRepartidor, snapPendiente] = await Promise.all([
+                get(query(ref(db, 'pedidos_historial'), orderByChild('estado'), equalTo('sin_repartidor'))),
+                get(query(ref(db, 'pedidos_historial'), orderByChild('estado'), equalTo('pendiente')))
+            ]);
             
-            if (!snapshot.exists()) {
+            if (!snapSinRepartidor.exists() && !snapPendiente.exists()) {
                 console.log('📭 No hay pedidos en el historial');
                 return;
             }
             
             let pedidosAsignados = 0;
             const promesas = [];
+            const pedidosVistos = new Set();
             
-            snapshot.forEach((childSnapshot) => {
+            const procesarPedido = (childSnapshot) => {
                 const pedido = childSnapshot.val();
                 const pedidoId = childSnapshot.key;
+                if (pedidosVistos.has(pedidoId)) return; // evitar duplicados entre las 2 queries
+                pedidosVistos.add(pedidoId);
                 
                 // Verificar si el pedido está sin repartidor o pendiente sin asignar
                 const sinRepartidor = pedido.estado === 'sin_repartidor' || 
@@ -4180,7 +4190,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     promesas.push(promesa);
                     pedidosAsignados++;
                 }
-            });
+            };
+            snapSinRepartidor.forEach(procesarPedido);
+            snapPendiente.forEach(procesarPedido);
             
             // Ejecutar todas las asignaciones
             if (promesas.length > 0) {
@@ -4228,7 +4240,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         if (_listenerPedidosNuevosActivo || !repartidorUID || !db) return;
         _listenerPedidosNuevosActivo = true;
 
-        onChildAdded(ref(db, 'pedidos_historial'), (childSnapshot) => {
+        // 🔧 FIX 2026-09-06: onChildAdded sobre 'pedidos_historial' sin query
+        // es rechazado por las reglas de Firebase (permission-denied) para un
+        // repartidor normal. Se reemplaza por 2 listeners con query filtrada
+        // por 'estado' (una por cada valor posible, ya que equalTo solo acepta
+        // un valor); las reglas sí permiten esta forma de lectura.
+        const manejarPedidoDetectado = (childSnapshot) => {
             const pedido = childSnapshot.val();
             const pedidoId = childSnapshot.key;
             if (!pedido) return;
@@ -4240,7 +4257,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 console.log(`🔔 Pedido nuevo detectado en vivo: ${pedidoId.substring(0, 8)} - Intentando asignar...`);
                 asignarPedidoARepartidor(pedidoId, pedido);
             }
-        });
+        };
+        onChildAdded(query(ref(db, 'pedidos_historial'), orderByChild('estado'), equalTo('sin_repartidor')), manejarPedidoDetectado);
+        onChildAdded(query(ref(db, 'pedidos_historial'), orderByChild('estado'), equalTo('pendiente')), manejarPedidoDetectado);
 
         console.log('👂 Escuchando pedidos_historial en tiempo real para auto-asignación.');
     }
@@ -5319,6 +5338,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
     // ── Caché de pedidos del formulario cliente (repartidores_pedidos) ──
     let pedidosFormulario = {}; // pedidoId → pedidoData
+    // 🔧 FIX 2026-09-06: caché de pedidos YA ACEPTADOS del sistema nuevo
+    // (domicilio normal, ServiBot/IA, compra en tienda), leído del mismo nodo
+    // repartidores_pedidos/{uid} que ya funciona sin problemas de permisos.
+    // Reemplaza la lectura completa de pedidos_historial que causaba
+    // "Error cargando historial asignados: Error {}" (permission-denied) y
+    // dejaba "Asignados" en 0 pese a que el pedido sí estaba aceptado.
+    let pedidosAsignadosFormulario = {}; // pedidoId → pedidoData
 
     // ── Calcula tiempo real (min) desde posición del repartidor
     //    hasta las coords del cliente usando Haversine ──
@@ -5426,21 +5452,35 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         // (un get() puntual). Ahora, cada vez que pedidos_historial cambia (p. ej.
         // al completar un pedido), esto recalcula y actualiza el texto en pantalla
         // automáticamente, sin importar en qué pestaña esté el repartidor.
-        const historialGananciasRef = ref(db, 'pedidos_historial');
+        // 🔧 FIX 2026-09-06: onValue a lo bruto sobre todo 'pedidos_historial'
+        // es rechazado por las reglas de Firebase para un repartidor normal.
+        // Se filtra por 'repartidorUID' == auth.uid, que las reglas sí permiten.
+        const historialGananciasRef = query(ref(db, 'pedidos_historial'), orderByChild('repartidorUID'), equalTo(repartidorUID));
         onValue(historialGananciasRef, () => {
             _calcularYMostrarGananciasHoy();
         });
 
-        // ── 2. Listener: repartidores_pedidos/{uid} (pedidos del formulario cliente) ──
+        // ── 2. Listener: repartidores_pedidos/{uid} (pedidos del sistema nuevo:
+        //    domicilio normal, ServiBot/IA, compra en tienda, formulario) ──
+        // 🔧 FIX 2026-09-06: antes esto solo guardaba los pendientes/sin_repartidor
+        // (pedidosFormulario) y "Asignados" dependía de un get() completo de
+        // pedidos_historial que fallaba por permisos. Ahora este mismo nodo
+        // (que sí se puede leer sin problema) también alimenta pedidosAsignadosFormulario
+        // con los que ya están aceptados, para que "Asignados" no dependa más
+        // de pedidos_historial.
         const formPedidosRef = ref(db, `repartidores_pedidos/${repartidorUID}`);
         onValue(formPedidosRef, (snapshot) => {
             pedidosFormulario = {};
+            pedidosAsignadosFormulario = {};
             if (snapshot.exists()) {
                 snapshot.forEach(child => {
                     const p = child.val();
-                    // Solo los que están pendientes o sin_repartidor
-                    if (p.estado === 'pendiente' || p.estado === 'sin_repartidor') {
+                    const estadoNorm = (p.estado || '').toLowerCase();
+                    if (estadoNorm === 'pendiente' || estadoNorm === 'sin_repartidor') {
                         pedidosFormulario[child.key] = p;
+                    } else if (estadoNorm !== 'completado' && estadoNorm !== 'cancelado') {
+                        // aceptado / esperando / en camino / en_camino / etc.
+                        pedidosAsignadosFormulario[child.key] = p;
                     }
                 });
             }
@@ -5448,11 +5488,14 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         });
         
         // ── 🆕 3. Listener: pedidos_historial (para auto-asignación en tiempo real) ──
-        const historialRef = ref(db, 'pedidos_historial');
-        onValue(historialRef, async (snapshot) => {
+        // 🔧 FIX 2026-09-06: onValue a lo bruto sobre todo 'pedidos_historial'
+        // es rechazado por las reglas de Firebase para un repartidor normal.
+        // Se reemplaza por 2 listeners con query filtrada por 'estado' (una
+        // por cada valor posible, ya que equalTo solo acepta un valor).
+        const manejarSnapshotSinAsignar = async (snapshot) => {
             if (!snapshot.exists()) return;
             
-            snapshot.forEach(async (childSnapshot) => {
+            snapshot.forEach((childSnapshot) => {
                 const pedido = childSnapshot.val();
                 const pedidoId = childSnapshot.key;
                 
@@ -5463,20 +5506,23 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 
                 if (sinRepartidor) {
                     console.log(`🔔 Nuevo pedido sin repartidor detectado: ${pedidoId.substring(0, 8)}`);
-                    
-                    // Verificar que este repartidor esté online y activo
-                    const repSnapshot = await get(ref(db, `repartidores_info/${repartidorUID}`));
-                    if (repSnapshot.exists()) {
-                        const repData = repSnapshot.val();
-                        if (repData.online === true && repData.trackingActivo === true) {
-                            // Auto-asignar el pedido
-                            await asignarPedidoARepartidor(pedidoId, pedido);
-                            console.log(`✅ Pedido ${pedidoId.substring(0, 8)} auto-asignado`);
+                    (async () => {
+                        // Verificar que este repartidor esté online y activo
+                        const repSnapshot = await get(ref(db, `repartidores_info/${repartidorUID}`));
+                        if (repSnapshot.exists()) {
+                            const repData = repSnapshot.val();
+                            if (repData.online === true && repData.trackingActivo === true) {
+                                // Auto-asignar el pedido
+                                await asignarPedidoARepartidor(pedidoId, pedido);
+                                console.log(`✅ Pedido ${pedidoId.substring(0, 8)} auto-asignado`);
+                            }
                         }
-                    }
+                    })();
                 }
             });
-        });
+        };
+        onValue(query(ref(db, 'pedidos_historial'), orderByChild('estado'), equalTo('sin_repartidor')), manejarSnapshotSinAsignar);
+        onValue(query(ref(db, 'pedidos_historial'), orderByChild('estado'), equalTo('pendiente')), manejarSnapshotSinAsignar);
     }
 
     // ── Renderizador unificado ──
@@ -5574,45 +5620,36 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             });
         }
 
-        // ── Pedidos de historial asignados a este repartidor (del formulario) ──
-        try {
-            const histSnap = await get(ref(db, 'pedidos_historial'));
-            if (histSnap.exists()) {
-                histSnap.forEach(child => {
-                    if (pedidosYaMostrados.has(child.key)) return; // 🔧 FIX: saltar duplicados
-                    const p = child.val();
-                    console.log('?? historial pedido:', child.key.slice(-6), '— estado:', p.estado, '— uid match:', p.repartidorUID === repartidorUID);
-                    const _pEstado = (p.estado || '').toLowerCase();
-                    if (p.repartidorUID === repartidorUID &&
-                        (_pEstado === 'aceptado' || _pEstado === 'esperando' || _pEstado === 'en camino' || _pEstado === 'en_camino') &&
-                        _pEstado !== 'completado' && _pEstado !== 'cancelado') {
-                        pedidosYaMostrados.add(child.key);
-                        contadorAsignados++;
-                        mostrarPedidoAsignado(p, child.key, listaAsignados);
-                        repEscucharChatCliente(child.key); // 🔔 Notificar mensajes del cliente
-                        // 🔧 FIX: Iniciar seguimiento para TODOS los clientes activos
-                        const cId = p.clienteUID || p.clienteIdAsignado;
-                        if (cId) {
-                            if (!activePedidoData) activePedidoData = { pedidoId: child.key, clienteUID: cId, estado: p.estado };
-                            if (document.getElementById('mapa-cliente-container').style.display !== 'none' && mapaCliente) {
-                                iniciarSeguimientoCliente(cId, {
-                                    pedidoId: child.key,
-                                    tiempoAceptado: p.tiempoAceptado || Date.now(),
-                                    desc: p.producto || p.descripcion || `Pedido #${child.key.slice(-6)}`,
-                                    monto: p.precio || p.total || '',
-                                    barrio: p.barrioEntrega || p.barrio_entrega || p.barrioDestino || '',
-                                    zona: p.zonaEntrega || p.zona_entrega || p.zona || '',
-                                    barrioRecogida: p.barrioRecogida || p.barrio_recogida || p.barrioOrigen || '',
-                                    zonaRecogida: p.zonaRecogida || p.zona_recogida || '',
-                                    gpsDestino: p.gpsDestino || null,
-                                    gpsRecogida: p.gpsRecogida || null
-                                });
-                            }
-                        }
-                    }
-                });
+        // ── Pedidos ya aceptados del sistema nuevo (domicilio, IA/ServiBot,
+        //    compra en tienda, formulario) — leídos de repartidores_pedidos/{uid},
+        //    NO de un get() completo de pedidos_historial (eso causaba el
+        //    permission-denied "Error cargando historial asignados: Error {}"
+        //    y dejaba "Asignados" en 0 aunque el pedido ya estuviera aceptado). ──
+        for (const [pedidoId, p] of Object.entries(pedidosAsignadosFormulario)) {
+            if (pedidosYaMostrados.has(pedidoId)) continue; // saltar duplicados
+            pedidosYaMostrados.add(pedidoId);
+            contadorAsignados++;
+            mostrarPedidoAsignado(p, pedidoId, listaAsignados);
+            repEscucharChatCliente(pedidoId); // 🔔 Notificar mensajes del cliente
+            const cId = p.clienteUID || p.clienteIdAsignado;
+            if (cId) {
+                if (!activePedidoData) activePedidoData = { pedidoId, clienteUID: cId, estado: p.estado };
+                if (document.getElementById('mapa-cliente-container').style.display !== 'none' && mapaCliente) {
+                    iniciarSeguimientoCliente(cId, {
+                        pedidoId,
+                        tiempoAceptado: p.tiempoAceptado || Date.now(),
+                        desc: p.producto || p.descripcion || `Pedido #${pedidoId.slice(-6)}`,
+                        monto: p.precio || p.total || '',
+                        barrio: p.barrioEntrega || p.barrio_entrega || p.barrioDestino || '',
+                        zona: p.zonaEntrega || p.zona_entrega || p.zona || '',
+                        barrioRecogida: p.barrioRecogida || p.barrio_recogida || p.barrioOrigen || '',
+                        zonaRecogida: p.zonaRecogida || p.zona_recogida || '',
+                        gpsDestino: p.gpsDestino || null,
+                        gpsRecogida: p.gpsRecogida || null
+                    });
+                }
             }
-        } catch(e) { console.error('❌ Error cargando historial asignados:', e); }
+        }
 
         // ── Actualizar contadores ──
         if (contadorPendientes === 0) {
@@ -5977,8 +6014,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 tiempoAceptado: timestamp
             });
 
-            // 3. Eliminar de repartidores_pedidos (ya fue aceptado)
-            await remove(ref(db, `repartidores_pedidos/${repartidorUID}/${pedidoId}`));
+            // 3. 🔧 FIX 2026-09-06: antes esto BORRABA la entrada de
+            // repartidores_pedidos al aceptar. Como "Asignados" ahora lee este
+            // mismo nodo (ver pedidosAsignadosFormulario), hay que ACTUALIZARLA
+            // con el estado 'Aceptado' en vez de borrarla — se borra recién al
+            // completar/cancelar el pedido (ver completarPedido/ejecutarCancelacionConMotivo).
+            await update(ref(db, `repartidores_pedidos/${repartidorUID}/${pedidoId}`), {
+                estado: 'Aceptado',
+                repartidorUID: repartidorUID,
+                repartidorNombre: repartidorNombre,
+                tiempoAceptado: timestamp
+            });
 
             // 4. Quitar del caché local
             delete pedidosFormulario[pedidoId];
@@ -6212,6 +6258,16 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             return; // No seguimos con los pasos secundarios si el paso crítico falló
         }
 
+        // 🔧 FIX 2026-09-06: quitar también la entrada de repartidores_pedidos
+        // (sistema nuevo) para que el pedido completado deje de contar en
+        // "Asignados". No crítico: si falla, el pedido ya quedó bien marcado
+        // como Completado en pedidos_historial arriba.
+        try {
+            await remove(ref(db, `repartidores_pedidos/${repartidorUID}/${pedidoId}`));
+        } catch (e) {
+            console.warn('⚠️ No se pudo limpiar repartidores_pedidos al completar (no crítico):', e);
+        }
+
         // ── Pasos secundarios: nunca deben revertir ni bloquear lo anterior ──
         try {
             // ✅ Quitar solo este cliente del mapa, no todos
@@ -6285,6 +6341,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 tiempoCancelado: Date.now()
             });
             await remove(pedidoRef);
+            // 🔧 FIX 2026-09-06: limpiar también repartidores_pedidos (sistema nuevo)
+            try {
+                await remove(ref(db, `repartidores_pedidos/${repartidorUID}/${currentPedidoIdToCancel}`));
+            } catch (e) {
+                console.warn('⚠️ No se pudo limpiar repartidores_pedidos al cancelar (no crítico):', e);
+            }
             window.detenerSeguimiento(); // 🆕 DETENER SEGUIMIENTO AL CANCELAR
             document.getElementById('cancelModal').style.display = 'none';
             currentPedidoIdToCancel = null;
@@ -6397,7 +6459,10 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             hoy.setHours(0, 0, 0, 0);
             const inicioHoy = hoy.getTime();
 
-            const snapH = await get(ref(db, 'pedidos_historial'));
+            // 🔧 FIX 2026-09-06: get() a lo bruto de todo 'pedidos_historial'
+            // es rechazado por las reglas de Firebase para un repartidor normal;
+            // se filtra por 'repartidorUID' == auth.uid, que sí está permitido.
+            const snapH = await get(query(ref(db, 'pedidos_historial'), orderByChild('repartidorUID'), equalTo(repartidorUID)));
             let completadosHoy = 0;
             let canceladosHoy  = 0;
             let gananciasHoy   = 0;
@@ -7339,7 +7404,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
     function escucharHistorial() {
         if (!repartidorUID) return;
-        const historialRef = ref(db, 'pedidos_historial');
+        // 🔧 FIX 2026-09-06: onValue a lo bruto sobre todo 'pedidos_historial'
+        // es rechazado por las reglas de Firebase para un repartidor normal
+        // (esto probablemente dejaba la pestaña "Historial" siempre vacía).
+        // Se filtra por 'repartidorUID' == auth.uid, que sí está permitido.
+        const historialRef = query(ref(db, 'pedidos_historial'), orderByChild('repartidorUID'), equalTo(repartidorUID));
         onValue(historialRef, (snapshot) => {
             const data = snapshot.val();
             const listaHistorial = document.getElementById('pedidosHistorialList');
@@ -7449,8 +7518,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     return resultado;
                 },
                 // fuente 2: pedidos_historial
+                // 🔧 FIX 2026-09-06: get() a lo bruto de todo 'pedidos_historial'
+                // es rechazado por las reglas de Firebase para un repartidor
+                // normal (esto era la causa del "Error restaurando seguimiento").
+                // Se filtra por 'repartidorUID' == auth.uid, que sí está permitido.
                 async () => {
-                    const snap = await get(ref(db, 'pedidos_historial'));
+                    const snap = await get(query(ref(db, 'pedidos_historial'), orderByChild('repartidorUID'), equalTo(repartidorUID)));
                     if (!snap.exists()) return [];
                     const resultado = [];
                     snap.forEach(child => {
