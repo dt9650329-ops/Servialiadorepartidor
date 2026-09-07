@@ -101,7 +101,7 @@
     <!-- 🛠️ ERUDA: consola de depuración activa -->
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
-    <title>Panel Repartidor - v1.1.2</title>
+    <title>Panel Repartidor - v1.1.3</title>
     <style>
         /* ┌─────────────────────────────────────────────────────────┐
    │ [CSS-01] VARIABLES GLOBALES (:root)                     │
@@ -2230,7 +2230,7 @@ function _fechaHoyColombia() {
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
     window.goOffline = () => goOffline(db);
     window.goOnline = () => goOnline(db);
-    const APP_VERSION = "1.1.2";
+    const APP_VERSION = "1.1.3";
 
  // ============================================================
  // CONTROL DE VERSIÓN OBLIGATORIA DEL REPARTIDOR (mismo mecanismo
@@ -2683,7 +2683,10 @@ function _fechaHoyColombia() {
             return false;
         }
         
-        // Validar que el mapa exista
+        // Validar que el mapa exista — si no existe, intentar crearlo ahora
+        if (!mapaCliente) {
+            try { inicializarMapaCliente(); } catch(e) {}
+        }
         if (!mapaCliente) {
             console.error('❌ MAPA NO INICIALIZADO - No se puede agregar marcador');
             return false;
@@ -2766,7 +2769,12 @@ function _fechaHoyColombia() {
             return false;
         }
         
-        // Validar que el mapa exista
+        // Validar que el mapa exista — si no existe, intentar crearlo ahora
+        // (antes se rendía aquí con el error "MAPA NO INICIALIZADO" y nunca
+        // más lo intentaba, dejando el marcador del repartidor sin dibujar).
+        if (!mapaCliente) {
+            try { inicializarMapaCliente(); } catch(e) {}
+        }
         if (!mapaCliente) {
             console.error('❌ MAPA NO INICIALIZADO - No se puede agregar marcador del repartidor');
             return false;
@@ -6103,6 +6111,35 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     [`tiempo${nuevoEstado.replace(' ', '')}`]: tsEstado
                 });
             } catch(eH) { console.warn('⚠️ No se pudo actualizar historial (notif cliente):', eH); }
+            // 🔧 FIX 2026-09-06: pedidos asignados por el sistema nuevo (ej. compra_tienda
+            // asignada automáticamente por la Cloud Function, o pedidos ServiBot) NO tienen
+            // entrada en pedidos_pendientes con repartidorUID, así que el render de "Asignados"
+            // los toma de repartidores_pedidos/{uid}/{pedidoId} — pero esa entrada nunca se
+            // actualizaba aquí. Resultado: el botón parecía "no responder" (el write de arriba
+            // sí se guardaba, pero en un nodo que la UI no estaba leyendo para este pedido).
+            try {
+                await update(ref(db, `repartidores_pedidos/${repartidorUID}/${pedidoId}`), {
+                    estado: nuevoEstado,
+                    [`tiempo${nuevoEstado.replace(' ', '')}`]: tsEstado
+                });
+            } catch(eRP) { console.warn('⚠️ No se pudo actualizar repartidores_pedidos (estado):', eRP); }
+            // 🔧 FIX 2026-09-06 (2): si el pedido es una compra_tienda, la tienda
+            // ve su propio estado en compras_tienda/{negocioId}/{pedidoId} — pero
+            // nada escribía ahí cuando el repartidor pasaba a Esperando/En Camino,
+            // así que el dueño se quedaba viendo "Confirmado, en camino un
+            // repartidor" para siempre, sin ver el progreso real.
+            try {
+                const estadoTienda = nuevoEstado === 'Esperando' ? 'esperando_en_local'
+                    : nuevoEstado === 'En Camino' ? 'en_camino'
+                    : null;
+                if (estadoTienda) {
+                    const histSnap = await get(ref(db, `pedidos_historial/${pedidoId}`));
+                    const pedidoHist = histSnap.exists() ? histSnap.val() : null;
+                    if (pedidoHist && pedidoHist.tipo === 'compra_tienda' && pedidoHist.negocioId) {
+                        await update(ref(db, `compras_tienda/${pedidoHist.negocioId}/${pedidoId}`), { estado: estadoTienda });
+                    }
+                }
+            } catch (eCT) { console.warn('⚠️ No se pudo reflejar estado en compras_tienda:', eCT); }
             console.log(`✅ Estado cambiado a: ${nuevoEstado}`);
         } catch (error) {
             console.error('❌ Error al cambiar estado:', error);
@@ -6168,6 +6205,20 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     };
 
     window.completarPedido = async function(pedidoId) {
+        // 🔧 FIX 2026-09-06 (2): guardamos tipo/negocioId ANTES de mover el
+        // pedido a Completado (una vez movido, pedidos_pendientes ya no existe
+        // y ese dato es más costoso de recuperar) para poder reflejar la
+        // entrega en compras_tienda al final, sin bloquear el paso crítico.
+        let _pedidoTipoParaTienda = null;
+        let _pedidoNegocioParaTienda = null;
+        try {
+            const histSnapPrevio = await get(ref(db, `pedidos_historial/${pedidoId}`));
+            if (histSnapPrevio.exists()) {
+                const ph = histSnapPrevio.val();
+                _pedidoTipoParaTienda = ph.tipo || null;
+                _pedidoNegocioParaTienda = ph.negocioId || null;
+            }
+        } catch (ePrevio) { console.warn('⚠️ No se pudo leer tipo/negocioId antes de completar (no crítico):', ePrevio); }
         // ── PASO CRÍTICO: mover/marcar el pedido como Completado ──
         // Este bloque tiene su propio try/catch para que un fallo en
         // pasos secundarios (tracking, chat, etc.) NUNCA deje al pedido
@@ -6266,6 +6317,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             await remove(ref(db, `repartidores_pedidos/${repartidorUID}/${pedidoId}`));
         } catch (e) {
             console.warn('⚠️ No se pudo limpiar repartidores_pedidos al completar (no crítico):', e);
+        }
+
+        // 🔧 FIX 2026-09-06 (2): reflejar la entrega en compras_tienda para que
+        // el dueño de la tienda vea "Pedido entregado" en vez de quedarse
+        // congelado en "Confirmado, en camino un repartidor".
+        if (_pedidoTipoParaTienda === 'compra_tienda' && _pedidoNegocioParaTienda) {
+            try {
+                await update(ref(db, `compras_tienda/${_pedidoNegocioParaTienda}/${pedidoId}`), { estado: 'entregado' });
+            } catch (eCT) {
+                console.warn('⚠️ No se pudo reflejar entrega en compras_tienda (no crítico):', eCT);
+            }
         }
 
         // ── Pasos secundarios: nunca deben revertir ni bloquear lo anterior ──
