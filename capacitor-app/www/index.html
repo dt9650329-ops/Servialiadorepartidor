@@ -4275,6 +4275,20 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
     async function asignarPedidoARepartidor(pedidoId, pedidoData) {
         try {
+            // Obtener información del repartidor
+            const repSnapshot = await get(ref(db, `repartidores_info/${repartidorUID}`));
+            const repData = repSnapshot.exists() ? repSnapshot.val() : {};
+            const repNombre = repData.nombre || repartidorNombre || 'Repartidor';
+
+            // 🔧 FIX 2026-09-08: verificación de online/trackingActivo que antes
+            // vivía solo en el listener duplicado (ver nota en escucharPedidos()).
+            // Sin esto, un repartidor con el listener aún pegado pero ya desconectado
+            // podría intentar auto-asignarse pedidos.
+            if (repData.online !== true || repData.trackingActivo !== true) {
+                console.log(`⏸️ Pedido ${pedidoId.substring(0, 8)} NO asignado: repartidor no está online/activo`);
+                return;
+            }
+
             // 🚫 No auto-asignar si este repartidor tiene un bloqueo de servicio
             // activo con el cliente de este pedido (moderación de chats)
             const clienteIdBloqueo = pedidoData.clienteIdAsignado || pedidoData.clienteUID;
@@ -4291,11 +4305,6 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     }
                 } catch (eBl) { console.warn('⚠️ No se pudo verificar bloqueo de servicio:', eBl); }
             }
-
-            // Obtener información del repartidor
-            const repSnapshot = await get(ref(db, `repartidores_info/${repartidorUID}`));
-            const repData = repSnapshot.exists() ? repSnapshot.val() : {};
-            const repNombre = repData.nombre || repartidorNombre || 'Repartidor';
 
             // 🔧 FIX 2026-09-05: reclamo ATÓMICO vía transacción sobre repartidorUID.
             // Antes esto era un update() directo: si dos repartidores conectados
@@ -5496,42 +5505,21 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             renderizarTodosLosPedidos();
         });
         
-        // ── 🆕 3. Listener: pedidos_historial (para auto-asignación en tiempo real) ──
-        // 🔧 FIX 2026-09-06: onValue a lo bruto sobre todo 'pedidos_historial'
-        // es rechazado por las reglas de Firebase para un repartidor normal.
-        // Se reemplaza por 2 listeners con query filtrada por 'estado' (una
-        // por cada valor posible, ya que equalTo solo acepta un valor).
-        const manejarSnapshotSinAsignar = async (snapshot) => {
-            if (!snapshot.exists()) return;
-            
-            snapshot.forEach((childSnapshot) => {
-                const pedido = childSnapshot.val();
-                const pedidoId = childSnapshot.key;
-                
-                // Si hay un pedido sin repartidor y el repartidor está online
-                const sinRepartidor = (pedido.estado === 'sin_repartidor' || 
-                                      (pedido.estado === 'pendiente' && !pedido.repartidorUID)) &&
-                                      !pedido.asignacionAutomatica; // Evitar reasignar lo ya asignado
-                
-                if (sinRepartidor) {
-                    console.log(`🔔 Nuevo pedido sin repartidor detectado: ${pedidoId.substring(0, 8)}`);
-                    (async () => {
-                        // Verificar que este repartidor esté online y activo
-                        const repSnapshot = await get(ref(db, `repartidores_info/${repartidorUID}`));
-                        if (repSnapshot.exists()) {
-                            const repData = repSnapshot.val();
-                            if (repData.online === true && repData.trackingActivo === true) {
-                                // Auto-asignar el pedido
-                                await asignarPedidoARepartidor(pedidoId, pedido);
-                                console.log(`✅ Pedido ${pedidoId.substring(0, 8)} auto-asignado`);
-                            }
-                        }
-                    })();
-                }
-            });
-        };
-        onValue(query(ref(db, 'pedidos_historial'), orderByChild('estado'), equalTo('sin_repartidor')), manejarSnapshotSinAsignar);
-        onValue(query(ref(db, 'pedidos_historial'), orderByChild('estado'), equalTo('pendiente')), manejarSnapshotSinAsignar);
+        // 🔧 FIX 2026-09-08: se eliminó de aquí el listener duplicado de
+        // auto-asignación en tiempo real (onValue sobre 'sin_repartidor'/'pendiente').
+        // Hacía EXACTAMENTE lo mismo que escucharPedidosNuevosParaAsignar() (ver JS-16b,
+        // función manejarPedidoDetectado con onChildAdded), pero con onValue en vez de
+        // onChildAdded — eso significa que se re-disparaba en CADA cambio de valor del
+        // query, incluyendo el rebote local cuando la transacción de asignación fallaba
+        // (permission_denied) y Firebase revertía el valor optimista. Con los dos
+        // listeners activos a la vez, cada pedido nuevo dispara DOS intentos de
+        // asignación en paralelo desde este mismo dispositivo, y cada fallo de uno de
+        // los dos reactivaba a este por el rebote — eso era el ciclo infinito de
+        // "Error al asignar pedido" / "ya fue tomado por otro repartidor" / 
+        // "auto-asignado" en la consola, y por qué el pedido nunca terminaba de
+        // aparecer como pendiente aunque sonó la notificación. La verificación de
+        // online/trackingActivo que tenía este bloque se movió dentro de
+        // asignarPedidoARepartidor() para no perderla.
     }
 
     // ── Renderizador unificado ──
