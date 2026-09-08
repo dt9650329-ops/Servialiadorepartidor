@@ -1948,6 +1948,7 @@
                 <div class="perfil-stat-icon">💰</div>
                 <div class="perfil-stat-value" style="color:#27ae60; font-size:1.8em;" id="perfilGananciasHoy">$0</div>
                 <div class="perfil-stat-label">Ganancias del día (domicilios)</div>
+                <div id="perfilBonosHoy" style="display:none; margin-top:6px; font-size:0.8em; color:#c4b5fd;"></div>
             </div>
         </div>
 
@@ -6528,6 +6529,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             let completadosHoy = 0;
             let canceladosHoy  = 0;
             let gananciasHoy   = 0;
+            let bonosHoy       = 0; // 🆕 total descontado por cupones/bonos que el repartidor asume hoy
 
             if (snapH.exists()) {
                 snapH.forEach(child => {
@@ -6547,13 +6549,26 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             const limpio = String(raw).replace(/[$\s.]/g, '').replace(',', '.');
                             return parseFloat(limpio) || 0;
                         };
-                        // montoTotal ya viene con el descuento aplicado desde el cliente
-                        // Usarlo directamente evita doble descuento por cupones
+                        // 🔧 FIX 2026-09-07: la ganancia REAL del repartidor es
+                        // siempre el cobro del domicilio, nunca el valor del producto.
+                        // Antes se usaba montoTotal como primera opción, y en pedidos
+                        // de tipo 'compra_tienda' montoTotal incluye producto + domicilio
+                        // (el repartidor paga el producto en la tienda y lo recupera del
+                        // cliente, eso NO es ganancia suya) → inflaba las ganancias del día.
                         let num = 0;
-                        if (p.montoTotal) {
+                        if (p.tipo === 'compra_tienda') {
+                            // Solo el valor del domicilio (ya neto de cualquier cupón:
+                            // ver descuentoCuponHTML en mostrarPedidoAsignado, el
+                            // descuento SIEMPRE se resta de montoDomicilioCliente).
+                            const rawDomi = (p.montoDomicilioCliente != null) ? p.montoDomicilioCliente
+                                          : (p.montoDomicilio != null ? p.montoDomicilio : 0);
+                            num = _parseCOP(rawDomi);
+                        } else if (p.montoTotal) {
+                            // Para domicilios normales montoTotal ya es solo la tarifa
+                            // de domicilio (con cualquier descuento ya aplicado).
                             num = _parseCOP(p.montoTotal);
                         }
-                        // Si no hay montoTotal, intentar campos específicos de domicilio
+                        // Si no hay valor todavía, intentar campos específicos de domicilio
                         if (!num) {
                             const raw = p.valorDomicilio || p.costoEnvio || p.domicilio
                                       || p.tarifaDomicilio || p.montoEnvio || p.tarifa
@@ -6566,6 +6581,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             num = _parseCOP(rawAlt);
                         }
                         gananciasHoy += Math.max(0, num);
+                        // 🆕 Sumar el descuento de bono/cupón usado en este pedido
+                        // (informativo: ya está restado de la ganancia arriba, no se
+                        // vuelve a descontar aquí).
+                        if (p.descuentoCupon) {
+                            bonosHoy += Math.max(0, _parseCOP(p.descuentoCupon));
+                        }
                     } else if (p.estado === 'Cancelado') {
                         canceladosHoy++;
                     }
@@ -6575,9 +6596,18 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             const elPedidosHoy = document.getElementById('perfilPedidosHoy');
             const elCanceladosHoy = document.getElementById('perfilCanceladosHoy');
             const elGananciasHoy = document.getElementById('perfilGananciasHoy');
+            const elBonosHoy = document.getElementById('perfilBonosHoy');
             if (elPedidosHoy) elPedidosHoy.textContent = completadosHoy;
             if (elCanceladosHoy) elCanceladosHoy.textContent = canceladosHoy;
             if (elGananciasHoy) elGananciasHoy.textContent = '$' + gananciasHoy.toLocaleString('es-CO');
+            if (elBonosHoy) {
+                if (bonosHoy > 0) {
+                    elBonosHoy.textContent = '−$' + bonosHoy.toLocaleString('es-CO') + ' en bonos usados por clientes hoy';
+                    elBonosHoy.style.display = 'block';
+                } else {
+                    elBonosHoy.style.display = 'none';
+                }
+            }
         } catch(e) {
             console.warn('⚠️ Error calculando estadísticas del día:', e);
         }
