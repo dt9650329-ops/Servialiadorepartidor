@@ -6373,16 +6373,43 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     }
     window.ejecutarCancelacionConMotivo = async function(motivo) {
         if (!currentPedidoIdToCancel) return;
+        const pedidoId = currentPedidoIdToCancel;
         try {
-            const pedidoRef = ref(db, `pedidos_pendientes/${currentPedidoIdToCancel}`);
-            const snapshot = await get(pedidoRef);
-            if (!snapshot.exists()) {
+            // 🔧 FIX 2026-09-11: los pedidos del "sistema nuevo" (compra_tienda,
+            // ServiBot/IA, formulario) NUNCA tienen entrada en pedidos_pendientes
+            // -- solo en pedidos_historial y repartidores_pedidos/{uid}. El
+            // get() de antes leía SIEMPRE pedidos_pendientes primero; para esos
+            // pedidos el nodo no existe, y las reglas de Firebase niegan la
+            // lectura de un nodo inexistente que no coincide con ningún dueño
+            // (permission-denied), así que el cancelar fallaba con un error
+            // vacío ANTES de siquiera llegar al alert de "el pedido no existe".
+            // Ahora se intenta primero pedidos_pendientes (sistema legacy) y,
+            // si no existe ahí, se cae a pedidos_historial (que si tiene el
+            // registro del pedido para el repartidor ya asignado).
+            let pedido = null;
+            let origenLegacy = false;
+            const pedidoRefPendiente = ref(db, `pedidos_pendientes/${pedidoId}`);
+            try {
+                const snapshot = await get(pedidoRefPendiente);
+                if (snapshot.exists()) {
+                    pedido = snapshot.val();
+                    origenLegacy = true;
+                }
+            } catch (eLegacy) {
+                console.warn('⚠️ No se pudo leer pedidos_pendientes (normal si es sistema nuevo):', eLegacy.code || eLegacy.message || eLegacy);
+            }
+            if (!pedido) {
+                const snapHist = await get(ref(db, `pedidos_historial/${pedidoId}`));
+                if (snapHist.exists()) {
+                    pedido = snapHist.val();
+                }
+            }
+            if (!pedido) {
                 alert('❌ El pedido no existe');
                 document.getElementById('cancelModal').style.display = 'none';
                 return;
             }
-            const pedido = snapshot.val();
-            await set(ref(db, `pedidos_historial/${currentPedidoIdToCancel}`), {
+            await set(ref(db, `pedidos_historial/${pedidoId}`), {
                 ...pedido,
                 estado: 'Cancelado',
                 repartidorUID:    repartidorUID,    // 🔔 campanita del cliente
@@ -6391,12 +6418,31 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 canceladoPor: 'Repartidor',
                 tiempoCancelado: Date.now()
             });
-            await remove(pedidoRef);
+            if (origenLegacy) {
+                try {
+                    await remove(pedidoRefPendiente);
+                } catch (e) {
+                    console.warn('⚠️ No se pudo limpiar pedidos_pendientes al cancelar (no crítico):', e);
+                }
+            }
             // 🔧 FIX 2026-09-06: limpiar también repartidores_pedidos (sistema nuevo)
             try {
-                await remove(ref(db, `repartidores_pedidos/${repartidorUID}/${currentPedidoIdToCancel}`));
+                await remove(ref(db, `repartidores_pedidos/${repartidorUID}/${pedidoId}`));
             } catch (e) {
                 console.warn('⚠️ No se pudo limpiar repartidores_pedidos al cancelar (no crítico):', e);
+            }
+            // 🆕 FIX 2026-09-11: si es una compra_tienda, reflejar la cancelación
+            // ahí también para que el dueño de la tienda vea el estado real
+            // (antes se quedaba viendo "en camino un repartidor" para siempre).
+            try {
+                if (pedido.tipo === 'compra_tienda' && pedido.negocioId) {
+                    await update(ref(db, `compras_tienda/${pedido.negocioId}/${pedidoId}`), {
+                        estado: 'cancelado',
+                        motivoCancelacion: motivo
+                    });
+                }
+            } catch (eCT) {
+                console.warn('⚠️ No se pudo reflejar cancelación en compras_tienda (no crítico):', eCT);
             }
             window.detenerSeguimiento(); // 🆕 DETENER SEGUIMIENTO AL CANCELAR
             document.getElementById('cancelModal').style.display = 'none';
@@ -6404,8 +6450,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             console.log('✅ Pedido cancelado con motivo:', motivo);
             alert(`✅ Pedido cancelado\n\nMotivo: ${motivo}`);
         } catch (error) {
-            console.error('❌ Error al cancelar pedido:', error);
-            alert('❌ Error al cancelar el pedido');
+            console.error('❌ Error al cancelar pedido:', error.code, error.message, error);
+            alert(`❌ Error al cancelar el pedido${error.code ? '\n' + error.code : ''}`);
         }
     }
     // ┌─────────────────────────────────────────────────────────┐
