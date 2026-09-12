@@ -44,8 +44,8 @@ android {
     }
 }
 
-// 🆕 FIX 2026-08-25: fuerza androidx.credentials a 1.3.0+ — versiones más
-// viejas de esta librería fallan con "Your device doesn't support credential
+// ðŸ†• FIX 2026-08-25: fuerza androidx.credentials a 1.3.0+ â€” versiones mÃ¡s
+// viejas de esta librerÃ­a fallan con "Your device doesn't support credential
 // manager" en varios celulares (confirmado en Oppo/ColorOS y otros). Es el
 // mismo fix que ya tiene el build.gradle del cliente.
 configurations.all {
@@ -71,6 +71,11 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    // ðŸ†• Crashlytics: SDK nativo (ademÃ¡s de lo que ya trae el plugin de
+    // Capacitor). El BoM asegura versiones compatibles entre sÃ­ sin tener
+    // que fijar el nÃºmero de versiÃ³n a mano.
+    implementation platform('com.google.firebase:firebase-bom:33.5.1')
+    implementation 'com.google.firebase:firebase-crashlytics'
 }
 
 apply from: 'capacitor.build.gradle'
@@ -79,6 +84,10 @@ try {
     def servicesJSON = file('google-services.json')
     if (servicesJSON.text) {
         apply plugin: 'com.google.gms.google-services'
+        // ðŸ†• Crashlytics: se aplica DESPUÃ‰S de google-services, en el mismo
+        // bloque protegido â€” asÃ­ si algÃºn dÃ­a falta google-services.json,
+        // tampoco intenta aplicar Crashlytics (que tambiÃ©n lo necesita).
+        apply plugin: 'com.google.firebase.crashlytics'
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
