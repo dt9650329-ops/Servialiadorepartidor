@@ -5347,6 +5347,50 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         btn.innerHTML = '▶️';
     }
 }
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-MON-01] MONITOREO DE ERRORES — REPARTIDOR            │
+    // └─────────────────────────────────────────────────────────┘
+    // Reporta un fallo real (no cosmético) a Firebase para el panel de
+    // monitoreo del admin. seccion: 'chats' | 'pedidos' | 'sos'.
+    // - Guarda el error en el historial: monitoreo_repartidor_log/{seccion}
+    // - Actualiza el último error visible: monitoreo_repartidor/{seccion}
+    // - Si es SOS (crítico), además dispara una alerta a notificaciones_admin
+    window.reportarErrorMonitoreo = function(seccion, funcion, error, extra) {
+        try {
+            const _db = window.db || db;
+            const _push = window.push || push;
+            const _set = window.set || set;
+            const _ref = window.ref || ref;
+            const _update = window.update || update;
+            if (!_db || !_push || !_set || !_ref) return;
+            const _rUID = window.repartidorUID || window.currentRepartidorUID || (typeof repartidorUID !== 'undefined' ? repartidorUID : '') || '';
+            const _rNombre = window.repartidorNombre || window.currentRepartidorNombre || (typeof repartidorNombre !== 'undefined' ? repartidorNombre : 'Repartidor') || 'Repartidor';
+            const mensajeError = (error && error.message) ? error.message : String(error || 'Error desconocido');
+            const registro = {
+                funcion: funcion || '—',
+                error: mensajeError,
+                codigo: (error && error.code) || null,
+                extra: extra || null,
+                repartidorUID: _rUID,
+                repartidorNombre: _rNombre,
+                ts: Date.now()
+            };
+            const logRef = _push(_ref(_db, `monitoreo_repartidor_log/${seccion}`));
+            _set(logRef, registro);
+            if (_update) _update(_ref(_db, `monitoreo_repartidor/${seccion}`), { ultimoError: registro }).catch(() => {});
+            if (seccion === 'sos') {
+                _push(_ref(_db, 'notificaciones_admin'), {
+                    tipo: 'monitoreo_error',
+                    seccion: 'sos',
+                    mensaje: `⚠️ Falló "${funcion}" en el S.O.S de ${_rNombre}: ${mensajeError}`,
+                    repartidorUID: _rUID,
+                    repartidorNombre: _rNombre,
+                    ts: Date.now()
+                }).catch(() => {});
+            }
+        } catch (eMon) { console.warn('No se pudo reportar error de monitoreo:', eMon); }
+    };
+
     // ========================================
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-24] PEDIDOS (renderizado, aceptar, completar, cancelar) │
@@ -5937,6 +5981,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             }
         } catch (error) {
             console.error('❌ Error al aceptar pedido:', error);
+            window.reportarErrorMonitoreo('pedidos', 'aceptarPedido', error);
             alert('❌ Error al aceptar el pedido');
         }
     }
@@ -6055,6 +6100,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             }
         } catch (error) {
             console.error('❌ Error al aceptar pedido formulario:', error);
+            window.reportarErrorMonitoreo('pedidos', 'aceptarPedidoFormulario', error);
             alert('❌ Error al aceptar el pedido: ' + error.message);
         }
     };
@@ -6132,6 +6178,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             console.log(`✅ Estado cambiado a: ${nuevoEstado}`);
         } catch (error) {
             console.error('❌ Error al cambiar estado:', error);
+            window.reportarErrorMonitoreo('pedidos', 'cambiarEstadoPedido', error, { nuevoEstado });
             alert('❌ Error al cambiar el estado del pedido');
         }
     }
@@ -6451,6 +6498,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             alert(`✅ Pedido cancelado\n\nMotivo: ${motivo}`);
         } catch (error) {
             console.error('❌ Error al cancelar pedido:', error.code, error.message, error);
+            window.reportarErrorMonitoreo('pedidos', 'ejecutarCancelacionConMotivo', error);
             alert(`❌ Error al cancelar el pedido${error.code ? '\n' + error.code : ''}`);
         }
     }
@@ -7366,6 +7414,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             console.log('✅ Solicitud de cambio de ruta enviada:', solicitudId);
         } catch(e) {
             console.error('❌ Error enviando solicitud de ruta:', e);
+            window.reportarErrorMonitoreo('pedidos', 'enviarSolicitudCambioRuta', e);
             alert('❌ Error al enviar la solicitud: ' + e.message);
         } finally {
             btn.disabled = false;
@@ -8580,10 +8629,16 @@ window.enviarMensajeP2PRep = function() {
   const txt = inp.value.trim();
   if (!txt) return;
   inp.value = '';
-  const msgRef = _push(_ref(_db, 'chat_p2p/' + _p2pRepPedidoId));
-  _set(msgRef, { tipo:'texto', texto:txt, remitente:'repartidor', ts:Date.now(), leido:false, repartidorNombre: _rNombre });
-  if (contieneMalaPalabra(txt)) {
-    reportarLenguajeInapropiado(_p2pRepPedidoId, 'repartidor', txt, _rNombre);
+  try {
+    const msgRef = _push(_ref(_db, 'chat_p2p/' + _p2pRepPedidoId));
+    _set(msgRef, { tipo:'texto', texto:txt, remitente:'repartidor', ts:Date.now(), leido:false, repartidorNombre: _rNombre });
+    if (contieneMalaPalabra(txt)) {
+      reportarLenguajeInapropiado(_p2pRepPedidoId, 'repartidor', txt, _rNombre);
+    }
+  } catch(e) {
+    console.error('❌ Error al enviar mensaje de chat:', e);
+    window.reportarErrorMonitoreo('chats', 'enviarMensajeP2PRep', e);
+    alert('❌ No se pudo enviar el mensaje');
   }
 };
 
@@ -8609,7 +8664,10 @@ window.enviarFotoP2PRep = async function(input) {
     const url = await _getDL(sRef);
     const msgRef = _push(_ref(_db, 'chat_p2p/' + _p2pRepPedidoId));
     _set(msgRef, { tipo:'imagen', url, remitente:'repartidor', ts:Date.now(), leido:false, repartidorNombre: _rNombre });
-  } catch(e) { alert('Error al subir foto: ' + e.message); }
+  } catch(e) {
+    window.reportarErrorMonitoreo('chats', 'enviarFotoP2PRep', e);
+    alert('Error al subir foto: ' + e.message);
+  }
   input.value = '';
 };
 
@@ -8633,7 +8691,10 @@ window.toggleGrabarAudioP2PRep = async function() {
       _p2pRepRecording = true;
       btn.textContent = '⏹️ Detener';
       btn.style.background = '#c0392b';
-    } catch(e) { alert('Error al acceder al micrófono'); }
+    } catch(e) {
+      window.reportarErrorMonitoreo('chats', 'toggleGrabarAudioP2PRep', e);
+      alert('Error al acceder al micrófono');
+    }
   } else {
     _p2pRepAudio.stop();
     _p2pRepRecording = false;
@@ -8662,7 +8723,10 @@ window.enviarAudioP2PRep = async function() {
     const msgRef = _push(_ref(_db, 'chat_p2p/' + _p2pRepPedidoId));
     _set(msgRef, { tipo:'audio', url, remitente:'repartidor', ts:Date.now(), leido:false, repartidorNombre: _rNombre });
     cancelarAudioP2PRep();
-  } catch(e) { alert('Error al subir audio: ' + e.message); }
+  } catch(e) {
+    window.reportarErrorMonitoreo('chats', 'enviarAudioP2PRep', e);
+    alert('Error al subir audio: ' + e.message);
+  }
 };
 
 window.cancelarAudioP2PRep = function() {
@@ -8835,7 +8899,10 @@ async function enviarSOS() {
         }
       }
     }
-  } catch(e) { console.warn('SOS: no se pudo obtener info del repartidor', e); }
+  } catch(e) {
+    console.warn('SOS: no se pudo obtener info del repartidor', e);
+    window.reportarErrorMonitoreo('sos', 'enviarSOS_obtenerInfoRepartidor', e);
+  }
 
   const descripcion = _sosTipoSeleccionado === 'Otro' ? otroTexto : _sosTipoSeleccionado;
   const ts = Date.now();
@@ -8876,6 +8943,7 @@ async function enviarSOS() {
       }
     } catch(eEstado) {
       console.warn('SOS: no se pudo cambiar estado a ocupado', eEstado);
+      window.reportarErrorMonitoreo('sos', 'enviarSOS_cambioEstadoOcupado', eEstado);
     }
 
     // 🆕 Guardar la alerta activa y mostrar el banner de reactivación
@@ -8893,6 +8961,7 @@ async function enviarSOS() {
       alert(`✅ Alerta S.O.S enviada.\nTipo: ${tipo}\nEl admin y todos los repartidores han sido notificados.\n\n🔴 Tu estado fue cambiado a "Ocupado" para que no te lleguen más domicilios.`);
     }, 200);
   } catch(e) {
+    window.reportarErrorMonitoreo('sos', 'enviarSOS', e);
     alert('❌ Error al enviar S.O.S: ' + e.message);
   }
 }
@@ -9020,6 +9089,7 @@ function iniciarEscuchaSOS(uid) {
     mostrarAlertaSOS(d, snap.key);
   }, (error) => {
     console.error('🆘 [SOS] Error al escuchar sos_alertas (posible permiso denegado):', error);
+    window.reportarErrorMonitoreo('sos', 'iniciarEscuchaSOS', error);
   });
 }
 
@@ -9194,6 +9264,7 @@ async function irAApoyarSOS() {
     _sosAlertaActivaId = null;
     setTimeout(() => alert(`✅ Registrado como apoyador.\nTu estado: "${nuevoEstado}"\nVe con calma y apoya a tu compañero. 💪`), 150);
   } catch(e) {
+    window.reportarErrorMonitoreo('sos', 'irAApoyarSOS', e);
     alert('❌ Error: ' + e.message);
     btn.disabled = false;
     btn.textContent = '🚀 Ir a Apoyar';
@@ -9292,6 +9363,7 @@ async function activarseDesdeSOS() {
     _ocultarBannerSOSActivo();
     alert('✅ ¡Listo! Ya estás disponible y te pueden volver a asignar pedidos.');
   } catch(e) {
+    window.reportarErrorMonitoreo('sos', 'activarseDesdeSOS', e);
     alert('❌ Error al activarte: ' + e.message);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '✅ Estoy Listo, Activarme'; }
@@ -9350,6 +9422,7 @@ async function noPuedeTerminarTurnoSOS() {
       alert('⚠️ No se pudo cerrar sesión automáticamente. Ciérrala manualmente desde el menú.');
     }
   } catch(e) {
+    window.reportarErrorMonitoreo('sos', 'noPuedeTerminarTurnoSOS', e);
     alert('❌ Error al cerrar el turno: ' + e.message);
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '🛑 No Puedo Terminar Turno'; }
