@@ -5498,6 +5498,10 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
     // ── Variable global para almacenar pedidos pendientes del sistema antiguo ──
     let pedidosPendientesAntiguos = {};
+    // 🩺 Monitoreo: marca de tiempo de cuándo se le OFRECIÓ cada pedido al
+    // repartidor (primera vez que aparece en su lista), para medir cuánto
+    // tarda en aceptarlo/rechazarlo. Se limpia al aceptar o al desaparecer.
+    window._pedidoOfrecidoTs = window._pedidoOfrecidoTs || {};
 
     function escucharPedidos() {
         if (!repartidorUID) return;
@@ -5586,6 +5590,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             contadorPendientes++;
             await mostrarPedidoFormulario(pedido, pedidoId, listaPendientes);
             if (!initialLoad && !pedidosActivos[pedidoId]) {
+                window._pedidoOfrecidoTs[pedidoId] = Date.now();
                 reproducirNotificacion();
                 document.getElementById('chatSection').style.display = 'none';
                 document.getElementById('pendientesSection').style.display = 'block';
@@ -5613,6 +5618,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     contadorPendientes++;
                     mostrarPedidoPendiente(pedido, pedidoId, listaPendientes);
                     if (!initialLoad && !pedidosActivos[pedidoId]) {
+                        window._pedidoOfrecidoTs[pedidoId] = Date.now();
                         reproducirNotificacion();
                         document.getElementById('chatSection').style.display = 'none';
                         document.getElementById('pendientesSection').style.display = 'block';
@@ -5909,6 +5915,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         return `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
     }
     window.aceptarPedido = async function(pedidoId) {
+        window.crashlyticsMiga && window.crashlyticsMiga('aceptarPedido: ' + pedidoId);
         try {
             const pedidoRef = ref(db, `pedidos_pendientes/${pedidoId}`);
             const snapshot = await get(pedidoRef);
@@ -5935,6 +5942,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             }
 
             const tsAceptado = Date.now();
+            // 🩺 Monitoreo: cuánto tardó el repartidor en aceptar desde que se le
+            // ofreció el pedido (umbral de 45s — si tarda más, puede indicar que
+            // no le llegó la notificación a tiempo, o que estaba distraído).
+            if (window._pedidoOfrecidoTs && window._pedidoOfrecidoTs[pedidoId]) {
+                const _segs = Math.round((tsAceptado - window._pedidoOfrecidoTs[pedidoId]) / 1000);
+                if (_segs > 45) {
+                    window.reportarErrorMonitoreo('pedidos', 'tiempoAceptacionLento',
+                        new Error(`Tardó ${_segs}s en aceptar el pedido`), { pedidoId, segundos: _segs });
+                }
+                delete window._pedidoOfrecidoTs[pedidoId];
+            }
             await update(pedidoRef, {
                 estado: 'Aceptado',
                 repartidorUID: repartidorUID,
@@ -6008,6 +6026,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
     // ── Aceptar pedido proveniente del formulario del cliente ──
     window.aceptarPedidoFormulario = async function(pedidoId) {
+        window.crashlyticsMiga && window.crashlyticsMiga('aceptarPedidoFormulario: ' + pedidoId);
         try {
             const pedido = pedidosFormulario[pedidoId];
             if (!pedido) {
@@ -6032,6 +6051,16 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             }
 
             const timestamp = Date.now();
+            // 🩺 Monitoreo: cuánto tardó el repartidor en aceptar desde que se le
+            // ofreció el pedido (umbral de 45s).
+            if (window._pedidoOfrecidoTs && window._pedidoOfrecidoTs[pedidoId]) {
+                const _segs = Math.round((timestamp - window._pedidoOfrecidoTs[pedidoId]) / 1000);
+                if (_segs > 45) {
+                    window.reportarErrorMonitoreo('pedidos', 'tiempoAceptacionLento',
+                        new Error(`Tardó ${_segs}s en aceptar el pedido`), { pedidoId, segundos: _segs });
+                }
+                delete window._pedidoOfrecidoTs[pedidoId];
+            }
 
             // 1. Mover a pedidos_pendientes con estado Aceptado
             await set(ref(db, `pedidos_pendientes/${pedidoId}`), window._limpiarUndefined({
@@ -7623,7 +7652,15 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     function reproducirNotificacion() {
         const tonoId = localStorage.getItem('servi_rep_tono') || 'notif_t1';
         const audio  = document.getElementById(tonoId);
-        if (audio) { audio.currentTime = 0; audio.play().catch(e => console.warn('Tono:', e)); }
+        if (audio) {
+            audio.currentTime = 0;
+            audio.play().catch(e => {
+                console.warn('Tono:', e);
+                window.reportarErrorMonitoreo('notificaciones', 'reproducirNotificacion', e, { tonoId });
+            });
+        } else {
+            window.reportarErrorMonitoreo('notificaciones', 'reproducirNotificacion', new Error('Elemento de audio no encontrado: ' + tonoId), { tonoId });
+        }
     }
     window.seleccionarTonoRep = function(id) {
         localStorage.setItem('servi_rep_tono', id);
@@ -7944,6 +7981,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 }
             }
             await marcarComoOffline();
+            window._logoutManualEnCurso = true;
             detenerTrackingGPS();
             detenerEnvioUbicacionRepartidor();
             detenerBackgroundGeolocation();
@@ -8029,6 +8067,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
      repEscucharNotificaciones(user.uid);
                 _inicializarPushFCMRepartidor(user.uid);
+                _inicializarCrashlyticsRepartidor(user.uid, repartidorNombre);
                 _escucharAvisosUrgentesRepartidor(user.uid);
                 (function _arrancarEscuchaSOS(uid) {
                     if (typeof window.iniciarEscuchaSOS === 'function') {
@@ -8048,6 +8087,15 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 }
             }
         } else {
+            // 🩺 Monitoreo de sesión: si el usuario tenía un pedido activo (en curso)
+            // y de repente se cae la sesión (no fue un logout manual desde el botón),
+            // eso es una señal de que algo falló (token expirado, error de Auth, etc.)
+            // — vale la pena que quede registrado para que el admin se entere.
+            if (repartidorUID && !window._logoutManualEnCurso && typeof activePedidoData !== 'undefined' && activePedidoData) {
+                window.reportarErrorMonitoreo('sesion', 'onAuthStateChanged',
+                    new Error('Sesión cerrada inesperadamente con un pedido activo en curso'),
+                    { pedidoId: activePedidoData.pedidoId || null });
+            }
             repartidorUID = null;
             window.currentRepartidorUID = null;
             window.repartidorUID = null;
@@ -8286,6 +8334,58 @@ function _escucharAvisosUrgentesRepartidor(uid) {
 // usuarios/{uid}/fcmToken para que el backend (enviarPush) pueda
 // enviarle avisos push. SIN ESTO, avisarRepartidorOlvido nunca tiene
 // a quién mandarle la notificación — este era el bug raíz.
+// ══════════════════════════════════════════════════════════════
+// 💥 CRASHLYTICS — identificación del repartidor + migas de pan
+// Requiere @capacitor-firebase/crashlytics instalado y sincronizado en el
+// proyecto Android nativo (ver checklist aparte); si el plugin no está
+// disponible (web, o falta instalar), esto se salta solo sin romper nada.
+// Esto es un RESPALDO aparte del monitoreo propio en Firebase RTDB: cubre
+// crashes nativos y ANRs que un try/catch de JS nunca podría atrapar.
+// ══════════════════════════════════════════════════════════════
+async function _inicializarCrashlyticsRepartidor(uid, nombre) {
+  const Crashlytics = window.Capacitor?.Plugins?.FirebaseCrashlytics;
+  if (!Crashlytics) {
+    console.warn('[Crashlytics] Plugin no disponible (revisa que @capacitor-firebase/crashlytics esté instalado y sincronizado)');
+    return;
+  }
+  try {
+    await Crashlytics.setUserId({ userId: uid });
+    if (nombre) await Crashlytics.setCustomKey({ key: 'nombreRepartidor', value: nombre, type: 'string' });
+    window._crashlyticsListo = true;
+    console.log('✅ Crashlytics identificado para', uid);
+  } catch (e) {
+    console.warn('[Crashlytics] Error al identificar repartidor:', e.message);
+  }
+}
+
+// Miga de pan: deja constancia de la última acción importante, para que si
+// hay un crash nativo justo después, Crashlytics muestre qué estaba
+// haciendo el repartidor (no requiere que el crash esté relacionado con
+// esa acción — es solo contexto).
+window.crashlyticsMiga = function(mensaje) {
+  const Crashlytics = window.Capacitor?.Plugins?.FirebaseCrashlytics;
+  if (!Crashlytics) return;
+  Crashlytics.log({ message: mensaje }).catch(() => {});
+};
+
+// Red de seguridad: cualquier error JS que se escape de un try/catch
+// (o promesa rechazada sin .catch) también se manda a Crashlytics, además
+// de quedar en la consola. No reemplaza reportarErrorMonitoreo — es un
+// respaldo adicional para lo que ese sistema no llegó a cubrir.
+window.addEventListener('error', (event) => {
+  const Crashlytics = window.Capacitor?.Plugins?.FirebaseCrashlytics;
+  if (Crashlytics && event.error) {
+    Crashlytics.recordException({ message: String(event.error.message || event.error), stackTrace: [] }).catch(() => {});
+  }
+});
+window.addEventListener('unhandledrejection', (event) => {
+  const Crashlytics = window.Capacitor?.Plugins?.FirebaseCrashlytics;
+  if (Crashlytics) {
+    const msg = event.reason && event.reason.message ? event.reason.message : String(event.reason);
+    Crashlytics.recordException({ message: 'Promesa no atrapada: ' + msg, stackTrace: [] }).catch(() => {});
+  }
+});
+
 async function _inicializarPushFCMRepartidor(uid) {
   const FirebaseMessaging = window.Capacitor?.Plugins?.FirebaseMessaging;
   if (!FirebaseMessaging) {
@@ -8299,6 +8399,8 @@ async function _inicializarPushFCMRepartidor(uid) {
     }
     if (permStatus.receive !== 'granted') {
       console.warn('[FCM] Permiso de notificaciones no otorgado');
+      window.reportarErrorMonitoreo('notificaciones', 'permisosFCM',
+        new Error('Repartidor no otorgó permiso de notificaciones push — no le llegarán avisos'), { uid });
       return;
     }
 
@@ -8338,20 +8440,37 @@ async function _inicializarPushFCMRepartidor(uid) {
         await window.update(window.ref(window.db, `usuarios/${uid}`), { fcmToken: token });
         console.log('✅ Token FCM guardado para', uid);
       }
-    } catch (e) { console.error('Error obteniendo/guardando token FCM', e); }
+    } catch (e) {
+      console.error('Error obteniendo/guardando token FCM', e);
+      window.reportarErrorMonitoreo('notificaciones', 'tokenFCM', e, { uid, momento: 'inicial' });
+    }
 
     // El token puede renovarse solo (reinstalación, cambio de dispositivo, etc.)
     FirebaseMessaging.addListener('tokenReceived', async (event) => {
       try {
         await window.update(window.ref(window.db, `usuarios/${uid}`), { fcmToken: event.token });
         console.log('✅ Token FCM renovado y guardado');
-      } catch (e) { console.error('Error guardando token FCM renovado', e); }
+      } catch (e) {
+        console.error('Error guardando token FCM renovado', e);
+        window.reportarErrorMonitoreo('notificaciones', 'tokenFCM', e, { uid, momento: 'renovacion' });
+      }
     });
 
     // Push recibido MIENTRAS la app está abierta (primer plano)
     FirebaseMessaging.addListener('notificationReceived', (event) => {
       const n = event.notification || {};
       const data = n.data || {};
+      // 🩺 Monitoreo de retraso: si el backend incluye data.ts (marca de
+      // tiempo de cuándo se mandó el push), se mide cuánto tardó en llegar.
+      // Si el backend todavía no manda ese campo, esta parte simplemente
+      // no hace nada (no genera falsos errores).
+      if (data.ts) {
+        const _segsRetraso = Math.round((Date.now() - Number(data.ts)) / 1000);
+        if (_segsRetraso > 60) {
+          window.reportarErrorMonitoreo('notificaciones', 'retrasoPush',
+            new Error(`Push tardó ${_segsRetraso}s en llegar`), { uid, tipo: data.tipo || null, segundos: _segsRetraso });
+        }
+      }
       if (data.tipo === 'aviso_cliente_devolver') {
         _mostrarAvisoUrgenteRepartidor(n.body || 'El cliente necesita avisarte algo, por favor contáctalo.', null, data.pedidoId);
       }
@@ -8367,6 +8486,7 @@ async function _inicializarPushFCMRepartidor(uid) {
     });
   } catch (e) {
     console.error('[FCM] Error inicializando Firebase Messaging', e);
+    window.reportarErrorMonitoreo('notificaciones', 'inicializarPushFCM', e, { uid });
   }
 }
 
@@ -8859,6 +8979,7 @@ function seleccionarTipoSOS(tipo) {
 
 // ── Enviar SOS a Firebase ──────────────────────────────────────
 async function enviarSOS() {
+  window.crashlyticsMiga && window.crashlyticsMiga('enviarSOS: tipo=' + _sosTipoSeleccionado);
   if (!_sosTipoSeleccionado) { alert('⚠️ Selecciona el tipo de emergencia.'); return; }
   const otroTexto = document.getElementById('sosOtroInput').value.trim();
   if (_sosTipoSeleccionado === 'Otro' && !otroTexto) {
