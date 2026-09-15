@@ -2179,11 +2179,11 @@
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-01] IMPORTS DE FIREBASE                             │
     // └─────────────────────────────────────────────────────────┘
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded, goOffline, goOnline, runTransaction, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
-    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithRedirect } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-    import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
-    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getDatabase, ref, onValue, push, set, update, get, remove, onDisconnect, off, onChildAdded, goOffline, goOnline, runTransaction, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithCredential, signInWithRedirect } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+    import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-functions.js";
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-02] CONFIGURACIÓN FIREBASE                          │
     // └─────────────────────────────────────────────────────────┘
@@ -2932,7 +2932,7 @@ function _fechaHoyColombia() {
 
     // Colores y emojis por índice para diferenciar clientes en el mapa
     const COLORES_CLIENTES = ['#4CAF50','#FF9800','#9C27B0','#F44336','#00BCD4'];
-    const EMOJIS_CLIENTES  = ['📍','🏠','🎯','📦','🔵'];
+    const EMOJIS_CLIENTES  = ['??','🏠','🎯','📦','🔵'];
 
     function _extraerCoords(data) {
         // Acepta lng o lon en cualquiera de los nodos
