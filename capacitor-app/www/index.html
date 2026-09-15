@@ -5469,6 +5469,25 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             → 🏠 Entrega en <strong style="color:#FFC300;">${sanitizarHTML(pedido.zonaEntrega || '?')}</strong>
         </div>` : '';
 
+        // 🆕 Pago en el local (pedidos "para tercero" de ServiBot): valorProducto
+        // viene en 0 cuando el local usó "Solo cobrar Domi", y con monto cuando
+        // el repartidor debe pagar el producto en el local y cobrárselo al
+        // cliente junto con el domicilio. Solo se muestra si el campo existe,
+        // para no afectar pedidos normales que nunca lo traen.
+        const tieneValorProducto = pedido.valorProducto !== undefined && pedido.valorProducto !== null;
+        const valorProductoNum = Number(pedido.valorProducto || 0);
+        const montoDomicilioNum = Number(pedido.montoTotal || pedido.precio || 0);
+        const pagoLocalHTML = tieneValorProducto ? (
+            valorProductoNum > 0
+            ? `<div style="background:#3a2a1a;border:1px solid #e67e22;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;">
+                 💰 <strong style="color:#e67e22;">Debes pagar en el local: $${valorProductoNum.toLocaleString('es-CO')}</strong>
+               </div>`
+            : `<div style="background:#1a2a1a;border:1px solid #27ae60;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;">
+                 ✅ <span style="color:#27ae60;">Solo cobrar el servicio — no hay que pagar nada en el local</span>
+               </div>`
+        ) : '';
+        const totalACobrarNum = montoDomicilioNum + (tieneValorProducto ? valorProductoNum : 0);
+
         div.innerHTML = `
         <strong>🔔 Pedido #${pedidoId.slice(-6)}</strong>
         <span style="background:#FFC300;color:#000;padding:2px 8px;border-radius:10px;font-size:0.75em;margin-left:6px;">FORMULARIO</span><br>
@@ -5484,9 +5503,10 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             <strong style="color:#4A9EFF;">🏠 Punto B – Entrega</strong><br>
             ${datosEntregaHTML(pedido)}
         </div>
+        ${pagoLocalHTML}
         <div style="text-align:center;margin:8px 0;">
             <span style="font-size:1.3em;font-weight:bold;color:#FFC300;">
-                💵 $${Number(pedido.montoTotal || pedido.precio || 0).toLocaleString('es-CO')}
+                💵 Total a cobrar: $${totalACobrarNum.toLocaleString('es-CO')}
             </span>
         </div>
         <button onclick="window.aceptarPedidoFormulario('${pedidoId}')"
@@ -5846,6 +5866,26 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             || (esCompraTienda ? `Compra en ${pedido.nombreEntrega || 'la tienda'}` : 'Sin descripción');
         const precioTexto = pedido.precio || pedido.valor || pedido.total || pedido.monto || pedido.costoTotal
             || (pedido.montoTotal != null ? `$${Number(pedido.montoTotal).toLocaleString('es-CO')}` : 'Sin precio');
+        // 🆕 Pago en el local (pedidos "para tercero" de ServiBot): valorProducto
+        // viene en 0 cuando el local usó "Solo cobrar Domi", y con monto cuando
+        // el repartidor debe pagar el producto en el local y cobrárselo al
+        // cliente junto con el domicilio. Solo se muestra si el campo existe,
+        // para no afectar pedidos normales que nunca lo traen.
+        const tieneValorProducto = pedido.valorProducto !== undefined && pedido.valorProducto !== null;
+        const valorProductoNum = Number(pedido.valorProducto || 0);
+        const montoDomicilioNum = Number(pedido.montoTotal || pedido.precio || 0);
+        const totalACobrarNum = montoDomicilioNum + (tieneValorProducto ? valorProductoNum : 0);
+        const pagoLocalHTML2 = tieneValorProducto ? (
+            valorProductoNum > 0
+            ? `<div style="background:#3a2a1a;border:1px solid #e67e22;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;">
+                 💰 <strong style="color:#e67e22;">Debes pagar en el local: $${valorProductoNum.toLocaleString('es-CO')}</strong><br>
+                 <span style="color:#e0d7ff;">Total a cobrar al cliente (producto + domicilio): $${totalACobrarNum.toLocaleString('es-CO')}</span>
+               </div>`
+            : `<div style="background:#1a2a1a;border:1px solid #27ae60;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px;">
+                 ✅ <span style="color:#27ae60;">Solo cobrar el servicio — no hay que pagar nada en el local</span><br>
+                 <span style="color:#e0d7ff;">Total a cobrar al cliente: $${totalACobrarNum.toLocaleString('es-CO')}</span>
+               </div>`
+        ) : '';
         // 🆕 Aviso de descuento por cupón/créditos del cliente en compras de
         // tienda: el descuento SIEMPRE se descuenta de la tarifa de domicilio
         // del repartidor, nunca de lo que se paga a la tienda — hay que
@@ -5861,6 +5901,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             <span class="timer" id="timer-${pedidoId}">⏱️ ${tiempoTranscurrido}</span><br>
             📦 ${productoTexto}<br>
     💵 ${precioTexto}<br>
+    ${pagoLocalHTML2}
     ${descuentoCuponHTML}
     ${datosEntregaHTML(pedido)}<br>
     📝 ${pedido.observaciones || pedido.detalles || pedido.notas || pedido.comentarios || 'Sin detalles'}<br>            ${estadoBotones}
