@@ -8155,6 +8155,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     });
                 }
             } catch (e) { /* silencioso */ }
+            // Cerrar el menú lateral: vive fuera de #appContainer, así que al cerrar sesión
+            // quedaba abierto (con todas las funciones) encima de la pantalla de login
+            try {
+                document.getElementById('sideMenu').classList.remove('open');
+                document.getElementById('sideMenuOverlay').classList.remove('open');
+            } catch (e) { /* silencioso */ }
             document.getElementById('loginContainer').style.display = 'flex';
             document.getElementById('appContainer').style.display = 'none';
             document.getElementById('manualLoginForm').style.display = 'block';
