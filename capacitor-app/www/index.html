@@ -2172,6 +2172,30 @@
     })();
   </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ===== ESTILO DE MAPA (tipo Uber) — se cambia aquí y aplica a TODOS los mapas de la app =====
+window.MAPA_CONFIG = {
+  mapboxToken: 'pk.eyJ1IjoiZGllZ29mdG9ycmVzYSIsImEiOiJjbXVvYnZjbjcwMTMxMnpvbXhkMWVlMTFzIn0.omny2SoJ26gFs7XKsbNc5A',            // Pega aquí tu token público de Mapbox (pk.xxxxx). Vacío = usa CARTO temporalmente.
+  estiloMapbox: 'streets-v12',  // light-v11 | dark-v11 | streets-v12 | navigation-day-v1 | navigation-night-v1
+  estiloCarto: 'voyager'    // light_all | dark_all | voyager
+};
+(function(){var st=document.createElement('style');st.textContent='.leaflet-tile-pane{filter:saturate(.8)}';document.head.appendChild(st);})();
+window.crearCapaMapa = function (extra) {
+  var c = window.MAPA_CONFIG, o = extra || {};
+  var maxZ = o.maxZoom || 19;
+  var opts = { maxZoom: maxZ };
+  if (o.minZoom !== undefined) opts.minZoom = o.minZoom;
+  if (c.mapboxToken) {
+    opts.tileSize = 512; opts.zoomOffset = -1;
+    opts.attribution = '© Mapbox © OpenStreetMap';
+    return L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/' + c.estiloMapbox +
+      '/tiles/{z}/{x}/{y}?access_token=' + c.mapboxToken, opts);
+  }
+  opts.subdomains = 'abcd';
+  opts.attribution = '© OpenStreetMap contributors © CARTO';
+  return L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/' + c.estiloCarto + '/{z}/{x}/{y}{r}.png', opts);
+};
+</script>
 <script type="module">
     // ┌─────────────────────────────────────────────────────────┐
     // │ [JS-01] IMPORTS DE FIREBASE                             │
@@ -2623,7 +2647,7 @@ function _fechaHoyColombia() {
             touchZoom: true
         });
         
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        crearCapaMapa({
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19,
             minZoom: 3
@@ -3360,7 +3384,7 @@ function _fechaHoyColombia() {
         // FIX UBICACIÓN GPS: usar coordenadas exactas si el cliente marcó el punto
         // de recogida en el mapeador/GPS (antes se salía aquí y no se colocaba pin).
         const gpsRecogida = info.gpsRecogida || null;
-        const etiquetaRecogida = barrioRecogida || (gpsRecogida ? 'Ubicación GPS del cliente' : '');
+        const etiquetaRecogida = barrioRecogida || info.nombreRecogida || (gpsRecogida ? 'Ubicación GPS del cliente' : '');
         if (!barrioRecogida && !gpsRecogida) return;
         const claveActual = barrioRecogida || `gps:${gpsRecogida.lat.toFixed(5)},${gpsRecogida.lng.toFixed(5)}`;
         if (marcadoresRecogidaPedido[pedidoId] && marcadoresRecogidaPedido[pedidoId]._barrioKey === claveActual) return;
@@ -3431,7 +3455,7 @@ function _fechaHoyColombia() {
         const label = info.desc || `Cliente ${idx+1}`;
         const barrio         = info.barrio         || '';   // barrioEntrega (destino)
         const zona           = info.zona           || '';   // zonaEntrega
-        const barrioRecogida = info.barrioRecogida || '';   // punto de recogida
+        const barrioRecogida = info.barrioRecogida || info.nombreRecogida || '';   // punto de recogida
         const zonaRecogida   = info.zonaRecogida   || '';
         const zonaColor = ZONA_COLORES[(zona||'').toUpperCase()] || '#555';
         const tooltipContent = _tooltipBarrio(barrioRecogida, zonaRecogida, barrio, zona);
@@ -3555,7 +3579,7 @@ function _fechaHoyColombia() {
                 const distA = calcularDistancia(repartidorCoords.lat, repartidorCoords.lng, llRec.lat, llRec.lng);
                 const kmA   = (distA / 1000).toFixed(2);
                 const minA  = Math.round(distA / (30000 / 60));
-                const barrioRec = info.barrioRecogida || 'Recogida';
+                const barrioRec = info.barrioRecogida || info.nombreRecogida || 'Recogida';
                 lineaHtml += `📦 <b>Recoge en ${barrioRec}</b>: <b>${kmA} km</b> · ~${minA} min`;
                 if (pinEnt) {
                     const llEnt = pinEnt.getLatLng();
@@ -3669,7 +3693,7 @@ function _fechaHoyColombia() {
             const { info, esperaMin, distRecKm, distEntKm } = item;
             const color = coloresPrioridad[i % coloresPrioridad.length];
             const espera = esperaMin < 1 ? 'recién aceptado' : `${Math.round(esperaMin)} min esperando`;
-            const barrioRec = info.barrioRecogida || '?';
+            const barrioRec = info.barrioRecogida || info.nombreRecogida || '?';
             const barrioEnt = info.barrio || info.barrioEntrega || '?';
             const numLabel = i === 0 ? '🥇 1º ENTREGAR' : i === 1 ? '🥈 2º ENTREGAR' : `${i+1}º`;
             html += `
@@ -5460,10 +5484,11 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             ? `⏱️ <strong style="color:#FFC300;">~${tiempoInfo.minutos} min</strong> <small style="color:#aaa;">(${tiempoInfo.distKm} km hasta punto de recogida)</small>`
             : `⏱️ <span style="color:#aaa;">Tiempo estimado: 15 – 20 min</span>`;
 
-        const zonaInfo = pedido.zonaRecogida ? `
+        const recogidaInfoTexto = pedido.zonaRecogida || pedido.barrioRecogida || pedido.nombreRecogida || null;
+        const zonaInfo = recogidaInfoTexto ? `
         <div style="background:#2a2a2a;padding:8px;border-radius:6px;margin:6px 0;border-left:3px solid #FFC300;">
-            📍 Recoge en <strong style="color:#FFC300;">${sanitizarHTML(pedido.zonaRecogida)}</strong>
-            → 🏠 Entrega en <strong style="color:#FFC300;">${sanitizarHTML(pedido.zonaEntrega || '?')}</strong>
+            📍 Recoge en <strong style="color:#FFC300;">${sanitizarHTML(recogidaInfoTexto)}</strong>
+            → 🏠 Entrega en <strong style="color:#FFC300;">${sanitizarHTML(pedido.zonaEntrega || pedido.barrioEntrega || '?')}</strong>
         </div>` : '';
 
         // 🆕 Pago en el local (pedidos "para tercero" de ServiBot): valorProducto
@@ -5675,6 +5700,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                                 zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                                 barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
                                 zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                                nombreRecogida: pedido.nombreRecogida || '',
                                 gpsDestino: pedido.gpsDestino || null,
                                 gpsRecogida: pedido.gpsRecogida || null
                             });
@@ -5708,6 +5734,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         zona: p.zonaEntrega || p.zona_entrega || p.zona || '',
                         barrioRecogida: p.barrioRecogida || p.barrio_recogida || p.barrioOrigen || '',
                         zonaRecogida: p.zonaRecogida || p.zona_recogida || '',
+                        nombreRecogida: p.nombreRecogida || '',
                         gpsDestino: p.gpsDestino || null,
                         gpsRecogida: p.gpsRecogida || null
                     });
@@ -5792,8 +5819,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         div.className = 'pedido-item';
         div.id = `pedido-${pedidoId}`;
         // 🆕 Info de zona y domicilio si viene del formulario del cliente
-        const zonaRecogida = pedido.zonaRecogida ? pedido.zonaRecogida.toUpperCase() : null;
-        const zonaEntrega = pedido.zonaEntrega ? pedido.zonaEntrega.toUpperCase() : null;
+        const zonaRecogida = (pedido.zonaRecogida || pedido.barrioRecogida || pedido.nombreRecogida) ? (pedido.zonaRecogida || pedido.barrioRecogida || pedido.nombreRecogida).toUpperCase() : null;
+        const zonaEntrega = (pedido.zonaEntrega || pedido.barrioEntrega) ? (pedido.zonaEntrega || pedido.barrioEntrega).toUpperCase() : null;
         const valorDomicilio = pedido.valorDomicilio ? `$${Number(pedido.valorDomicilio).toLocaleString('es-CO')}` : null;
         const montoProducto = pedido.montoProducto ? `$${Number(pedido.montoProducto).toLocaleString('es-CO')}` : null;
         const zonaInfo = zonaRecogida ? `
@@ -5913,7 +5940,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             <div style="background:#1a2a1a; border:1px solid #2a3a2a; border-radius:10px; padding:10px; margin-top:8px; font-size:13px;">
                 <div style="margin-bottom:6px;">
                   📦 <span style="color:#aaa;">Recoge en:</span>
-                  <strong style="color:#FFC300;">${pedido.barrioRecogida || pedido.zonaRecogida || '—'}</strong>
+                  <strong style="color:#FFC300;">${pedido.barrioRecogida || pedido.zonaRecogida || pedido.nombreRecogida || '—'}</strong>
                   ${pedido.barrioRecogida && pedido.zonaRecogida ? '<span style="background:#c0392b;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:4px;">'+pedido.zonaRecogida+'</span>' : ''}
                 </div>
                 <div>
@@ -5939,7 +5966,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 telCliente:    pedido.telRecibe || pedido.telefonoCliente || pedido.telefono || '—',
                 barrioEntrega: pedido.barrioEntrega || pedido.zonaEntrega || pedido.barrio_entrega || '—',
                 zonaEntrega:   pedido.zonaEntrega || '',
-                barrioRecogida:pedido.barrioRecogida || pedido.zonaRecogida || '',
+                barrioRecogida:pedido.barrioRecogida || pedido.zonaRecogida || pedido.nombreRecogida || '',
                 tiempoRecogidaTexto: pedido.tiempoRecogidaTexto || '',
                 tiempoRecogidaMin:   pedido.tiempoRecogidaMin ?? null
             });
@@ -6028,6 +6055,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                             barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
                             zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                            nombreRecogida: pedido.nombreRecogida || '',
                             gpsDestino: pedido.gpsDestino || null,
                             gpsRecogida: pedido.gpsRecogida || null
                         });
@@ -6158,6 +6186,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                             zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                             barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
                             zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                            nombreRecogida: pedido.nombreRecogida || '',
                             gpsDestino: pedido.gpsDestino || null,
                             gpsRecogida: pedido.gpsRecogida || null
                         });
@@ -7741,7 +7770,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         document.getElementById('pendientesSection').style.display = 'block';
         document.getElementById('asignadosSection').style.display = 'none';
         document.getElementById('historialSection').style.display = 'none';
-        window.detenerSeguimiento(); // 🆕 DETENER AL CAMBIAR DE SECCIÓN
+        window.detenerSeguimiento(); // ?? DETENER AL CAMBIAR DE SECCIÓN
     });
     document.getElementById('showAsignadosBtn').addEventListener('click', () => {
         document.getElementById('chatSection').style.display = 'none';
@@ -7810,6 +7839,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                                 zona: pedido.zonaEntrega || pedido.zona_entrega || pedido.zona || '',
                                 barrioRecogida: pedido.barrioRecogida || pedido.barrio_recogida || pedido.barrioOrigen || '',
                                 zonaRecogida: pedido.zonaRecogida || pedido.zona_recogida || '',
+                                nombreRecogida: pedido.nombreRecogida || '',
                                 gpsDestino: pedido.gpsDestino || null,
                                 gpsRecogida: pedido.gpsRecogida || null
                             });
