@@ -2172,29 +2172,22 @@
     })();
   </script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Capa de mapa estilo Mapbox Light -->
 <script>
-// ===== ESTILO DE MAPA (tipo Uber) — se cambia aquí y aplica a TODOS los mapas de la app =====
-window.MAPA_CONFIG = {
-  mapboxToken: 'pk.eyJ1IjoiZGllZ29mdG9ycmVzYSIsImEiOiJjbXVvYnZjbjcwMTMxMnpvbXhkMWVlMTFzIn0.omny2SoJ26gFs7XKsbNc5A',            // Pega aquí tu token público de Mapbox (pk.xxxxx). Vacío = usa CARTO temporalmente.
-  estiloMapbox: 'streets-v12',  // light-v11 | dark-v11 | streets-v12 | navigation-day-v1 | navigation-night-v1
-  estiloCarto: 'voyager'    // light_all | dark_all | voyager
-};
-(function(){var st=document.createElement('style');st.textContent='.leaflet-tile-pane{filter:saturate(.8)}';document.head.appendChild(st);})();
-window.crearCapaMapa = function (extra) {
-  var c = window.MAPA_CONFIG, o = extra || {};
-  var maxZ = o.maxZoom || 19;
-  var opts = { maxZoom: maxZ };
-  if (o.minZoom !== undefined) opts.minZoom = o.minZoom;
-  if (c.mapboxToken) {
-    opts.tileSize = 512; opts.zoomOffset = -1;
-    opts.attribution = '© Mapbox © OpenStreetMap';
-    return L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/' + c.estiloMapbox +
-      '/tiles/{z}/{x}/{y}?access_token=' + c.mapboxToken, opts);
-  }
-  opts.subdomains = 'abcd';
-  opts.attribution = '© OpenStreetMap contributors © CARTO';
-  return L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/' + c.estiloCarto + '/{z}/{x}/{y}{r}.png', opts);
-};
+  window.MAPBOX_TOKEN = 'pk.eyJ1IjoiZGllZ29mdG9ycmVzYSIsImEiOiJjbXVvOWpjNjIwMGF2MndvZ216d3U5dnQ5In0.B0O9sdv3P-VInWD3ZcsnuQ';
+  (function(){var st=document.createElement('style');st.textContent='.leaflet-tile-pane{filter:saturate(.8)}';document.head.appendChild(st);})(); window.crearCapaMapbox = function (opciones) {
+    opciones = opciones || {};
+    if (!window.MAPBOX_TOKEN || window.MAPBOX_TOKEN.indexOf('pk.') !== 0) {
+      console.warn('⚠️ Sin token de Mapbox: usando OpenStreetMap de respaldo');
+      return L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors', maxZoom: 19, minZoom: opciones.minZoom || 0
+      });
+    }
+    return L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=' + window.MAPBOX_TOKEN, {
+      tileSize: 512, zoomOffset: -1, maxZoom: 19, minZoom: opciones.minZoom || 0,
+      attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    });
+  };
 </script>
 <script type="module">
     // ┌─────────────────────────────────────────────────────────┐
@@ -2647,11 +2640,7 @@ function _fechaHoyColombia() {
             touchZoom: true
         });
         
-        crearCapaMapa({
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19,
-            minZoom: 3
-        }).addTo(mapaCliente);
+        window.crearCapaMapbox({ minZoom: 3 }).addTo(mapaCliente);
         
         // CRÍTICO: Forzar tamaño
         setTimeout(() => {
