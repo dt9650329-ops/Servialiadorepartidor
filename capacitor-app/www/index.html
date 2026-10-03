@@ -98,7 +98,7 @@
                 .catch(err => console.error('❌ Error SW:', err));
         }
     </script>
-    <title>Panel Repartidor - v1.1.7</title>
+    <title>Panel Repartidor - v1.1.9</title>
     <style>
         /* ┌─────────────────────────────────────────────────────────┐
    │ [CSS-01] VARIABLES GLOBALES (:root)                     │
@@ -2260,7 +2260,7 @@ function _fechaHoyColombia() {
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
     window.goOffline = () => goOffline(db);
     window.goOnline = () => goOnline(db);
-    const APP_VERSION = "1.1.7";
+    const APP_VERSION = "1.1.9";
 
  // ============================================================
  // CONTROL DE VERSIÓN OBLIGATORIA DEL REPARTIDOR (mismo mecanismo
@@ -4306,7 +4306,10 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // online por distancia al punto de recogida: solo el MÁS CERCANO recibe la
     // oferta y tiene OFERTA_MS para aceptarla. Si la rechaza o se le vence el
     // tiempo, pasa al siguiente más cercano, y así sucesivamente.
-    const OFERTA_MS = 45000;          // tiempo que tiene cada repartidor para aceptar
+    const OFERTA_MS = 60000;          // tiempo que tiene cada repartidor para aceptar (igual que el servidor)
+    // El servidor (Cloud Function ofrecerPedidoNuevoCercano) escoge al repartidor más cercano.
+    // Este celular solo actúa de RESPALDO: espera esta gracia antes de intentar reclamar.
+    const GRACIA_SERVIDOR_MS = 8000;
     const _timersTurno  = {};         // pedidoId -> timeout (esperar mi turno)
     const _timersOferta = {};         // pedidoId -> timeout (vencimiento de mi oferta)
     const _primeraVezOferta = {};     // pedidoId -> ms en que ESTE dispositivo lo vio por 1ª vez
@@ -4338,7 +4341,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     async function _rankingCercania(pedido, ignorarExcluidos) {
         const origen = await _coordsRecogidaPedido(pedido);
         if (!origen) return null;
-        const snap = await get(ref(db, 'repartidores_info'));
+        let snap;
+        try { snap = await get(ref(db, 'repartidores_info')); }
+        catch (e) { throw e; } // permisos: lo maneja el respaldo por distancia propia
         if (!snap.exists()) return null;
         const excluidos = ignorarExcluidos ? {} : Object.assign({}, pedido.rechazadoPor || {});
         if (!ignorarExcluidos && _ofertaVencida(pedido)) excluidos[pedido.repartidorUID] = true;
@@ -4360,6 +4365,42 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             return _rankingCercania(pedido, true); // todos lo rechazaron: nueva ronda
         }
         return lista;
+    }
+
+    // FIX 2026-10-03: respaldo SIN leer a los demás repartidores. Si las reglas de
+    // Firebase no dejan leer repartidores_info completo (o falta algún GPS), antes
+    // todos competían a la vez ("el primero que llegue"). Ahora cada dispositivo
+    // espera un tiempo proporcional a SU PROPIA distancia a la recogida: el más
+    // cercano reclama primero y los demás ven el pedido ya tomado y se abstienen.
+    // Devuelve true si puedo reclamar ya, o false si debo esperar/abstenerme.
+    async function _turnoPorMiDistancia(pedidoId, pedidoData) {
+        const rech = pedidoData.rechazadoPor || {};
+        if (rech[repartidorUID] && !pedidoData._soloRonda) {
+            const todos = Object.keys(rech).length;
+            if (todos < 2) return false; // yo lo rechacé/vencí: que lo tome otro
+        }
+        let demora = 20000; // sin datos de GPS: voy después de los que sí tienen
+        let distTxt = 'sin dato';
+        try {
+            const origen = await _coordsRecogidaPedido(pedidoData);
+            const snap = await get(ref(db, `repartidores_info/${repartidorUID}/ubicacionActual`));
+            const mi = _coordsDe(snap.val());
+            if (origen && mi) {
+                const m = calcularDistancia(mi.lat, mi.lng, origen.lat, origen.lng);
+                demora = Math.min(Math.round((m / 1000) * 4000), 60000); // 4 s por km, máx 60 s
+                distTxt = Math.round(m) + ' m';
+            }
+        } catch (e) { console.warn('⚠️ No se pudo calcular mi distancia:', e); }
+        const base = GRACIA_SERVIDOR_MS + (pedidoData.liberadoTs ||
+                     (_ofertaVencida(pedidoData) ? (pedidoData.timestampAsignacionAutomatica + OFERTA_MS) : _primeraVezOferta[pedidoId]));
+        const faltan = base + demora - Date.now();
+        if (faltan > 400) {
+            console.log(`⏳ Pedido ${pedidoId.substring(0, 8)}: estoy a ${distTxt} de la recogida, espero ${Math.round(faltan / 1000)}s por si hay uno más cerca.`);
+            _programarReintentoTurno(pedidoId, faltan + 300);
+            return false;
+        }
+        console.log(`📍 Pedido ${pedidoId.substring(0, 8)}: me toca (${distTxt} de la recogida).`);
+        return true;
     }
 
     function _programarReintentoTurno(pedidoId, ms) {
@@ -4453,8 +4494,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         console.log(`⏸️ Pedido ${pedidoId.substring(0, 8)}: no estoy en el ranking de cercanía, no compito.`);
                         return;
                     }
-                    const base = pedidoData.liberadoTs ||
-                                 (_ofertaVencida(pedidoData) ? (pedidoData.timestampAsignacionAutomatica + OFERTA_MS) : _primeraVezOferta[pedidoId]);
+                    const base = GRACIA_SERVIDOR_MS + (pedidoData.liberadoTs ||
+                                 (_ofertaVencida(pedidoData) ? (pedidoData.timestampAsignacionAutomatica + OFERTA_MS) : _primeraVezOferta[pedidoId]));
                     const turnoActual = Math.floor((Date.now() - base) / OFERTA_MS);
                     if (miPos > turnoActual) {
                         const faltan = base + miPos * OFERTA_MS - Date.now();
@@ -4464,10 +4505,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     }
                     console.log(`📍 Pedido ${pedidoId.substring(0, 8)}: me toca (#${miPos + 1}, ${Math.round(ranking[miPos].dist)} m de la recogida).`);
                 } else {
-                    console.log(`ℹ️ Pedido ${pedidoId.substring(0, 8)}: sin ranking de cercanía, se asigna como antes.`);
+                    console.log(`ℹ️ Pedido ${pedidoId.substring(0, 8)}: ranking vacío, uso turno por mi distancia.`);
+                    if (!(await _turnoPorMiDistancia(pedidoId, pedidoData))) return;
                 }
             } catch (eRank) {
-                console.warn('⚠️ No se pudo calcular cercanía (¿permisos o sin GPS?), se asigna como antes:', eRank);
+                console.warn('⚠️ No pude leer a los demás repartidores (¿reglas de Firebase?), uso turno por mi distancia:', eRank.code || eRank.message || eRank);
+                if (!(await _turnoPorMiDistancia(pedidoId, pedidoData))) return;
             }
 
             // 🔧 FIX 2026-09-05: reclamo ATÓMICO vía transacción sobre repartidorUID.
