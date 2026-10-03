@@ -98,7 +98,7 @@
                 .catch(err => console.error('❌ Error SW:', err));
         }
     </script>
-    <title>Panel Repartidor - v1.1.6</title>
+    <title>Panel Repartidor - v1.1.7</title>
     <style>
         /* ┌─────────────────────────────────────────────────────────┐
    │ [CSS-01] VARIABLES GLOBALES (:root)                     │
@@ -2183,10 +2183,25 @@
         attribution: '© OpenStreetMap contributors', maxZoom: 19, minZoom: opciones.minZoom || 0
       });
     }
-    return L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=' + window.MAPBOX_TOKEN, {
+    var capaMb = L.tileLayer('https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/{z}/{x}/{y}?access_token=' + window.MAPBOX_TOKEN, {
       tileSize: 512, zoomOffset: -1, maxZoom: 19, minZoom: opciones.minZoom || 0,
       attribution: '© <a href="https://www.mapbox.com/about/maps/">Mapbox</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     });
+    // RESPALDO: si Mapbox falla (token vencido/restringido, cuota, red), cambiar a OpenStreetMap
+    var fallosMb = 0, enRespaldo = false;
+    capaMb.on('tileerror', function () {
+      fallosMb++;
+      if (fallosMb >= 3 && !enRespaldo && capaMb._map) {
+        enRespaldo = true;
+        console.warn('⚠️ Mapbox no cargó tiles: cambiando a OpenStreetMap');
+        var m = capaMb._map;
+        m.removeLayer(capaMb);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors', maxZoom: 19, minZoom: opciones.minZoom || 0
+        }).addTo(m);
+      }
+    });
+    return capaMb;
   };
 </script>
 <script type="module">
@@ -2245,7 +2260,7 @@ function _fechaHoyColombia() {
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
     window.goOffline = () => goOffline(db);
     window.goOnline = () => goOnline(db);
-    const APP_VERSION = "1.1.6";
+    const APP_VERSION = "1.1.7";
 
  // ============================================================
  // CONTROL DE VERSIÓN OBLIGATORIA DEL REPARTIDOR (mismo mecanismo
@@ -4283,6 +4298,116 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         console.log('👂 Escuchando pedidos_historial en tiempo real para auto-asignación.');
     }
 
+    // ┌─────────────────────────────────────────────────────────┐
+    // │ [JS-16c] ASIGNACIÓN POR CERCANÍA (turnos)                │
+    // └─────────────────────────────────────────────────────────┘
+    // FIX 2026-10-02: antes TODOS los repartidores conectados competían por el
+    // pedido y le llegaba la oferta a todos. Ahora se ordena a los repartidores
+    // online por distancia al punto de recogida: solo el MÁS CERCANO recibe la
+    // oferta y tiene OFERTA_MS para aceptarla. Si la rechaza o se le vence el
+    // tiempo, pasa al siguiente más cercano, y así sucesivamente.
+    const OFERTA_MS = 45000;          // tiempo que tiene cada repartidor para aceptar
+    const _timersTurno  = {};         // pedidoId -> timeout (esperar mi turno)
+    const _timersOferta = {};         // pedidoId -> timeout (vencimiento de mi oferta)
+    const _primeraVezOferta = {};     // pedidoId -> ms en que ESTE dispositivo lo vio por 1ª vez
+
+    function _coordsDe(n) {
+        if (!n) return null;
+        const lat = parseFloat(n.lat);
+        const lng = parseFloat(n.lng !== undefined ? n.lng : n.lon);
+        return (isFinite(lat) && isFinite(lng) && lat && lng) ? { lat, lng } : null;
+    }
+
+    async function _coordsRecogidaPedido(p) {
+        let c = _coordsDe(p.gpsRecogida);
+        if (c) return c;
+        try {
+            const b = p.barrioRecogida || p.barrio_recogida || p.barrioOrigen || p.nombreRecogida;
+            if (b) { c = _coordsDe(await _geocodificarBarrio(b)); if (c) return c; }
+        } catch (e) {}
+        return null;
+    }
+
+    function _ofertaVencida(p) {
+        const est = (p.estado || '').toLowerCase();
+        return est === 'pendiente' && p.asignacionAutomatica && p.repartidorUID &&
+               (Date.now() - (p.timestampAsignacionAutomatica || 0)) > (OFERTA_MS + 3000);
+    }
+
+    // Devuelve la lista de repartidores ordenada por cercanía [{uid, dist}], o null si no se puede calcular
+    async function _rankingCercania(pedido, ignorarExcluidos) {
+        const origen = await _coordsRecogidaPedido(pedido);
+        if (!origen) return null;
+        const snap = await get(ref(db, 'repartidores_info'));
+        if (!snap.exists()) return null;
+        const excluidos = ignorarExcluidos ? {} : Object.assign({}, pedido.rechazadoPor || {});
+        if (!ignorarExcluidos && _ofertaVencida(pedido)) excluidos[pedido.repartidorUID] = true;
+        const ahora = Date.now();
+        const lista = [];
+        snap.forEach(ch => {
+            const d = ch.val() || {};
+            const uid = ch.key;
+            if (d.online !== true || d.trackingActivo !== true) return;
+            if (excluidos[uid]) return;
+            const c = _coordsDe(d.ubicacionActual) || _coordsDe(d.ubicacion);
+            if (!c) return;
+            const ts = (d.ubicacionActual && d.ubicacionActual.timestamp) || d.lastSeen || 0;
+            if (ts && ahora - ts > 5 * 60 * 1000) return; // ubicación muy vieja
+            lista.push({ uid, dist: calcularDistancia(c.lat, c.lng, origen.lat, origen.lng) });
+        });
+        lista.sort((a, b) => a.dist - b.dist);
+        if (lista.length === 0 && !ignorarExcluidos && Object.keys(pedido.rechazadoPor || {}).length) {
+            return _rankingCercania(pedido, true); // todos lo rechazaron: nueva ronda
+        }
+        return lista;
+    }
+
+    function _programarReintentoTurno(pedidoId, ms) {
+        clearTimeout(_timersTurno[pedidoId]);
+        _timersTurno[pedidoId] = setTimeout(async () => {
+            try {
+                const s = await get(ref(db, `pedidos_historial/${pedidoId}`));
+                if (!s.exists()) return;
+                const p = s.val();
+                const est = (p.estado || '').toLowerCase();
+                const sinDueno = est === 'sin_repartidor' || (est === 'pendiente' && !p.repartidorUID);
+                if (sinDueno || _ofertaVencida(p)) asignarPedidoARepartidor(pedidoId, p);
+            } catch (e) { console.warn('⚠️ Reintento de turno falló:', e); }
+        }, Math.max(ms, 500));
+    }
+
+    // Devuelve el pedido al grupo (rechazo manual o tiempo vencido) para que pase al siguiente más cercano
+    async function _liberarOferta(pedidoId, motivo) {
+        try {
+            const res = await runTransaction(ref(db, `pedidos_historial/${pedidoId}`), (cur) => {
+                if (!cur) return cur;
+                if (cur.repartidorUID !== repartidorUID || (cur.estado || '').toLowerCase() !== 'pendiente') return; // ya no es mío / ya aceptado
+                const nuevo = Object.assign({}, cur);
+                const rech = Object.assign({}, cur.rechazadoPor || {});
+                rech[repartidorUID] = motivo || true;
+                delete nuevo.repartidorUID; delete nuevo.repartidorNombre; delete nuevo.repartidorIdAsignado;
+                delete nuevo.timestampAsignacionAutomatica; delete nuevo.asignacionAutomatica;
+                nuevo.estado = 'sin_repartidor';
+                nuevo.rechazadoPor = rech;
+                nuevo.liberadoTs = Date.now();
+                return nuevo;
+            });
+            clearTimeout(_timersOferta[pedidoId]);
+            if (res.committed) {
+                await remove(ref(db, `repartidores_pedidos/${repartidorUID}/${pedidoId}`));
+                delete pedidosFormulario[pedidoId];
+                delete pedidosActivos[pedidoId];
+                renderizarTodosLosPedidos();
+                console.log(`↩️ Pedido ${pedidoId.substring(0, 8)} devuelto (${motivo}) — pasa al siguiente más cercano.`);
+            }
+        } catch (e) { console.warn('⚠️ No se pudo liberar la oferta:', e); }
+    }
+
+    window.rechazarPedidoFormulario = async function(pedidoId) {
+        if (!confirm('¿Rechazar este pedido? Se ofrecerá al siguiente repartidor más cercano.')) return;
+        await _liberarOferta(pedidoId, 'rechazado');
+    };
+
     async function asignarPedidoARepartidor(pedidoId, pedidoData) {
         try {
             // Obtener información del repartidor
@@ -4316,6 +4441,35 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 } catch (eBl) { console.warn('⚠️ No se pudo verificar bloqueo de servicio:', eBl); }
             }
 
+            // 📍 FIX 2026-10-02: asignación por CERCANÍA al punto de recogida.
+            // Solo el repartidor que le toca el turno intenta reclamar el pedido;
+            // si algo impide calcular el ranking, se usa el comportamiento anterior.
+            if (!_primeraVezOferta[pedidoId]) _primeraVezOferta[pedidoId] = Date.now();
+            try {
+                const ranking = await _rankingCercania(pedidoData);
+                if (ranking && ranking.length > 0) {
+                    const miPos = ranking.findIndex(r => r.uid === repartidorUID);
+                    if (miPos === -1) {
+                        console.log(`⏸️ Pedido ${pedidoId.substring(0, 8)}: no estoy en el ranking de cercanía, no compito.`);
+                        return;
+                    }
+                    const base = pedidoData.liberadoTs ||
+                                 (_ofertaVencida(pedidoData) ? (pedidoData.timestampAsignacionAutomatica + OFERTA_MS) : _primeraVezOferta[pedidoId]);
+                    const turnoActual = Math.floor((Date.now() - base) / OFERTA_MS);
+                    if (miPos > turnoActual) {
+                        const faltan = base + miPos * OFERTA_MS - Date.now();
+                        console.log(`⏳ Pedido ${pedidoId.substring(0, 8)}: soy el #${miPos + 1} más cercano (${Math.round(ranking[miPos].dist)} m), espero mi turno ${Math.round(faltan / 1000)}s.`);
+                        _programarReintentoTurno(pedidoId, faltan + 500);
+                        return;
+                    }
+                    console.log(`📍 Pedido ${pedidoId.substring(0, 8)}: me toca (#${miPos + 1}, ${Math.round(ranking[miPos].dist)} m de la recogida).`);
+                } else {
+                    console.log(`ℹ️ Pedido ${pedidoId.substring(0, 8)}: sin ranking de cercanía, se asigna como antes.`);
+                }
+            } catch (eRank) {
+                console.warn('⚠️ No se pudo calcular cercanía (¿permisos o sin GPS?), se asigna como antes:', eRank);
+            }
+
             // 🔧 FIX 2026-09-05: reclamo ATÓMICO vía transacción sobre repartidorUID.
             // Antes esto era un update() directo: si dos repartidores conectados
             // detectaban el mismo pedido al mismo tiempo (ej. ambos reconectando o
@@ -4328,9 +4482,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             const resultado = await runTransaction(pedidoRef, (pedidoActual) => {
                 if (!pedidoActual) return pedidoActual; // ya no existe, abortar
                 const yaAsignado = pedidoActual.repartidorUID && pedidoActual.estado !== 'sin_repartidor';
-                if (yaAsignado) return; // abortar: otro repartidor ya lo tomó primero
+                const vencida = _ofertaVencida(pedidoActual);
+                if (yaAsignado && !vencida) return; // abortar: otro repartidor ya lo tomó primero
+                const rechazadoPor = Object.assign({}, pedidoActual.rechazadoPor || {});
+                if (yaAsignado && vencida) rechazadoPor[pedidoActual.repartidorUID] = 'vencido';
                 return {
                     ...pedidoActual,
+                    rechazadoPor,
                     estado: 'pendiente',
                     repartidorUID: repartidorUID,
                     repartidorNombre: repNombre,
@@ -4357,6 +4515,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             });
             
             console.log(`✅ Pedido ${pedidoId.substring(0, 8)} asignado correctamente`);
+            // ⏱️ Si no lo acepta a tiempo, pasa al siguiente repartidor más cercano
+            clearTimeout(_timersOferta[pedidoId]);
+            _timersOferta[pedidoId] = setTimeout(() => _liberarOferta(pedidoId, 'vencido'), OFERTA_MS);
             
         } catch (error) {
             console.error(`❌ Error al asignar pedido ${pedidoId}:`, error);
@@ -5523,7 +5684,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         <button onclick="window.aceptarPedidoFormulario('${pedidoId}')"
                 style="background:#FFC300;color:#000;margin-top:8px;width:100%;padding:14px;font-size:1.05em;font-weight:bold;border:none;border-radius:8px;cursor:pointer;">
             ✅ ACEPTAR PEDIDO
-        </button>`;
+        </button>
+        <button onclick="window.rechazarPedidoFormulario('${pedidoId}')"
+                style="background:transparent;color:#e74c3c;margin-top:6px;width:100%;padding:10px;font-size:0.95em;font-weight:bold;border:1px solid #e74c3c;border-radius:8px;cursor:pointer;">
+            ❌ Rechazar
+        </button>
+        <div style="text-align:center;color:#aaa;font-size:0.8em;margin-top:6px;">⏱️ Eres el más cercano: tienes ${Math.round(OFERTA_MS/1000)} s para aceptar</div>`;
         container.appendChild(div);
     }
 
@@ -6104,6 +6270,20 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     }
                 } catch (eBl) { console.warn('⚠️ No se pudo verificar bloqueo de servicio:', eBl); }
             }
+
+            // 📍 FIX 2026-10-02: confirmar que la oferta SIGUE siendo mía (no se
+            // venció ni pasó al siguiente repartidor) antes de aceptar.
+            try {
+                const dueno = await get(ref(db, `pedidos_historial/${pedidoId}/repartidorUID`));
+                if (dueno.exists() && dueno.val() !== repartidorUID) {
+                    alert('⏱️ Este pedido ya pasó a otro repartidor.');
+                    delete pedidosFormulario[pedidoId];
+                    remove(ref(db, `repartidores_pedidos/${repartidorUID}/${pedidoId}`)).catch(() => {});
+                    renderizarTodosLosPedidos();
+                    return;
+                }
+            } catch (eDueno) { console.warn('⚠️ No se pudo verificar la oferta:', eDueno); }
+            clearTimeout(_timersOferta[pedidoId]);
 
             const timestamp = Date.now();
             // 🩺 Monitoreo: cuánto tardó el repartidor en aceptar desde que se le
