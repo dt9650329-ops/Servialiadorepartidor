@@ -2887,13 +2887,31 @@ function _fechaHoyColombia() {
         if (_distEntregaRutaCache[pedidoId] !== undefined) return;
         _distEntregaRutaCache[pedidoId] = null; // marca "cargando" para no pedirlo dos veces
         let km = null;
+        // 🛣️ 2026-10-08: misma fuente que cobra el servidor y el cliente: Mapbox Directions primero, OSRM de respaldo.
         try {
-            const url = `https://router.project-osrm.org/route/v1/driving/${coordsA.lng},${coordsA.lat};${coordsB.lng},${coordsB.lat}?overview=false`;
-            const resp = await fetch(url);
-            const data = await resp.json();
-            if (data.routes && data.routes[0]) km = data.routes[0].distance / 1000;
+            const tk = window.MAPBOX_TOKEN;
+            if (tk && String(tk).indexOf('pk.') === 0) {
+                const ctrl = new AbortController();
+                const t = setTimeout(() => ctrl.abort(), 8000);
+                try {
+                    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsA.lng},${coordsA.lat};${coordsB.lng},${coordsB.lat}?overview=false&access_token=${tk}`;
+                    const resp = await fetch(url, { signal: ctrl.signal });
+                    const data = await resp.json();
+                    if (data.routes && data.routes[0]) km = data.routes[0].distance / 1000;
+                } finally { clearTimeout(t); }
+            }
         } catch (e) {
-            console.warn('[DISTANCIA] OSRM no disponible para pedido', pedidoId, e);
+            console.warn('[DISTANCIA] Mapbox Directions no respondió para pedido', pedidoId, e);
+        }
+        if (km === null) {
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${coordsA.lng},${coordsA.lat};${coordsB.lng},${coordsB.lat}?overview=false`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+                if (data.routes && data.routes[0]) km = data.routes[0].distance / 1000;
+            } catch (e) {
+                console.warn('[DISTANCIA] OSRM no disponible para pedido', pedidoId, e);
+            }
         }
         if (km === null) {
             km = (calcularDistancia(coordsA.lat, coordsA.lng, coordsB.lat, coordsB.lng) / 1000) * FACTOR_CORRECCION_RUTA;
@@ -5731,8 +5749,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         <button onclick="window.rechazarPedidoFormulario('${pedidoId}')"
                 style="background:transparent;color:#e74c3c;margin-top:6px;width:100%;padding:10px;font-size:0.95em;font-weight:bold;border:1px solid #e74c3c;border-radius:8px;cursor:pointer;">
             ❌ Rechazar
-        </button>
-        <div style="text-align:center;color:#aaa;font-size:0.8em;margin-top:6px;">⏱️ Eres el más cercano: tienes ${Math.round(OFERTA_MS/1000)} s para aceptar</div>`;
+        </button>`;
         container.appendChild(div);
     }
 
