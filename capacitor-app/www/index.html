@@ -5731,8 +5731,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         <button onclick="window.rechazarPedidoFormulario('${pedidoId}')"
                 style="background:transparent;color:#e74c3c;margin-top:6px;width:100%;padding:10px;font-size:0.95em;font-weight:bold;border:1px solid #e74c3c;border-radius:8px;cursor:pointer;">
             ❌ Rechazar
-        </button>
-        <div style="text-align:center;color:#aaa;font-size:0.8em;margin-top:6px;">⏱️ Eres el más cercano: tienes ${Math.round(OFERTA_MS/1000)} s para aceptar</div>`;
+        </button>`;
         container.appendChild(div);
     }
 
@@ -8797,18 +8796,27 @@ async function _inicializarPushFCMRepartidor(uid) {
     // nunca los creaba, así que Android mandaba el push a un canal inexistente y lo mostraba
     // con el sonido genérico del sistema (por eso no sonaba como "pedido recibido").
     // Los canales de Android son inmutables: para cambiar el sonido luego, usar ids nuevos.
+    if (FirebaseMessaging.deleteChannel) {
+      for (const n of ['1', '2']) {
+        try { await FirebaseMessaging.deleteChannel({ id: 'pedidos_tono' + n }); } catch (e) {}
+      }
+    }
     if (FirebaseMessaging.createChannel) {
       for (const n of ['1', '2']) {
         try {
           await FirebaseMessaging.createChannel({
-            id: 'pedidos_tono' + n,
+            // 🔧 FIX 2026-10-08: id nuevo (_v2) porque los canales de Android son inmutables:
+            // los 'pedidos_tono1/2' viejos ya existen en los celulares SIN sonido propio y
+            // por eso sonaba el tono del sistema. Debe calzar EXACTO con enviarPush() (index.js).
+            // Requiere android/app/src/main/res/raw/notif_t1.mp3 y notif_t2.mp3 en el proyecto.
+            id: 'pedidos_tono' + n + '_v2',
             name: 'Pedidos y mensajes (tono ' + n + ')',
             description: 'Nuevos pedidos, mensajes del cliente y avisos del sistema',
             importance: 5,
             visibility: 1,
             vibration: true,
             vibrationPattern: [300, 100, 300, 100, 500],
-            // sound: 'notif_t' + n, // ← descomentar cuando existan android/app/src/main/res/raw/notif_t1.mp3 y notif_t2.mp3
+            sound: 'notif_t' + n,
           });
         } catch (e) { console.warn('No se pudo crear el canal pedidos_tono' + n, e); }
       }
