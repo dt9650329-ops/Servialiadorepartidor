@@ -8739,6 +8739,30 @@ async function _inicializarPushFCMRepartidor(uid) {
       return;
     }
 
+    // 🔑 El token se registra PRIMERO: así un problema al crear canales nunca impide que lleguen los push.
+    // Token inicial
+    try {
+      const { token } = await FirebaseMessaging.getToken();
+      if (token) {
+        await window.update(window.ref(window.db, `usuarios/${uid}`), { fcmToken: token });
+        console.log('✅ Token FCM guardado para', uid, String(token).slice(0, 12) + '…');
+      }
+    } catch (e) {
+      console.error('Error obteniendo/guardando token FCM', e);
+      window.reportarErrorMonitoreo('notificaciones', 'tokenFCM', e, { uid, momento: 'inicial' });
+    }
+
+    // El token puede renovarse solo (reinstalación, cambio de dispositivo, etc.)
+    FirebaseMessaging.addListener('tokenReceived', async (event) => {
+      try {
+        await window.update(window.ref(window.db, `usuarios/${uid}`), { fcmToken: event.token });
+        console.log('✅ Token FCM renovado y guardado');
+      } catch (e) {
+        console.error('Error guardando token FCM renovado', e);
+        window.reportarErrorMonitoreo('notificaciones', 'tokenFCM', e, { uid, momento: 'renovacion' });
+      }
+    });
+
     // Canal de notificación Android con vibración fuerte e importancia máxima.
     // SIN ESTO, cuando la app está en segundo plano o cerrada (celular en el
     // bolsillo) Android muestra el push en silencio, sin vibrar — este era
@@ -8789,29 +8813,6 @@ async function _inicializarPushFCMRepartidor(uid) {
         } catch (e) { console.warn('No se pudo crear el canal pedidos_tono' + n, e); }
       }
     }
-
-    // Token inicial
-    try {
-      const { token } = await FirebaseMessaging.getToken();
-      if (token) {
-        await window.update(window.ref(window.db, `usuarios/${uid}`), { fcmToken: token });
-        console.log('✅ Token FCM guardado para', uid);
-      }
-    } catch (e) {
-      console.error('Error obteniendo/guardando token FCM', e);
-      window.reportarErrorMonitoreo('notificaciones', 'tokenFCM', e, { uid, momento: 'inicial' });
-    }
-
-    // El token puede renovarse solo (reinstalación, cambio de dispositivo, etc.)
-    FirebaseMessaging.addListener('tokenReceived', async (event) => {
-      try {
-        await window.update(window.ref(window.db, `usuarios/${uid}`), { fcmToken: event.token });
-        console.log('✅ Token FCM renovado y guardado');
-      } catch (e) {
-        console.error('Error guardando token FCM renovado', e);
-        window.reportarErrorMonitoreo('notificaciones', 'tokenFCM', e, { uid, momento: 'renovacion' });
-      }
-    });
 
     // Push recibido MIENTRAS la app está abierta (primer plano)
     FirebaseMessaging.addListener('notificationReceived', (event) => {
