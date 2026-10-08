@@ -5960,6 +5960,17 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         } else {
             const mapaTitle = document.getElementById('mapaTitle');
             if (mapaTitle) mapaTitle.textContent = '🗺️ Ubicaciones de Pedidos Asignados';
+            // 🔧 FIX 2026-10-07: al cerrar y reabrir la app con pedidos activos, el mapa
+            // quedaba oculto/sin pines porque el seguimiento solo se armaba si el mapa ya
+            // estaba visible en ese instante. Se restaura una vez por sesión (y otra vez
+            // si el mapa se perdió) sin cambiar de pestaña.
+            const _mapaOculto = document.getElementById('mapa-cliente-container').style.display === 'none' || !mapaCliente;
+            if (_mapaOculto && !window._restaurandoSeguimiento && typeof window._restaurarSeguimientoActivos === 'function') {
+                window._restaurandoSeguimiento = true;
+                setTimeout(async () => {
+                    try { await window._restaurarSeguimientoActivos(); } finally { window._restaurandoSeguimiento = false; }
+                }, 500);
+            }
         }
         document.getElementById('asignadosCount').textContent = contadorAsignados;
         // Sync menú lateral
@@ -7943,6 +7954,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     }
     window.seleccionarTonoRep = function(id) {
         localStorage.setItem('servi_rep_tono', id);
+        // Guardar el tono ('1' o '2') para que enviarPush() elija el canal pedidos_tono1/2
+        try {
+            const _uidTono = window.repartidorUID || (typeof repartidorUID !== 'undefined' ? repartidorUID : null);
+            if (_uidTono && window.update && window.ref && window.db) {
+                window.update(window.ref(window.db, 'usuarios/' + _uidTono), { tonoNotificacion: id === 'notif_t2' ? '2' : '1' }).catch(() => {});
+            }
+        } catch (e) {}
         document.querySelectorAll('.tono-rep-btn').forEach(b => b.classList.remove('activo'));
         const btn = document.getElementById('tb-' + id);
         if (btn) btn.classList.add('activo');
@@ -7990,12 +8008,21 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         document.getElementById('asignadosSection').style.display = 'block';
         document.getElementById('historialSection').style.display = 'none';
         // 🔧 FIX: Restaurar seguimiento para TODOS los pedidos activos
-        setTimeout(async () => {
+        setTimeout(() => window._restaurarSeguimientoActivos(), 300);
+    });
+    // 🔧 FIX 2026-10-07: la restauración vive en una función reutilizable para poder
+    // llamarla también automáticamente al reabrir la app (antes solo corría al tocar
+    // el botón "Asignados", y si fallaba UNA fuente se caían todas).
+    window._restaurarSeguimientoActivos = async function() {
+        {
             // Buscar todos los pedidos activos asignados al repartidor
             const fuentes = [
                 // fuente 1: pedidos_pendientes
                 async () => {
-                    const snap = await get(ref(db, 'pedidos_pendientes'));
+                    // 🔧 FIX 2026-10-07: antes era get() de TODO pedidos_pendientes, que las
+                    // reglas niegan a un repartidor (permission_denied) y tumbaba la
+                    // restauración completa. Ahora va filtrado por su propio repartidorUID.
+                    const snap = await get(query(ref(db, 'pedidos_pendientes'), orderByChild('repartidorUID'), equalTo(repartidorUID)));
                     if (!snap.exists()) return [];
                     const resultado = [];
                     snap.forEach(child => {
@@ -8027,13 +8054,33 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         }
                     });
                     return resultado;
+                },
+                // fuente 3: repartidores_pedidos/{uid} (ya en memoria) — aquí viven los
+                // pedidos de ServiBot / compra en tienda / formulario, que NO siempre
+                // aparecen en las otras dos fuentes.
+                async () => {
+                    const resultado = [];
+                    Object.entries(pedidosAsignadosFormulario || {}).forEach(([pid, p]) => {
+                        const cId = p.clienteUID || p.clienteIdAsignado;
+                        if (cId) resultado.push({ clienteId: cId, pedidoId: pid, pedido: p });
+                    });
+                    return resultado;
                 }
             ];
 
             try {
-                const resultados = await Promise.all(fuentes.map(f => f()));
-                const todos = resultados.flat();
-                const clientesVistos = new Set();
+                // Cada fuente falla por separado: si una da permission_denied, las demás siguen.
+                const resultados = await Promise.all(fuentes.map(f => f().catch(err => {
+                    console.warn('⚠️ Fuente de restauración falló (se ignora):', err && err.message);
+                    return [];
+                })));
+                const _vistosPid = new Set();
+                const todos = resultados.flat().filter(t => {
+                    if (_vistosPid.has(t.pedidoId)) return false;
+                    _vistosPid.add(t.pedidoId);
+                    return true;
+                });
+                const clientesVistos = new Set(); // (se conserva por compatibilidad; ya no filtra por cliente)
 
                 if (todos.length > 0) {
                     document.getElementById('mapa-cliente-container').style.display = 'block';
@@ -8041,7 +8088,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                     else { setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 200); setTimeout(() => mapaCliente && mapaCliente.invalidateSize(), 600); }
                     setTimeout(() => {
                         todos.forEach(({ clienteId, pedidoId, pedido }) => {
-                            if (clientesVistos.has(clienteId)) return;
+                            // 🔧 FIX: antes se saltaba el 2º pedido del mismo cliente y nunca
+                            // se dibujaban sus pines; iniciarSeguimientoCliente ya evita
+                            // listeners duplicados, así que se llama por CADA pedido.
                             clientesVistos.add(clienteId);
                             iniciarSeguimientoCliente(clienteId, {
                                 pedidoId,
@@ -8076,8 +8125,8 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             } catch(e) {
                 console.warn('⚠️ Error restaurando seguimiento:', e);
             }
-        }, 300);
-    });
+        }
+    };
     document.getElementById('showHistorialBtn').addEventListener('click', () => {
         document.getElementById('chatSection').style.display = 'none';
         document.getElementById('pendientesSection').style.display = 'none';
@@ -8719,6 +8768,28 @@ async function _inicializarPushFCMRepartidor(uid) {
       } catch (e) { console.warn('No se pudo crear el canal de notificación', e); }
     }
 
+    // 🔔 Canales que el backend YA manda para los repartidores: enviarPush() usa
+    // channelId = 'pedidos_tono' + tonoNotificacion ('1' o '2'). Antes la app del repartidor
+    // nunca los creaba, así que Android mandaba el push a un canal inexistente y lo mostraba
+    // con el sonido genérico del sistema (por eso no sonaba como "pedido recibido").
+    // Los canales de Android son inmutables: para cambiar el sonido luego, usar ids nuevos.
+    if (FirebaseMessaging.createChannel) {
+      for (const n of ['1', '2']) {
+        try {
+          await FirebaseMessaging.createChannel({
+            id: 'pedidos_tono' + n,
+            name: 'Pedidos y mensajes (tono ' + n + ')',
+            description: 'Nuevos pedidos, mensajes del cliente y avisos del sistema',
+            importance: 5,
+            visibility: 1,
+            vibration: true,
+            vibrationPattern: [300, 100, 300, 100, 500],
+            // sound: 'notif_t' + n, // ← descomentar cuando existan android/app/src/main/res/raw/notif_t1.mp3 y notif_t2.mp3
+          });
+        } catch (e) { console.warn('No se pudo crear el canal pedidos_tono' + n, e); }
+      }
+    }
+
     // Token inicial
     try {
       const { token } = await FirebaseMessaging.getToken();
@@ -8759,6 +8830,12 @@ async function _inicializarPushFCMRepartidor(uid) {
       }
       if (data.tipo === 'aviso_cliente_devolver') {
         _mostrarAvisoUrgenteRepartidor(n.body || 'El cliente necesita avisarte algo, por favor contáctalo.', null, data.pedidoId);
+      } else {
+        // 🔔 FIX: con la app abierta, Android NO suena el push solo (lo entrega al JS).
+        // Antes solo sonaba el aviso urgente; ahora cualquier otro push suena con el
+        // mismo tono que el de "pedido recibido" (el que eligió el repartidor).
+        try { reproducirNotificacion(); } catch (e) {}
+        try { if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 500]); } catch (e) {}
       }
     });
 
