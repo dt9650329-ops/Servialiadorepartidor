@@ -98,7 +98,7 @@
                 .catch(err => console.error('❌ Error SW:', err));
         }
     </script>
-    <title>Panel Repartidor - v1.2.0</title>
+    <title>Panel Repartidor - v1.2.3</title>
     <style>
         /* ┌─────────────────────────────────────────────────────────┐
    │ [CSS-01] VARIABLES GLOBALES (:root)                     │
@@ -2260,7 +2260,7 @@ function _fechaHoyColombia() {
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
     window.goOffline = () => goOffline(db);
     window.goOnline = () => goOnline(db);
-    const APP_VERSION = "1.2.0";
+    const APP_VERSION = "1.2.3";
 
  // ============================================================
  // CONTROL DE VERSIÓN OBLIGATORIA DEL REPARTIDOR (mismo mecanismo
@@ -7974,8 +7974,13 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
     // 🔔 CAMBIO 2026-10-09: vibración FUERTE + RECORDATORIO cada 30 s
     // mientras haya un pedido asignado sin aceptar.
     // ═══════════════════════════════════════════════════════════════
-    const RECORDATORIO_PEDIDO_MS = 30000;   // cada cuánto suena/vibra de nuevo
-    const _recordatorioBase = {};           // pedidoId -> última vez que sonó (o se vio por 1ª vez)
+    // 🚨 CAMBIO 2026-10-09 (v1.2.1): ALARMA CONTINUA. Apenas hay un pedido asignado
+    // sin aceptar, suena y vibra cada ALARMA_PEDIDO_MS hasta que el repartidor ENTRA
+    // al pedido (toca su tarjeta) o lo acepta/libera. Si lo abre pero no lo acepta,
+    // queda el recordatorio suave cada RECORDATORIO_PEDIDO_MS como respaldo.
+    const ALARMA_PEDIDO_MS = 6000;          // alarma continua (sin haber entrado al pedido)
+    const RECORDATORIO_PEDIDO_MS = 30000;   // recordatorio si ya lo vio pero no lo acepta
+    const _alarmaPedido = {};               // pedidoId -> { visto:boolean, ultimo:ms }
     let _recordatorioInterval = null;
 
     // Vibración larga (≈3 s) para que se sienta con el celular en el bolsillo.
@@ -8009,23 +8014,45 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
     function iniciarRecordatorioPedidos() {
         if (_recordatorioInterval) return;
-        // Revisa cada 5 s; suena/vibra cuando un pedido lleva 30 s sin aceptarse
+
+        // Entrar al pedido = tocar su tarjeta (id "pedido-XXXX"): se apaga la alarma
+        // continua de ESE pedido; sigue el recordatorio de 30 s hasta que lo acepte.
+        const marcarVisto = (ev) => {
+            const el = ev.target && ev.target.closest && ev.target.closest('[id^="pedido-"]');
+            if (!el) return;
+            const id = el.id.replace(/^pedido-/, '');
+            if (_alarmaPedido[id] && !_alarmaPedido[id].visto) {
+                _alarmaPedido[id].visto = true;
+                _alarmaPedido[id].ultimo = Date.now();
+                try { if (navigator.vibrate) navigator.vibrate(0); } catch (e) {}
+            }
+        };
+        document.addEventListener('click', marcarVisto, true);
+        document.addEventListener('touchstart', marcarVisto, true);
+
         _recordatorioInterval = setInterval(() => {
             if (!repartidorUID) return;
             const ids = _pedidosSinAceptarIds();
             const ahora = Date.now();
-            Object.keys(_recordatorioBase).forEach(id => { if (!ids.includes(id)) delete _recordatorioBase[id]; });
+            Object.keys(_alarmaPedido).forEach(id => { if (!ids.includes(id)) delete _alarmaPedido[id]; });
             let toca = false;
             ids.forEach(id => {
-                if (!_recordatorioBase[id]) { _recordatorioBase[id] = ahora; return; } // 1ª vez: ya sonó el aviso normal
-                if (ahora - _recordatorioBase[id] >= RECORDATORIO_PEDIDO_MS) { _recordatorioBase[id] = ahora; toca = true; }
+                let st = _alarmaPedido[id];
+                if (!st) {
+                    // Pedido nuevo para este repartidor. Si el aviso normal acaba de sonar
+                    // (hace < 5 s) no se repite; si no, suena YA (cubre cualquier camino de llegada).
+                    const ts = window._pedidoOfrecidoTs && window._pedidoOfrecidoTs[id];
+                    st = _alarmaPedido[id] = { visto: false, ultimo: (ts && ahora - ts < 5000) ? ts : 0 };
+                }
+                const espera = st.visto ? RECORDATORIO_PEDIDO_MS : ALARMA_PEDIDO_MS;
+                if (ahora - st.ultimo >= espera) { st.ultimo = ahora; toca = true; }
             });
             if (toca) {
-                console.log('⏰ Recordatorio: hay pedido(s) sin aceptar.');
+                console.log('🚨 Alarma: hay pedido(s) sin aceptar.');
                 try { reproducirNotificacion(); } catch (e) {}
                 _vibrarPedidoFuerte();
             }
-        }, 5000);
+        }, 2000);
     }
 
     function reproducirNotificacion() {
@@ -8602,6 +8629,7 @@ function repAgregarNotif(titulo, mensaje, opts) {
     // notificaciones normales de la campana.
     if (!panel.classList.contains('open')) repToggleNotif();
     _vibrarFuerteRepetido();
+    _registrarAvisoUrgentePendiente(opts.avisoKey, titulo, mensaje); // 🔔 también en segundo plano
     const btn = document.getElementById(btnId);
     if (btn) {
       btn.onclick = async () => {
@@ -8619,6 +8647,7 @@ function repAgregarNotif(titulo, mensaje, opts) {
             new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000)),
           ]);
           _detenerVibracionAvisoUrgente();
+          _quitarAvisoUrgentePendiente(opts.avisoKey);
           item.classList.remove('rep-notif-item-urgente');
           btn.remove();
         } catch (e) {
@@ -8673,23 +8702,98 @@ function repEscucharNotificaciones(uid) {
 let _avisoUrgenteVibrandoInterval = null;
 
 function _vibrarFuerteRepetido() {
-  const Haptics = window.Capacitor?.Plugins?.Haptics;
+  // 🚨 CAMBIO 2026-10-09 (v1.2.2): misma vibración fuerte de los pedidos (3 pulsos
+  // largos) y, además, el TONO repetido, cada 6 s hasta que el repartidor confirme.
   const vibrarUnaVez = () => {
-    if (Haptics && Haptics.vibrate) {
-      // Vibración nativa (Capacitor Haptics) — más confiable en Android
-      // que navigator.vibrate(), que en muchos WebView de Capacitor no
-      // está implementado y falla en silencio sin que se note el error.
-      Haptics.vibrate({ duration: 500 }).catch(() => {});
+    if (window._vibrarPedidoFuerte) {
+      window._vibrarPedidoFuerte();
     } else if (navigator.vibrate) {
-      navigator.vibrate([500, 200, 500, 200, 500]);
+      navigator.vibrate([1000, 400, 1000, 400, 1000]);
     }
   };
-  vibrarUnaVez();
+  let primera = true;
+  const ciclo = () => {
+    vibrarUnaVez();
+    // el primer tono ya lo toca quien llamó a esta función; solo se repite desde el 2º ciclo
+    if (!primera) { try { reproducirNotificacion(); } catch (e) {} }
+    primera = false;
+  };
+  ciclo();
   if (_avisoUrgenteVibrandoInterval) clearInterval(_avisoUrgenteVibrandoInterval);
-  // Repite la vibración cada 4s hasta que el repartidor confirme el aviso,
-  // así lo siente aunque tenga el celular en el bolsillo.
-  _avisoUrgenteVibrandoInterval = setInterval(vibrarUnaVez, 4000);
+  _avisoUrgenteVibrandoInterval = setInterval(ciclo, 6000);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 🔔 CAMBIO 2026-10-09 (v1.2.2): AVISO URGENTE EN SEGUNDO PLANO
+// Si el aviso llega (o ya está pendiente) con la app minimizada / pantalla
+// apagada, se programa una cadena de notificaciones locales (una cada 10 s,
+// ~4 min) con sonido y vibración. Se cancela al confirmar el aviso o al
+// volver la app al frente (ahí toma el control la alarma dentro de la app).
+// Requiere @capacitor/local-notifications (ya instalado en el proyecto).
+// ═══════════════════════════════════════════════════════════════
+const _ALERTAS_BG_CANT = 24;
+const _ALERTAS_BG_CADA_MS = 10000;
+const _avisosUrgentesPend = {};   // avisoKey -> { titulo, mensaje }
+
+function _idsNotifAviso(key) {
+  let h = 0;
+  for (const c of String(key)) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const base = (h % 10000000) * 100;
+  return Array.from({ length: _ALERTAS_BG_CANT }, (_, i) => base + i);
+}
+
+async function _programarAlertasSegundoPlano(key) {
+  const LN = window.Capacitor?.Plugins?.LocalNotifications;
+  const aviso = _avisosUrgentesPend[key];
+  if (!LN || !aviso) return;
+  try {
+    const tono = (localStorage.getItem('servi_rep_tono') === 'notif_t2') ? 'notif_t2.mp3' : 'notif_t1.mp3';
+    try {
+      await LN.createChannel({ id: 'avisos_urgentes_v1', name: 'Avisos urgentes del cliente',
+        description: 'Avisos del cliente (ej. se le quedó algo)', importance: 5, visibility: 1,
+        vibration: true, sound: tono });
+    } catch (eCh) {
+      try { await LN.createChannel({ id: 'avisos_urgentes_v1', name: 'Avisos urgentes del cliente',
+        description: 'Avisos del cliente (ej. se le quedó algo)', importance: 5, visibility: 1, vibration: true }); } catch (e2) {}
+    }
+    const ahora = Date.now();
+    await LN.schedule({ notifications: _idsNotifAviso(key).map((id, i) => ({
+      id, title: aviso.titulo, body: aviso.mensaje, channelId: 'avisos_urgentes_v1',
+      schedule: { at: new Date(ahora + 2000 + i * _ALERTAS_BG_CADA_MS), allowWhileIdle: true },
+      extra: { tipo: 'aviso_cliente_devolver', avisoKey: key }
+    })) });
+    console.log('🔔 Alertas en segundo plano programadas para el aviso', key);
+  } catch (e) { console.warn('No se pudieron programar alertas en segundo plano', e); }
+}
+
+async function _cancelarAlertasSegundoPlano(key) {
+  const LN = window.Capacitor?.Plugins?.LocalNotifications;
+  if (!LN) return;
+  const keys = key ? [key] : Object.keys(_avisosUrgentesPend);
+  for (const k of keys) {
+    const ns = _idsNotifAviso(k).map(id => ({ id }));
+    try { await LN.cancel({ notifications: ns }); } catch (e) {}
+    try { await LN.removeDeliveredNotifications({ notifications: ns }); } catch (e) {}
+  }
+}
+
+function _registrarAvisoUrgentePendiente(key, titulo, mensaje) {
+  if (!key) return;
+  _avisosUrgentesPend[key] = { titulo: String(titulo).replace(/<[^>]*>/g, ''), mensaje: String(mensaje).replace(/<[^>]*>/g, '') };
+  if (document.hidden) _programarAlertasSegundoPlano(key);
+}
+
+function _quitarAvisoUrgentePendiente(key) {
+  if (key) { _cancelarAlertasSegundoPlano(key); delete _avisosUrgentesPend[key]; }
+  else { _cancelarAlertasSegundoPlano(); Object.keys(_avisosUrgentesPend).forEach(k => delete _avisosUrgentesPend[k]); }
+}
+
+document.addEventListener('visibilitychange', () => {
+  const keys = Object.keys(_avisosUrgentesPend);
+  if (!keys.length) return;
+  if (document.hidden) keys.forEach(k => _programarAlertasSegundoPlano(k));   // se minimizó con avisos sin confirmar
+  else _cancelarAlertasSegundoPlano();                                          // volvió: sigue la alarma dentro de la app
+});
 
 function _detenerVibracionAvisoUrgente() {
   if (_avisoUrgenteVibrandoInterval) {
@@ -8722,6 +8826,7 @@ function _mostrarAvisoUrgenteRepartidor(mensaje, avisoKey, pedidoId) {
 
   document.getElementById('btnAvisoUrgenteOK').onclick = async () => {
     _detenerVibracionAvisoUrgente();
+    _quitarAvisoUrgentePendiente(avisoKey || null);
     overlay.remove();
     try {
       if (avisoKey && window.currentRepartidorUID) {
@@ -8912,6 +9017,36 @@ async function _inicializarPushFCMRepartidor(uid) {
       }
     }
 
+    // 🔔 CAMBIO 2026-10-09 (v1.2.3): canales _v3 con vibración LARGA (4 pulsos de 1 s)
+    // para las alarmas de pedido asignado y los avisos urgentes del cliente cuando la
+    // app está cerrada o en segundo plano. Deben calzar EXACTO con enviarPush() en
+    // index.js. Los canales de Android son inmutables, por eso ids nuevos (_v3).
+    if (FirebaseMessaging.createChannel) {
+      const _patronLargo = [1000, 500, 1000, 500, 1000, 500, 1000];
+      for (const n of ['1', '2']) {
+        try {
+          await FirebaseMessaging.createChannel({
+            id: 'pedidos_alarma_tono' + n + '_v3',
+            name: 'Pedido asignado (alarma, tono ' + n + ')',
+            description: 'Pedido asignado sin confirmar: suena y vibra fuerte',
+            importance: 5, visibility: 1, vibration: true,
+            vibrationPattern: _patronLargo,
+            sound: 'notif_t' + n,
+          });
+        } catch (e) { console.warn('No se pudo crear el canal pedidos_alarma_tono' + n + '_v3', e); }
+      }
+      try {
+        await FirebaseMessaging.createChannel({
+          id: 'aviso_urgente_repartidor_v3',
+          name: 'Avisos urgentes del cliente (fuerte)',
+          description: 'Alertas que requieren atención inmediata del repartidor',
+          importance: 5, visibility: 1, vibration: true,
+          vibrationPattern: _patronLargo,
+          lights: true, lightColor: '#F59E0B',
+        });
+      } catch (e) { console.warn('No se pudo crear el canal aviso_urgente_repartidor_v3', e); }
+    }
+
     // Push recibido MIENTRAS la app está abierta (primer plano)
     FirebaseMessaging.addListener('notificationReceived', (event) => {
       const n = event.notification || {};
@@ -8943,7 +9078,7 @@ async function _inicializarPushFCMRepartidor(uid) {
       const n = event.notification || {};
       const data = n.data || {};
       if (data.tipo === 'aviso_cliente_devolver') {
-        _mostrarAvisoUrgenteRepartidor(n.body || 'El cliente necesita avisarte algo, por favor contáctalo.', null, data.pedidoId);
+        _mostrarAvisoUrgenteRepartidor(n.body || 'El cliente necesita avisarte algo, por favor contáctalo.', data.avisoKey || null, data.pedidoId);
       }
     });
   } catch (e) {
