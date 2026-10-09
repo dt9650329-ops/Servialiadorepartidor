@@ -6027,6 +6027,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             }
         }
         initialLoad = false;
+        try { window.sincronizarAlarmasPedidosBg && window.sincronizarAlarmasPedidosBg(_pedidosSinAceptarIds()); } catch (e) {}
         if (repartidorUID) {
             update(ref(db, `repartidores_info/${repartidorUID}`), {
                 pedidosActivos: contadorAsignados
@@ -8012,7 +8013,65 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         return ids;
     }
 
-    function iniciarRecordatorioPedidos() {
+// 🚨 ALARMA DE PEDIDO ASIGNADO EN SEGUNDO PLANO / PANTALLA APAGADA
+    // Cadena de LocalNotifications (las dispara Android sin necesitar el WebView):
+    // suenan y vibran cada pocos segundos hasta que se acepte el pedido o se abra la app.
+    const _PED_BG_CANT = 48;
+    const _PED_BG_CADA_MS = 8000;
+    const _pedBgActivos = {};   // pedidoId -> true
+
+    function _idsNotifPedidoBg(key) {
+        let h = 7;
+        for (const c of 'ped_' + key) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+        const base = (h % 10000000) * 100;
+        return Array.from({ length: _PED_BG_CANT }, (_, i) => base + i);
+    }
+
+    async function _programarAlarmaPedidoBg(pedidoId) {
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN || _pedBgActivos[pedidoId]) return;
+        _pedBgActivos[pedidoId] = true;
+        try {
+            const t2 = localStorage.getItem('servi_rep_tono') === 'notif_t2';
+            const canal = t2 ? 'pedido_alarma_bg_t2' : 'pedido_alarma_bg_t1';
+            const sonido = t2 ? 'notif_t2.mp3' : 'notif_t1.mp3';
+            const baseCanal = { id: canal, name: 'Pedido asignado (alarma)', description: 'Pedido asignado sin aceptar: suena y vibra hasta que lo aceptes',
+                importance: 5, visibility: 1, vibration: true, lights: true, lightColor: '#F59E0B' };
+            try { await LN.createChannel({ ...baseCanal, sound: sonido }); }
+            catch (e) { try { await LN.createChannel(baseCanal); } catch (e2) {} }
+            const ahora = Date.now();
+            await LN.schedule({ notifications: _idsNotifPedidoBg(pedidoId).map((id, i) => ({
+                id, title: '🚨 ¡PEDIDO ASIGNADO! Acéptalo ya',
+                body: 'Tienes un pedido sin aceptar. Toca para abrirlo.',
+                channelId: canal,
+                schedule: { at: new Date(ahora + 1000 + i * _PED_BG_CADA_MS), allowWhileIdle: true },
+                extra: { tipo: 'pedido_asignado_alarma', pedidoId }
+            })) });
+        } catch (e) { delete _pedBgActivos[pedidoId]; }
+    }
+
+    async function _cancelarAlarmaPedidoBg(pedidoId) {
+        delete _pedBgActivos[pedidoId];
+        const LN = window.Capacitor?.Plugins?.LocalNotifications;
+        if (!LN) return;
+        const ns = _idsNotifPedidoBg(pedidoId).map(id => ({ id }));
+        try { await LN.cancel({ notifications: ns }); } catch (e) {}
+        try { await LN.removeDeliveredNotifications({ notifications: ns }); } catch (e) {}
+    }
+
+    window.sincronizarAlarmasPedidosBg = function (ids) {
+        const vigentes = new Set(ids || []);
+        Object.keys(_pedBgActivos).forEach(id => {
+            if (!vigentes.has(id) || !document.hidden) _cancelarAlarmaPedidoBg(id);
+        });
+        if (document.hidden) vigentes.forEach(id => _programarAlarmaPedidoBg(id));
+    };
+
+    document.addEventListener('visibilitychange', () => {
+        window.sincronizarAlarmasPedidosBg(_pedidosSinAceptarIds());
+    });
+
+        function iniciarRecordatorioPedidos() {
         if (_recordatorioInterval) return;
 
         // Entrar al pedido = tocar su tarjeta (id "pedido-XXXX"): se apaga la alarma
