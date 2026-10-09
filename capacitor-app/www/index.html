@@ -98,7 +98,7 @@
                 .catch(err => console.error('❌ Error SW:', err));
         }
     </script>
-    <title>Panel Repartidor - v1.1.9</title>
+    <title>Panel Repartidor - v1.2.0</title>
     <style>
         /* ┌─────────────────────────────────────────────────────────┐
    │ [CSS-01] VARIABLES GLOBALES (:root)                     │
@@ -2260,7 +2260,7 @@ function _fechaHoyColombia() {
     window.onChildAdded = onChildAdded; // 🔔 campana de notificaciones
     window.goOffline = () => goOffline(db);
     window.goOnline = () => goOnline(db);
-    const APP_VERSION = "1.1.9";
+    const APP_VERSION = "1.2.0";
 
  // ============================================================
  // CONTROL DE VERSIÓN OBLIGATORIA DEL REPARTIDOR (mismo mecanismo
@@ -2887,13 +2887,31 @@ function _fechaHoyColombia() {
         if (_distEntregaRutaCache[pedidoId] !== undefined) return;
         _distEntregaRutaCache[pedidoId] = null; // marca "cargando" para no pedirlo dos veces
         let km = null;
+        // 🛣️ 2026-10-08: misma fuente que cobra el servidor y el cliente: Mapbox Directions primero, OSRM de respaldo.
         try {
-            const url = `https://router.project-osrm.org/route/v1/driving/${coordsA.lng},${coordsA.lat};${coordsB.lng},${coordsB.lat}?overview=false`;
-            const resp = await fetch(url);
-            const data = await resp.json();
-            if (data.routes && data.routes[0]) km = data.routes[0].distance / 1000;
+            const tk = window.MAPBOX_TOKEN;
+            if (tk && String(tk).indexOf('pk.') === 0) {
+                const ctrl = new AbortController();
+                const t = setTimeout(() => ctrl.abort(), 8000);
+                try {
+                    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordsA.lng},${coordsA.lat};${coordsB.lng},${coordsB.lat}?overview=false&access_token=${tk}`;
+                    const resp = await fetch(url, { signal: ctrl.signal });
+                    const data = await resp.json();
+                    if (data.routes && data.routes[0]) km = data.routes[0].distance / 1000;
+                } finally { clearTimeout(t); }
+            }
         } catch (e) {
-            console.warn('[DISTANCIA] OSRM no disponible para pedido', pedidoId, e);
+            console.warn('[DISTANCIA] Mapbox Directions no respondió para pedido', pedidoId, e);
+        }
+        if (km === null) {
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${coordsA.lng},${coordsA.lat};${coordsB.lng},${coordsB.lat}?overview=false`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+                if (data.routes && data.routes[0]) km = data.routes[0].distance / 1000;
+            } catch (e) {
+                console.warn('[DISTANCIA] OSRM no disponible para pedido', pedidoId, e);
+            }
         }
         if (km === null) {
             km = (calcularDistancia(coordsA.lat, coordsA.lng, coordsB.lat, coordsB.lng) / 1000) * FACTOR_CORRECCION_RUTA;
@@ -4236,9 +4254,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 // Mostrar notificación al repartidor
                 if (pedidosAsignados > 0) {
                     reproducirNotificacion();
-                    if (navigator.vibrate) {
-                        navigator.vibrate([300, 100, 300, 100, 500]);
-                    }
+                    _vibrarPedidoFuerte();
                     
                     // Cambiar a la pestaña de pedidos pendientes
                     setTimeout(() => {
@@ -4331,10 +4347,12 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         return null;
     }
 
+    // 🔒 CAMBIO 2026-10-09: la oferta YA NO VENCE. Al repartidor asignado le
+    // corresponde el pedido y debe tomarlo; la central lo contacta si tarda.
+    // Solo sale de sus manos si el admin lo reasigna o si el propio repartidor
+    // reporta un problema (varado, pinchazo, accidente...).
     function _ofertaVencida(p) {
-        const est = (p.estado || '').toLowerCase();
-        return est === 'pendiente' && p.asignacionAutomatica && p.repartidorUID &&
-               (Date.now() - (p.timestampAsignacionAutomatica || 0)) > (OFERTA_MS + 3000);
+        return false;
     }
 
     // Devuelve la lista de repartidores ordenada por cercanía [{uid, dist}], o null si no se puede calcular
@@ -4444,9 +4462,22 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         } catch (e) { console.warn('⚠️ No se pudo liberar la oferta:', e); }
     }
 
+    // 🔒 CAMBIO 2026-10-09: ya no es "rechazar". Solo se libera el pedido si el
+    // repartidor tuvo un imprevisto real; debe indicar cuál (queda en rechazadoPor).
     window.rechazarPedidoFormulario = async function(pedidoId) {
-        if (!confirm('¿Rechazar este pedido? Se ofrecerá al siguiente repartidor más cercano.')) return;
-        await _liberarOferta(pedidoId, 'rechazado');
+        const op = prompt(
+            'Este pedido es tuyo y debes tomarlo.\n' +
+            'Solo libéralo si tienes un problema real. ¿Cuál?\n\n' +
+            '1 = Me varé / se me dañó la moto\n' +
+            '2 = Pinchazo\n' +
+            '3 = Accidente o emergencia\n' +
+            '4 = Otro motivo\n\n' +
+            'Escribe el número (o cancela para quedarte con el pedido):');
+        if (op === null) return;
+        const motivos = { '1': 'varado', '2': 'pinchazo', '3': 'emergencia', '4': 'otro' };
+        const motivo = motivos[String(op).trim()];
+        if (!motivo) { alert('Escribe 1, 2, 3 o 4.'); return; }
+        await _liberarOferta(pedidoId, motivo);
     };
 
     async function asignarPedidoARepartidor(pedidoId, pedidoData) {
@@ -4558,9 +4589,9 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             });
             
             console.log(`✅ Pedido ${pedidoId.substring(0, 8)} asignado correctamente`);
-            // ⏱️ Si no lo acepta a tiempo, pasa al siguiente repartidor más cercano
+            // 🔒 CAMBIO 2026-10-09: sin temporizador. El pedido se queda con este
+            // repartidor hasta que lo acepte (o la central/él lo libere por un problema).
             clearTimeout(_timersOferta[pedidoId]);
-            _timersOferta[pedidoId] = setTimeout(() => _liberarOferta(pedidoId, 'vencido'), OFERTA_MS);
             
         } catch (error) {
             console.error(`❌ Error al asignar pedido ${pedidoId}:`, error);
@@ -5730,7 +5761,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
         </button>
         <button onclick="window.rechazarPedidoFormulario('${pedidoId}')"
                 style="background:transparent;color:#e74c3c;margin-top:6px;width:100%;padding:10px;font-size:0.95em;font-weight:bold;border:1px solid #e74c3c;border-radius:8px;cursor:pointer;">
-            ❌ Rechazar
+            ⚠️ Tengo un problema, no puedo tomarlo
         </button>`;
         container.appendChild(div);
     }
@@ -5744,6 +5775,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
 
     function escucharPedidos() {
         if (!repartidorUID) return;
+        iniciarRecordatorioPedidos(); // 🔔 recordatorio cada 30 s de pedidos sin aceptar
 
         // ── 1. Listener: pedidos_pendientes (sistema anterior) ──
         const pedidosRef = ref(db, 'pedidos_pendientes');
@@ -5835,7 +5867,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                 document.getElementById('pendientesSection').style.display = 'block';
                 document.getElementById('asignadosSection').style.display = 'none';
                 document.getElementById('historialSection').style.display = 'none';
-                if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 500]);
+                _vibrarPedidoFuerte();
                 setTimeout(() => {
                     const el = document.getElementById(`pedido-${pedidoId}`);
                     if (el) el.style.animation = 'pedidoNuevo 1s ease 3';
@@ -5863,7 +5895,7 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
                         document.getElementById('pendientesSection').style.display = 'block';
                         document.getElementById('asignadosSection').style.display = 'none';
                         document.getElementById('historialSection').style.display = 'none';
-                        if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 500]);
+                        _vibrarPedidoFuerte();
                         setTimeout(() => {
                             const el = document.getElementById(`pedido-${pedidoId}`);
                             if (el) el.style.animation = 'pedidoNuevo 1s ease 3';
@@ -7938,6 +7970,64 @@ ${!permisosMicrofonoOtorgado ? '\n⚠️ Sin micrófono no podrás enviar audios
             });
         });
     }
+    // ═══════════════════════════════════════════════════════════════
+    // 🔔 CAMBIO 2026-10-09: vibración FUERTE + RECORDATORIO cada 30 s
+    // mientras haya un pedido asignado sin aceptar.
+    // ═══════════════════════════════════════════════════════════════
+    const RECORDATORIO_PEDIDO_MS = 30000;   // cada cuánto suena/vibra de nuevo
+    const _recordatorioBase = {};           // pedidoId -> última vez que sonó (o se vio por 1ª vez)
+    let _recordatorioInterval = null;
+
+    // Vibración larga (≈3 s) para que se sienta con el celular en el bolsillo.
+    // Usa Haptics nativo (Capacitor) si existe; si no, navigator.vibrate.
+    function _vibrarPedidoFuerte() {
+        try {
+            const H = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
+            if (H && H.vibrate) {
+                // Tres pulsos largos separados (un solo pulso de varios segundos
+                // lo recorta Android en algunos equipos)
+                H.vibrate({ duration: 1000 }).catch(() => {});
+                setTimeout(() => { H.vibrate({ duration: 1000 }).catch(() => {}); }, 1400);
+                setTimeout(() => { H.vibrate({ duration: 1000 }).catch(() => {}); }, 2800);
+            } else if (navigator.vibrate) {
+                navigator.vibrate([1000, 400, 1000, 400, 1000]);
+            }
+        } catch (e) { console.warn('Vibración:', e); }
+    }
+    window._vibrarPedidoFuerte = _vibrarPedidoFuerte; // el handler de push vive en otro <script>
+
+    function _pedidosSinAceptarIds() {
+        const ids = Object.keys(pedidosFormulario || {});
+        if (pedidosPendientesAntiguos) {
+            Object.keys(pedidosPendientesAntiguos).forEach(id => {
+                const pe = pedidosPendientesAntiguos[id];
+                if (pe && pe.estado === 'Pendiente' && !ids.includes(id)) ids.push(id);
+            });
+        }
+        return ids;
+    }
+
+    function iniciarRecordatorioPedidos() {
+        if (_recordatorioInterval) return;
+        // Revisa cada 5 s; suena/vibra cuando un pedido lleva 30 s sin aceptarse
+        _recordatorioInterval = setInterval(() => {
+            if (!repartidorUID) return;
+            const ids = _pedidosSinAceptarIds();
+            const ahora = Date.now();
+            Object.keys(_recordatorioBase).forEach(id => { if (!ids.includes(id)) delete _recordatorioBase[id]; });
+            let toca = false;
+            ids.forEach(id => {
+                if (!_recordatorioBase[id]) { _recordatorioBase[id] = ahora; return; } // 1ª vez: ya sonó el aviso normal
+                if (ahora - _recordatorioBase[id] >= RECORDATORIO_PEDIDO_MS) { _recordatorioBase[id] = ahora; toca = true; }
+            });
+            if (toca) {
+                console.log('⏰ Recordatorio: hay pedido(s) sin aceptar.');
+                try { reproducirNotificacion(); } catch (e) {}
+                _vibrarPedidoFuerte();
+            }
+        }, 5000);
+    }
+
     function reproducirNotificacion() {
         const tonoId = localStorage.getItem('servi_rep_tono') || 'notif_t1';
         const audio  = document.getElementById(tonoId);
@@ -8844,7 +8934,7 @@ async function _inicializarPushFCMRepartidor(uid) {
         // Antes solo sonaba el aviso urgente; ahora cualquier otro push suena con el
         // mismo tono que el de "pedido recibido" (el que eligió el repartidor).
         try { reproducirNotificacion(); } catch (e) {}
-        try { if (navigator.vibrate) navigator.vibrate([300, 100, 300, 100, 500]); } catch (e) {}
+        try { window._vibrarPedidoFuerte && window._vibrarPedidoFuerte(); } catch (e) {}
       }
     });
 
