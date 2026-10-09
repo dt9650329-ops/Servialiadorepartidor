@@ -14,12 +14,27 @@ import android.provider.Settings;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    // Lo lee AlarmaMessagingService: si la app está al frente no arma la alarma nativa.
+    public static volatile boolean enPrimerPlano = false;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(DeviceOptimizerPlugin.class);
         super.onCreate(savedInstanceState);
         crearCanalesAlarma();
         solicitarExencionBateria();
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        enPrimerPlano = true;
+    }
+
+    @Override
+    public void onPause() {
+        enPrimerPlano = false;
+        super.onPause();
     }
 
     // Canales con vibración larga. Los ids deben calzar EXACTO con enviarPush() en index.js
