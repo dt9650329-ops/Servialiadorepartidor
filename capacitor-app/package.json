@@ -17,6 +17,7 @@
     "@capacitor/background-runner": "^3.0.0",
     "@capacitor/cli": "^8.4.2",
     "@capacitor/core": "^8.4.2",
+    "@capacitor/haptics": "^8.0.0",
     "@capacitor/local-notifications": "^8.0.0",
     "@capgo/background-geolocation": "^8.3.2",
     "@capgo/capacitor-audio-recorder": "^8.2.1",
